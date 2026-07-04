@@ -77,15 +77,27 @@ export default function ContentEditor() {
   const setBody = (k: keyof Body, v: string) =>
     setEditing((e) => (e ? { ...e, body_json: { ...(e.body_json ?? {}), [k]: v } } : e));
 
-  function onFile(f: File | undefined) {
+  async function onFile(f: File | undefined) {
     if (!f) return;
     setMsg("");
     if (f.size > 8 * 1024 * 1024) { setMsg("File is too large — keep it under 8 MB (or paste the text instead)."); return; }
-    const isPdf = f.type === "application/pdf" || f.name.toLowerCase().endsWith(".pdf");
+    const name = f.name.toLowerCase();
+    const isPdf = f.type === "application/pdf" || name.endsWith(".pdf");
+    const isDocx = name.endsWith(".docx");
+    if (name.endsWith(".doc") && !isDocx) { setMsg("Old .doc files aren't supported — save it as .docx or PDF first."); return; }
     if (isPdf) {
       const reader = new FileReader();
       reader.onload = () => { setPdfB64(String(reader.result).split(",")[1] || null); setFileName(f.name); setGenSrc(""); };
       reader.readAsDataURL(f);
+    } else if (isDocx) {
+      try {
+        const mod = await import("mammoth/mammoth.browser");
+        const mammoth = (mod as { default?: unknown }).default ?? mod;
+        const arrayBuffer = await f.arrayBuffer();
+        const { value } = await (mammoth as { extractRawText: (o: { arrayBuffer: ArrayBuffer }) => Promise<{ value: string }> }).extractRawText({ arrayBuffer });
+        if (!value.trim()) { setMsg("Couldn't read any text from that Word file."); return; }
+        setGenSrc(value); setPdfB64(null); setFileName(f.name);
+      } catch { setMsg("Couldn't read that Word file — try exporting it to PDF."); }
     } else {
       const reader = new FileReader();
       reader.onload = () => { setGenSrc(String(reader.result || "")); setPdfB64(null); setFileName(f.name); };
@@ -162,8 +174,8 @@ export default function ContentEditor() {
           </p>
 
           <label style={{ display: "inline-flex", alignItems: "center", gap: 8, cursor: "pointer", background: "#fff", border: "1.5px dashed var(--border)", borderRadius: 10, padding: "12px 16px", fontSize: 13, fontWeight: 700, color: "var(--ink2)" }}>
-            📎 Choose a file (PDF, .txt, .md, .csv)
-            <input type="file" accept=".pdf,.txt,.md,.csv,.text,application/pdf,text/plain" style={{ display: "none" }}
+            📎 Choose a file (PDF, Word, .txt, .md, .csv)
+            <input type="file" accept=".pdf,.docx,.txt,.md,.csv,.text,application/pdf,text/plain,application/vnd.openxmlformats-officedocument.wordprocessingml.document" style={{ display: "none" }}
               onChange={(e) => { onFile(e.target.files?.[0]); e.target.value = ""; }} />
           </label>
           {fileName && (
