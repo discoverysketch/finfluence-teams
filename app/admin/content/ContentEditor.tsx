@@ -22,6 +22,8 @@ export default function ContentEditor() {
   const [genCount, setGenCount] = useState(5);
   const [genLoading, setGenLoading] = useState(false);
   const [drafts, setDrafts] = useState<Card[]>([]);
+  const [pdfB64, setPdfB64] = useState<string | null>(null);
+  const [fileName, setFileName] = useState("");
 
   const loadUnits = useCallback(async (pid: string) => {
     const { data } = await supabase.from("units").select("id,title,icon,ord:order").eq("pack_id", pid);
@@ -75,13 +77,33 @@ export default function ContentEditor() {
   const setBody = (k: keyof Body, v: string) =>
     setEditing((e) => (e ? { ...e, body_json: { ...(e.body_json ?? {}), [k]: v } } : e));
 
+  function onFile(f: File | undefined) {
+    if (!f) return;
+    setMsg("");
+    if (f.size > 8 * 1024 * 1024) { setMsg("File is too large — keep it under 8 MB (or paste the text instead)."); return; }
+    const isPdf = f.type === "application/pdf" || f.name.toLowerCase().endsWith(".pdf");
+    if (isPdf) {
+      const reader = new FileReader();
+      reader.onload = () => { setPdfB64(String(reader.result).split(",")[1] || null); setFileName(f.name); setGenSrc(""); };
+      reader.readAsDataURL(f);
+    } else {
+      const reader = new FileReader();
+      reader.onload = () => { setGenSrc(String(reader.result || "")); setPdfB64(null); setFileName(f.name); };
+      reader.readAsText(f);
+    }
+  }
+  function clearFile() { setPdfB64(null); setFileName(""); setGenSrc(""); }
+
   async function generate() {
     if (!sel) return;
     setGenLoading(true); setMsg(""); setDrafts([]);
     try {
+      const body = pdfB64
+        ? { pdfBase64: pdfB64, pdfName: fileName, unitTitle: sel.title, count: genCount }
+        : { source: genSrc, unitTitle: sel.title, count: genCount };
       const r = await fetch("/api/generate-cards", {
         method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ source: genSrc, unitTitle: sel.title, count: genCount }),
+        body: JSON.stringify(body),
       });
       const j = await r.json();
       if (!r.ok) { setMsg(j.error || "Generation failed."); return; }
@@ -135,10 +157,28 @@ export default function ContentEditor() {
       {sel && (
         <div className="card" style={{ marginTop: 24, background: "#FAF6EE", borderColor: "#E6CF94" }}>
           <div className="edsec" style={{ marginTop: 0 }}>✨ Generate cards with AI</div>
-          <p style={{ fontSize: 12, color: "var(--ink2)", margin: "0 0 8px" }}>
-            Paste source material (a briefing, article, or filing excerpt). Claude drafts cards for <b>{sel.title}</b> — you review and approve each before it saves. Nothing is published automatically.
+          <p style={{ fontSize: 12, color: "var(--ink2)", margin: "0 0 10px" }}>
+            Upload a document (or paste text). Claude drafts cards for <b>{sel.title}</b> — you review and approve each before it saves. Nothing is published automatically.
           </p>
-          <textarea value={genSrc} onChange={(e) => setGenSrc(e.target.value)} rows={5} placeholder="Paste the source text here…"
+
+          <label style={{ display: "inline-flex", alignItems: "center", gap: 8, cursor: "pointer", background: "#fff", border: "1.5px dashed var(--border)", borderRadius: 10, padding: "12px 16px", fontSize: 13, fontWeight: 700, color: "var(--ink2)" }}>
+            📎 Choose a file (PDF, .txt, .md, .csv)
+            <input type="file" accept=".pdf,.txt,.md,.csv,.text,application/pdf,text/plain" style={{ display: "none" }}
+              onChange={(e) => { onFile(e.target.files?.[0]); e.target.value = ""; }} />
+          </label>
+          {fileName && (
+            <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 8, fontSize: 13 }}>
+              <span style={{ background: "#EEF4FB", color: "var(--blue)", borderRadius: 6, padding: "3px 9px", fontWeight: 700 }}>
+                {pdfB64 ? "📄" : "📝"} {fileName}
+              </span>
+              <button className="mini del" onClick={clearFile}>Remove</button>
+            </div>
+          )}
+
+          <div style={{ fontSize: 11, fontWeight: 700, color: "var(--muted)", textTransform: "uppercase", letterSpacing: ".6px", margin: "12px 0 6px" }}>
+            {pdfB64 ? "PDF attached — or paste text instead" : "or paste text"}
+          </div>
+          <textarea value={genSrc} onChange={(e) => { setGenSrc(e.target.value); if (pdfB64) { setPdfB64(null); setFileName(""); } }} rows={4} placeholder="Paste the source text here…"
             style={{ width: "100%", border: "1px solid var(--border)", borderRadius: 8, padding: 8, fontFamily: "inherit", fontSize: 13 }} />
           <div style={{ display: "flex", gap: 8, alignItems: "center", marginTop: 8 }}>
             <label style={{ fontSize: 12, fontWeight: 700, color: "var(--ink2)" }}>Cards:
@@ -146,7 +186,7 @@ export default function ContentEditor() {
                 {[3, 4, 5, 6, 7, 8].map((n) => <option key={n} value={n}>{n}</option>)}
               </select>
             </label>
-            <button className="btn" disabled={genLoading || genSrc.trim().length < 40} onClick={generate}>
+            <button className="btn" disabled={genLoading || (!pdfB64 && genSrc.trim().length < 40)} onClick={generate}>
               {genLoading ? "Drafting…" : "Draft cards"}
             </button>
           </div>

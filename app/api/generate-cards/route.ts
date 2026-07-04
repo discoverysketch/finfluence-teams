@@ -46,9 +46,10 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "ANTHROPIC_API_KEY is not set on the server. Add it in .env.local (and Vercel) and redeploy." }, { status: 500 });
   }
 
-  const { source, unitTitle, count } = await request.json().catch(() => ({}));
+  const { source, unitTitle, count, pdfBase64, pdfName } = await request.json().catch(() => ({}));
   const src = String(source || "").trim();
-  if (src.length < 40) return NextResponse.json({ error: "Paste at least a paragraph of source material." }, { status: 400 });
+  const pdf = typeof pdfBase64 === "string" && pdfBase64.length > 100 ? pdfBase64 : null;
+  if (!pdf && src.length < 40) return NextResponse.json({ error: "Upload a file or paste at least a paragraph of source material." }, { status: 400 });
   const n = Math.min(Math.max(Number(count) || 5, 1), 8);
 
   const client = new Anthropic();
@@ -60,9 +61,19 @@ export async function POST(request: Request) {
     "Keep each field to 1-2 sentences. 'front' is the term/concept (2-5 words). 'prompt' is a one-line question shown on the card front. " +
     "'worked' is a short numeric example (use round illustrative numbers if the source lacks them, and say so). " +
     "If a field genuinely doesn't apply, use an empty string.";
-  const prompt =
-    `Draft ${n} flashcards for the unit titled "${unitTitle || "Financial Foundations"}" from the source material below.\n\n` +
-    `--- SOURCE ---\n${src.slice(0, 12000)}\n--- END SOURCE ---`;
+  const prompt = pdf
+    ? `Draft ${n} flashcards for the unit titled "${unitTitle || "Financial Foundations"}" from the attached document.`
+    : `Draft ${n} flashcards for the unit titled "${unitTitle || "Financial Foundations"}" from the source material below.\n\n` +
+      `--- SOURCE ---\n${src.slice(0, 12000)}\n--- END SOURCE ---`;
+
+  // Claude reads PDFs natively — pass the file as a document block rather than
+  // extracting text client-side (better fidelity on tables/filings).
+  const content: Anthropic.MessageParam["content"] = pdf
+    ? [
+        { type: "document", source: { type: "base64", media_type: "application/pdf", data: pdf } },
+        { type: "text", text: prompt },
+      ]
+    : prompt;
 
   try {
     const res = await client.messages.create({
@@ -71,7 +82,7 @@ export async function POST(request: Request) {
       thinking: { type: "adaptive" },
       output_config: { format: { type: "json_schema", schema: SCHEMA } },
       system,
-      messages: [{ role: "user", content: prompt }],
+      messages: [{ role: "user", content }],
     });
     const text = res.content.filter((b) => b.type === "text").map((b) => (b as { text: string }).text).join("");
     let cards: unknown = [];
