@@ -1,59 +1,55 @@
 import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import Link from "next/link";
+import Shell from "@/components/Shell";
+import Finn from "@/components/Finn";
 
-// Authed home. Middleware already guarantees a session here; we load the profile
-// (tenant + role) to confirm provisioning and branch by role later.
 export default async function Home() {
   const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const { data: { user } } = await supabase.auth.getUser();
   if (!user) redirect("/login");
 
   const { data: profile } = await supabase
-    .from("users")
-    .select("email, role, tenant_id")
-    .eq("id", user.id)
-    .maybeSingle();
+    .from("users").select("email, role, tenant_id").eq("id", user.id).maybeSingle();
+  const isAdmin = profile?.role === "admin";
+
+  // mastered count for a little motivation
+  const { count: masteredCount } = await supabase
+    .from("progress").select("*", { count: "exact", head: true }).eq("status", "mastered");
 
   return (
-    <main className="container">
-      <h1>
-        Fin<span style={{ color: "var(--red)" }}>Fluency</span> Teams
-      </h1>
-      <div className="card" style={{ marginTop: 16 }}>
-        <p style={{ margin: 0 }}>
-          Signed in as <b>{user.email}</b>
-        </p>
+    <Shell active="home" isAdmin={isAdmin}>
+      <div style={{ textAlign: "center", marginTop: 8 }}>
+        <Finn className="bob" style={{ width: 96, height: 114 }} />
+        <h1 style={{ marginTop: 0 }}>Fin<span style={{ color: "var(--red)" }}>Fluency</span></h1>
+      </div>
+
+      <div className="card">
+        <p style={{ margin: 0 }}>Signed in as <b>{user.email}</b></p>
         {profile ? (
-          <p style={{ color: "var(--ink2)" }}>
-            Role: <b>{profile.role}</b> · Tenant: <code>{profile.tenant_id ?? "—"}</code>
+          <p style={{ color: "var(--ink2)", margin: "6px 0 0" }}>
+            Role: <b>{profile.role}</b> · {masteredCount ?? 0} cards mastered
           </p>
         ) : (
-          <p style={{ color: "var(--red)" }}>
-            No tenant profile yet — an admin needs to add you to a tenant (roster, Phase 2).
+          <p style={{ color: "var(--red)", margin: "6px 0 0" }}>
+            No tenant profile yet — an admin needs to add you to a tenant.
           </p>
         )}
       </div>
+
       <p style={{ marginTop: 20, display: "flex", gap: 10, flexWrap: "wrap" }}>
-        <Link href="/learn" className="btn" style={{ display: "inline-block", textDecoration: "none" }}>
-          Go to the learning path →
-        </Link>
-        {profile?.role === "admin" && (
-          <Link href="/admin/content" className="btn" style={{ display: "inline-block", textDecoration: "none", background: "var(--charcoal)" }}>
-            ✏️ Content editor
-          </Link>
+        <Link href="/learn" className="btn">Learning path →</Link>
+        <Link href="/challenge" className="btn" style={{ background: "var(--teal)" }}>Company Challenge →</Link>
+        {isAdmin && (
+          <Link href="/admin/content" className="btn" style={{ background: "var(--charcoal)" }}>✏️ Content editor</Link>
         )}
       </p>
-      <p style={{ color: "var(--ink2)", marginTop: 16, fontSize: 13 }}>
-        Content is served from the database. Next: card-swipe UI + progress tracking. See <code>SPEC.md</code>.
-      </p>
-      <form action="/auth/signout" method="post" style={{ marginTop: 16 }}>
-        <button className="btn" style={{ background: "var(--charcoal)" }}>
+
+      <form action="/auth/signout" method="post" style={{ marginTop: 24 }}>
+        <button className="btn" style={{ background: "none", color: "var(--ink2)", border: "1px solid var(--border)", fontSize: 13, padding: "9px 16px" }}>
           Sign out
         </button>
       </form>
-    </main>
+    </Shell>
   );
 }

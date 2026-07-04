@@ -1,6 +1,7 @@
 "use client";
 import { useState } from "react";
 import { createClient } from "@/lib/supabase/client";
+import Finn from "@/components/Finn";
 
 export default function LoginPage() {
   const [email, setEmail] = useState("");
@@ -23,10 +24,12 @@ export default function LoginPage() {
   }
 
   return (
-    <main className="container">
+    <main className="container" style={{ textAlign: "center" }}>
+      <Finn className="bob" style={{ width: 110, height: 130, marginTop: 24 }} />
       <h1>
         Fin<span style={{ color: "var(--red)" }}>Fluency</span> Teams
       </h1>
+      <p style={{ color: "var(--ink2)", fontSize: 14, marginTop: -4 }}>Finance fluency for sales teams.</p>
       <div className="card" style={{ marginTop: 16 }}>
         {sent ? (
           <p>Check your email for a magic link to sign in.</p>
