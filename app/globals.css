@@ -1,0 +1,31 @@
+:root {
+  --cream: #f3eee6;
+  --surface: #fff;
+  --ink: #1d1f2b;
+  --ink2: #454a57;
+  --border: #e0d8cb;
+  --red: #c74634;
+  --gold: #c8902e;
+  --charcoal: #1d1f2b;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; padding: 0; }
+body {
+  font-family: "Source Sans 3", "Segoe UI", system-ui, sans-serif;
+  color: var(--ink);
+  background: var(--cream);
+}
+a { color: var(--red); }
+.container { max-width: 480px; margin: 0 auto; padding: 24px 16px; }
+.btn {
+  background: var(--red); color: #fff; border: none; border-radius: 8px;
+  padding: 13px 20px; font-size: 16px; font-weight: 700; cursor: pointer;
+}
+.card {
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: 12px; padding: 16px; box-shadow: 0 2px 8px rgba(60, 40, 20, 0.06);
+}
+input {
+  width: 100%; border: 1px solid var(--border); border-radius: 8px;
+  padding: 12px; font-size: 16px;
+}
