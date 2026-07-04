@@ -34,7 +34,10 @@ export default async function TerritoryPage() {
         Paste your account names — I&apos;ll match each to the SEC filer directory. Confirmed accounts feed learning, peer duels &amp; territory planning.
       </p>
       {(accts?.length ?? 0) > 0 && (
-        <Link href="/territory/duel" className="btn" style={{ background: "var(--red)", marginBottom: 14, display: "inline-block" }}>⚔️ Peer Duel</Link>
+        <p style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 14 }}>
+          <Link href="/territory/duel" className="btn" style={{ background: "var(--red)" }}>⚔️ Peer Duel</Link>
+          <Link href="/territory/board" className="btn" style={{ background: "var(--blue)" }}>🗺️ Territory Board</Link>
+        </p>
       )}
       <Territory listId={list?.id ?? ""} initial={(accts ?? []) as unknown as Account[]} />
     </Shell>
