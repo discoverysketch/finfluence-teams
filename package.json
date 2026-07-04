@@ -7,7 +7,9 @@
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "extract": "node seed/extract.cjs",
+    "seed": "node --env-file=.env.local seed/seed.mjs"
   },
   "dependencies": {
     "@supabase/ssr": "^0.5.2",

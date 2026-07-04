@@ -1,0 +1,1264 @@
+{
+  "units": [
+    {
+      "n": "The Income Statement",
+      "ic": "📈",
+      "color": "#0572CE",
+      "tl": "How it links",
+      "cards": [
+        {
+          "t": "The Income Statement",
+          "p": "Statement #1. What does it actually show?",
+          "a": "A company's financial performance over a period — a quarter or a year.",
+          "b": "It answers one question: did the business make a profit?",
+          "c": "Its bottom line, net income, becomes the starting point for both other statements.",
+          "d": "For a utility, 'performance' is shaped by the regulator — revenue is largely set by approved rates, not the open market.",
+          "ex": "Exelon, Q1 FY2026 top to bottom: Revenue $7,242M → Operating income $1,605M → Net income $919M. That bottom line then starts the cash flow statement and feeds retained earnings."
+        },
+        {
+          "t": "Revenue",
+          "p": "The top line. When is it recorded?",
+          "a": "The value of goods or services sold, recognized when earned.",
+          "b": "It's the starting point — everything below is subtracted from it.",
+          "c": "Booked when earned, not when cash arrives. That gap is why a cash flow statement exists.",
+          "d": "Utility revenue is regulated rates × volumes plus pass-through cost recovery — not a price the company sets freely.",
+          "ex": "Duke Energy, Q1 FY2026 revenue = $9,178M — roughly regulated rate × volume + pass-through cost recovery, not a price set freely on the open market."
+        },
+        {
+          "t": "Gross Profit",
+          "p": "Revenue minus what?",
+          "a": "Revenue minus the cost of goods or services sold (COGS).",
+          "b": "Shows how profitable the core product is before overhead.",
+          "c": "Gross margin feeds the profitability ratios in the Metrics unit.",
+          "d": "Utilities don't really report COGS or gross profit; their analog is margin after fuel and purchased power (pass-throughs).",
+          "ex": "Textbook: Revenue − COGS = $494.8M − $235.0M = $259.8M gross profit (52.5% margin). But for a utility this misleads — that 'COGS' is largely fuel and purchased power passed through at cost, not a marked-up product."
+        },
+        {
+          "t": "Operating Income (EBIT)",
+          "p": "Strip out financing and tax. What's left?",
+          "a": "Gross profit minus operating expenses like SG&A and R&D.",
+          "b": "Isolates how well the core business runs, regardless of financing or tax.",
+          "c": "EBIT drives interest coverage and launches free cash flow.",
+          "d": "For a regulated utility this is effectively what the allowed return on rate base produces — regulator-shaped, not market-shaped.",
+          "ex": "Operating margin = Operating income ÷ Revenue = $2,018M ÷ $8,397M = 24.0% (Southern, Q1 FY2026). For a regulated utility this is essentially what the allowed return on rate base produces."
+        },
+        {
+          "t": "Net Income",
+          "p": "The bottom line. Where does it go next?",
+          "a": "What remains after interest, taxes, and all expenses — the profit.",
+          "b": "The single most-quoted earnings number.",
+          "c": "It flows two places: retained earnings on the balance sheet, and the top of the cash flow statement. The first link.",
+          "d": "A utility's net income is judged against the allowed return on equity set in its last rate case.",
+          "ex": "Net margin = Net income ÷ Revenue = $621M ÷ $5,091M = 12.2% (Dominion, Q1 FY2026). Judge a utility's net income against the allowed ROE set in its last rate case."
+        },
+        {
+          "t": "Accrual vs. Cash",
+          "p": "Why can a profitable company go broke?",
+          "a": "Accrual accounting records revenue/expense when earned, not when cash moves.",
+          "b": "Profit is not the same as cash in the bank.",
+          "c": "This mismatch is the entire reason for the cash flow statement — Unit 3.",
+          "d": "Regulatory accounting adds a timing layer — costs can be deferred as regulatory assets and recovered in later periods.",
+          "ex": "Unitil FY2024: net income $47.1M but operating cash flow $130.0M — cash far exceeds profit, mostly because non-cash depreciation is added back. Profit ≠ cash in the bank."
+        }
+      ]
+    },
+    {
+      "n": "The Balance Sheet",
+      "ic": "⚖️",
+      "color": "#006B72",
+      "tl": "How it links",
+      "cards": [
+        {
+          "t": "The Balance Sheet",
+          "p": "Statement #2. A period or a moment?",
+          "a": "A snapshot of what a company owns and owes at a single point in time.",
+          "b": "It shows financial position and soundness, not performance.",
+          "c": "The income statement covers a span; this is one frozen instant — usually period-end.",
+          "d": "A utility's balance sheet is dominated by one thing: net utility plant — the rate base it earns a return on.",
+          "ex": "Southern, Q1 FY2026 (one frozen moment): Assets $157,031M — mostly net utility plant — funded by Liabilities $117,119M + Equity $39,912M. A snapshot, not a period."
+        },
+        {
+          "t": "The Accounting Equation",
+          "p": "The rule that must always hold?",
+          "a": "Assets = Liabilities + Equity. Always, by construction.",
+          "b": "Every transaction keeps it in balance — the heart of accounting.",
+          "c": "This is the 'balance sheet balances' tie. If it fails, the books are wrong.",
+          "d": "Utilities carry items others don't — regulatory assets and liabilities — that exist only because a regulator allows them.",
+          "ex": "Exelon, Q1 FY2026: Assets $117,545M = Liabilities $88,230M + Equity $29,315M. Check the work: $88,230M + $29,315M = $117,545M — it balances to the dollar. If the two sides don't tie, the books are wrong."
+        },
+        {
+          "t": "Assets",
+          "p": "What the company owns. Two flavors?",
+          "a": "Resources owned: current (cash, receivables, inventory) and long-term (PP&E, intangibles).",
+          "b": "Assets are the engine that generates revenue.",
+          "c": "Net PP&E here is what depreciation on the income statement slowly wears down.",
+          "d": "Net utility plant (PP&E) is the asset that matters most — it IS the rate base that drives utility earnings.",
+          "ex": "Unitil FY2024 assets $1,794.5M — only $188.8M is current (cash, receivables); the rest is long-term net utility plant, the rate base. That huge base is why asset turnover is tiny: $494.8M revenue ÷ $1,794.5M assets = 0.28×."
+        },
+        {
+          "t": "Liabilities",
+          "p": "What the company owes. To whom?",
+          "a": "Obligations: payables, accrued costs, short- and long-term debt.",
+          "b": "They fund assets and reveal financing and risk.",
+          "c": "Debt here drives the interest expense back on the income statement.",
+          "d": "Utilities run heavy long-term debt by design; regulators build a cost of debt into approved rates.",
+          "ex": "Debt ÷ assets = $90,245M ÷ $198,048M = 45.6% of Duke's asset base is debt-funded (Q1 FY2026) — heavy long-term debt is by design; regulators build that cost of debt into approved rates."
+        },
+        {
+          "t": "Equity & Retained Earnings",
+          "p": "The owners' slice — and the first big link?",
+          "a": "Equity = assets minus liabilities. Retained earnings = cumulative profit kept in the business.",
+          "b": "The shareholders' claim and a record of reinvested profit.",
+          "c": "Each period's net income flows straight into retained earnings. Link #1, made concrete.",
+          "d": "Equity is half the capital structure regulators reason about — they set an allowed return on this equity base.",
+          "ex": "Unitil FY2024 equity $512.5M. Each year's profit lands here: FY2024 net income $47.1M was added to retained earnings inside that balance. Return on that base: $47.1M ÷ $512.5M = 9.2% ROE — judged against the allowed ~9–10%."
+        },
+        {
+          "t": "Working Capital",
+          "p": "Current assets minus current liabilities. Why care?",
+          "a": "The short-term cash cushion to run day-to-day operations.",
+          "b": "Too little strains liquidity; too much is idle cash.",
+          "c": "Changes in working capital reappear on the cash flow statement — consuming or releasing cash.",
+          "d": "Utilities often run thin working capital and tight current ratios; short-term debt bridges the constant capex spend.",
+          "ex": "Working capital = Current assets − Current liabilities = $6,623M − $12,594M = −$5,971M (AEP, Q3 FY2024). Current ratio = 6,623 ÷ 12,594 = 0.53× — negative working capital is normal for a utility; short-term debt bridges the constant capex spend."
+        }
+      ]
+    },
+    {
+      "n": "The Cash Flow Statement",
+      "ic": "💵",
+      "color": "#1B7A47",
+      "tl": "How it links",
+      "cards": [
+        {
+          "t": "The Cash Flow Statement",
+          "p": "Statement #3. What gap does it close?",
+          "a": "It tracks actual cash in and out over a period, in three buckets.",
+          "b": "It reconciles accrual profit to real cash — the test of solvency.",
+          "c": "It exists because net income isn't cash. It proves where the cash went.",
+          "d": "For utilities the cash story is stark: strong operating cash, enormous capex, and a financing gap to fill.",
+          "ex": "Dominion, Q1 FY2026 in three numbers: operating cash $882M, capex $1,462M — an $882M − $1,462M = −$580M gap that financing must fill. That's the utility cash story in miniature."
+        },
+        {
+          "t": "Cash from Operations",
+          "p": "Where does it start?",
+          "a": "Cash from the core business, starting from net income and adjusting for non-cash and working-capital items.",
+          "b": "Growing operating cash flow is the strongest sign of quality.",
+          "c": "It literally begins with net income from the income statement — link #2.",
+          "d": "Operating cash flow is large for utilities largely because depreciation on a giant plant base is huge.",
+          "ex": "Unitil FY2024 CFO = $130.0M, built up from net income $47.1M plus large non-cash add-backs. CFO ÷ revenue = $130.0M ÷ $494.8M = 26.3%."
+        },
+        {
+          "t": "Adding Back Depreciation",
+          "p": "A non-cash expense. Why add it back?",
+          "a": "Depreciation cut net income but moved no cash, so it's added back.",
+          "b": "Explains why cash flow often exceeds reported profit.",
+          "c": "Depreciation touches all three: expense on the IS, accumulated on the BS, added back here.",
+          "d": "For utilities this add-back is enormous — the plant base is so large it dwarfs most other line items.",
+          "ex": "Why Unitil's CFO ($130.0M) is ~2.8× its net income ($47.1M): depreciation on the huge plant base is added back — it cut reported profit but moved no cash."
+        },
+        {
+          "t": "Working Capital Changes",
+          "p": "Why does rising inventory hurt cash?",
+          "a": "More receivables or inventory consume cash; more payables release it.",
+          "b": "A 'profitable' quarter can still burn cash if working capital balloons.",
+          "c": "These swings come straight from the balance sheet's current accounts.",
+          "d": "Less of a swing factor for utilities; the dominant cash story is relentless capex, not working capital.",
+          "ex": "For Unitil the swing is small: working capital is only −$39.9M ($188.8M − $228.7M), while capex runs $175.0M a year. Capex, not working capital, drives the cash story."
+        },
+        {
+          "t": "Investing & Financing",
+          "p": "The other two buckets?",
+          "a": "Investing = capex and acquisitions. Financing = debt, equity, dividends.",
+          "b": "They show how the company invests and funds itself.",
+          "c": "Capex builds the PP&E on the balance sheet; debt and dividends move liabilities and equity.",
+          "d": "This is the utility's whole identity — massive investing outflows (capex) funded by financing (debt + equity).",
+          "ex": "Southern, Q1 FY2026: investing outflow ≈ capex $2,944M, while CFO was $1,226M — the ~$1,718M gap is filled by financing (new debt and equity) to fund rate-base growth."
+        },
+        {
+          "t": "Ending Cash",
+          "p": "The number that closes the loop?",
+          "a": "Beginning cash plus the net change across all three buckets.",
+          "b": "The final cash position for the period.",
+          "c": "It must equal the cash line on the balance sheet. The last tie — loop closed.",
+          "d": "Utilities hold very little cash; capital flows almost straight from financing into plant. (Unitil ended a year near $6M.)",
+          "ex": "Duke held $2,140M cash at Q1 FY2026 — cash ratio = $2,140M ÷ $20,334M current liabilities = 0.11×. Utilities hold little cash; capital flows almost straight from financing into plant."
+        }
+      ]
+    },
+    {
+      "n": "How the Three Connect",
+      "ic": "🔗",
+      "color": "#C74634",
+      "tl": "The big picture",
+      "cards": [
+        {
+          "t": "Net Income → Retained Earnings",
+          "p": "Income statement to balance sheet?",
+          "a": "Each period's net income increases retained earnings within equity.",
+          "b": "It's how performance accumulates into position over time.",
+          "c": "Profit doesn't vanish at year-end — it's banked into owners' equity.",
+          "d": "Retained earnings help fund rate-base growth, reducing how much new equity a utility must issue.",
+          "ex": "Unitil FY2024: $47.1M net income flows into the $512.5M equity balance as retained earnings — banked profit that helps fund rate-base growth, so less new equity must be issued."
+        },
+        {
+          "t": "Net Income → Cash Flow",
+          "p": "Income statement to cash flow?",
+          "a": "Net income is the first line of the operating section.",
+          "b": "Cash flow is built by reconciling that profit to actual cash.",
+          "c": "Same number, two destinations — equity and the top of cash flow.",
+          "d": "True for utilities too — though their cash flow is defined more by the depreciation add-back than the net income line.",
+          "ex": "Unitil's cash flow starts at the same $47.1M net income, then builds to CFO $130.0M via the big depreciation add-back. Same number, two destinations: equity and the top of the cash flow statement."
+        },
+        {
+          "t": "Ending Cash → Balance Sheet",
+          "p": "Cash flow back to balance sheet?",
+          "a": "Ending cash on the cash flow statement equals the cash asset on the balance sheet.",
+          "b": "It proves the statements are internally consistent.",
+          "c": "If these don't match, something is mis-stated. A hard tie.",
+          "d": "Holds exactly for utilities — though their cash line is tiny next to the plant base.",
+          "ex": "Unitil's cash-flow ending cash ($6.3M) must equal the cash asset on the balance sheet ($6.3M) — a hard tie. If those two differ, something is mis-stated."
+        },
+        {
+          "t": "The Three Integrity Ties",
+          "p": "How do you sanity-check any company's books?",
+          "a": "Balance sheet balances; ending cash ties; net income ties to the cash flow's first line.",
+          "b": "If all three hold, the statements are consistent — your first data-quality test.",
+          "c": "These are exactly the green/red checks in the Three-Statement Reader tool.",
+          "d": "These are how you sanity-check a utility filing before quoting its rate base, ROE, or capex to a client.",
+          "ex": "Unitil check: (1) Assets $1,794.5M = Liabilities $1,282.0M + Equity $512.5M ✓; (2) ending cash ties at $6.3M ✓; (3) net income $47.1M starts the cash flow ✓. All three hold — the filing is internally consistent."
+        },
+        {
+          "t": "Profitable, Sound, Solvent",
+          "p": "Why do you need all three statements?",
+          "a": "Income statement = profitable; balance sheet = sound; cash flow = solvent.",
+          "b": "Each covers a blind spot of the others — one alone misleads.",
+          "c": "A company can look profitable yet be insolvent. Only all three tell the truth.",
+          "d": "Utilities are reliably profitable yet rarely self-funding — solvency leans on continuous access to capital markets.",
+          "ex": "Unitil FY2024: profitable (net income $47.1M) and sound (equity $512.5M) — yet FCF = $130.0M − $175.0M = −$45.0M. Not self-funding; solvency leans on capital-market access."
+        }
+      ]
+    },
+    {
+      "n": "Reading the Business",
+      "ic": "🧮",
+      "color": "#0572CE",
+      "tl": "Why a seller cares",
+      "cards": [
+        {
+          "t": "Margins",
+          "p": "Gross, operating, net — the ladder?",
+          "a": "Profit at each level divided by revenue.",
+          "b": "Shows where money is made or lost down the statement.",
+          "c": "Margin compression is quantifiable pain — and a reason to modernize for real-time visibility.",
+          "d": "Use margin after pass-through costs for utilities — raw revenue includes fuel and purchased power they don't mark up.",
+          "ex": "Unitil FY2024 margin ladder (each ÷ revenue $494.8M): gross 52.5% ($259.8M), operating 18.3% ($90.6M), net 9.5% ($47.1M). For a utility, read margin after pass-through fuel/power costs."
+        },
+        {
+          "t": "Liquidity Ratios",
+          "p": "Can they pay the short-term bills?",
+          "a": "Current ratio (current assets / current liabilities) and the stricter quick ratio.",
+          "b": "They flag short-term solvency risk.",
+          "c": "Tight liquidity makes working-capital release a compelling ERP ROI story.",
+          "d": "Don't be alarmed by a sub-1 current ratio at a utility — it's structural, backed by predictable regulated cash flows.",
+          "ex": "NextEra current ratio = Current assets ÷ Current liabilities = $13,858M ÷ $25,573M = 0.54× (Q1 FY2026). Cash ratio: $1,998M ÷ $25,573M = 0.08×. Sub-1 is structural for a utility, not a red flag."
+        },
+        {
+          "t": "Leverage",
+          "p": "How much debt, and can they cover it?",
+          "a": "Debt-to-equity sizes leverage; interest coverage (EBIT / interest) tests the cushion.",
+          "b": "Over-levered firms are fragile when rates or earnings move.",
+          "c": "Leverage context shapes how you frame TCO and deal financing.",
+          "d": "Utilities run roughly 50/50 debt/equity or higher by design; stable cash flows justify it. (Unitil sits near 1.5× D/E.)",
+          "ex": "Southern debt-to-equity = Total debt ÷ Equity = $74,522M ÷ $39,912M = 1.87× (Q1 FY2026) — high by design. Interest coverage = EBIT ÷ interest = $2,018M ÷ $778M = 2.59×, so earnings cover interest about 2.6×."
+        },
+        {
+          "t": "Returns: ROE, ROA, ROIC",
+          "p": "How well is capital used?",
+          "a": "Net income over equity, assets, or invested capital.",
+          "b": "Returns above the cost of capital create value; below it, destroy it.",
+          "c": "Returns are boardroom language — anchor your value case to them.",
+          "d": "A utility's ROE only means something next to its allowed ROE from the rate case — that's the real benchmark.",
+          "ex": "Unitil FY2024: ROE = $47.1M ÷ $512.5M = 9.2%; ROA = $47.1M ÷ $1,794.5M = 2.6% (low — the asset base is huge). Compare that 9.2% ROE to the allowed ROE set in the rate case."
+        },
+        {
+          "t": "Cash Conversion Cycle",
+          "p": "DSO + DIO − DPO. What does it reveal?",
+          "a": "The days cash is tied up between paying suppliers and collecting from customers.",
+          "b": "A shorter cycle self-funds growth and cuts financing needs.",
+          "c": "Connecting order-to-cash and procure-to-pay in one ERP tightens every leg.",
+          "d": "Less central for utilities (no inventory-heavy cycle); the capex funding cycle matters far more.",
+          "ex": "Less central for a utility — no inventory cycle. The funding cycle dominates instead: CFO $130.0M vs capex $175.0M leaves a $45.0M gap to finance every year."
+        },
+        {
+          "t": "Free Cash Flow",
+          "p": "The number boards reward?",
+          "a": "Operating cash flow minus capital expenditures.",
+          "b": "It funds dividends, buybacks, debt paydown, and M&A.",
+          "c": "Better EPM forecasting makes FCF predictable — and predictability earns CFO trust.",
+          "d": "Utilities often run persistently negative FCF from heavy capex by design — that's healthy here, not a warning.",
+          "ex": "Unitil FCF = CFO − capex = $130.0M − $175.0M = −$45.0M. Negative by design; CFO ÷ capex = 0.74× means operations cover ~74% of the build, and debt/equity funds the rest."
+        }
+      ]
+    },
+    {
+      "n": "The Close & Controls",
+      "ic": "🔒",
+      "color": "#6A3E8E",
+      "tl": "Why a seller cares",
+      "cards": [
+        {
+          "t": "The Financial Close",
+          "p": "Your best opening question?",
+          "a": "The period-end process of finalizing the books. Best-in-class is ~3–5 days.",
+          "b": "A slow close delays decisions and signals weak controls.",
+          "c": "Ask 'what's your current days-to-close?' — it surfaces pain in one question.",
+          "d": "Utilities add regulatory reporting on top of the close — FERC and state-commission filings with their own deadlines.",
+          "ex": "Illustration: best-in-class close ≈ 3–5 business days; a laggard takes 10–15+. Every extra day delays the numbers leaders decide on. Ask 'what's your days-to-close?' — a slow answer surfaces the pain in one question."
+        },
+        {
+          "t": "Account Reconciliation",
+          "p": "The spreadsheet graveyard?",
+          "a": "Matching GL balances to subledgers and supporting detail.",
+          "b": "Unreconciled accounts are audit risk and potential misstatement.",
+          "c": "Automated, continuous reconciliation replaces the month-end marathon.",
+          "d": "Utilities also reconcile regulatory assets and liabilities — accounts that don't exist in other industries.",
+          "ex": "Illustration: a mid-size utility may reconcile thousands of GL accounts every month. If even 5% still live in spreadsheets, that's hundreds of manual, audit-risk reconciliations — exactly what continuous automation removes."
+        },
+        {
+          "t": "Subledger vs. GL",
+          "p": "Detail vs. summary — why both?",
+          "a": "Subledgers hold transaction detail; the GL holds summarized balances.",
+          "b": "Tracing a balance to its source is what makes books auditable.",
+          "c": "Fusion subledger accounting keeps an automatic audit trail.",
+          "d": "Utility fixed-asset subledgers are massive (every pole, transformer, meter) — plant accounting is a discipline of its own.",
+          "ex": "Illustration: one GL line — 'Net utility plant $1.5B' — can sit atop a fixed-asset subledger of millions of individual assets (poles, transformers, meters). Tracing that $1.5B back to its source detail is what makes the books auditable."
+        },
+        {
+          "t": "SOX & Segregation of Duties",
+          "p": "Why is this personal for the CFO?",
+          "a": "Controls over financial reporting; SoD ensures no one controls a whole transaction.",
+          "b": "Executives personally certify controls — real legal liability.",
+          "c": "Continuous controls monitoring cuts audit cost and material-weakness risk.",
+          "d": "Same SOX rules, plus regulatory audits — utilities answer to commissions as well as the SEC.",
+          "ex": "SoD illustration: the person who sets up a new vendor should not also approve that vendor's payments — one person controlling a whole transaction is the exact gap SOX targets. Executives personally certify these controls."
+        },
+        {
+          "t": "Chart of Accounts",
+          "p": "The coding spine. Why does a messy one hurt?",
+          "a": "The structured list of accounts classifying every transaction.",
+          "b": "A sprawling CoA breaks reporting, consolidation, comparability.",
+          "c": "Oracle EDM rationalizes and governs the CoA so reporting rolls up cleanly.",
+          "d": "Utilities map to the FERC Uniform System of Accounts — a prescribed chart layered onto their own.",
+          "ex": "Illustration: a sprawling chart of accounts with 40,000 accounts breaks reporting and comparability; a rationalized ~5,000-account structure rolls up cleanly. Utilities must also map every account to the FERC Uniform System of Accounts."
+        },
+        {
+          "t": "Consolidation & Eliminations",
+          "p": "Many entities, one set of books?",
+          "a": "Combining subsidiaries and removing intercompany transactions.",
+          "b": "Errors overstate consolidated revenue and profit.",
+          "c": "Fusion consolidation automates eliminations — vital for multi-entity groups.",
+          "d": "Holding companies like Exelon, AEP and Southern — many regulated subs under one parent — make consolidation and intercompany a real challenge.",
+          "ex": "Illustration: if two Exelon subsidiaries bill each other $50M, consolidated revenue must eliminate that $50M — otherwise the group overstates revenue by $50M. Multiply across many subs and the eliminations get large fast."
+        }
+      ]
+    },
+    {
+      "n": "Sector: Energy, Water & Utilities",
+      "ic": "⚡",
+      "color": "#006B72",
+      "tl": "Sector & ERP angle",
+      "cards": [
+        {
+          "t": "Rate Base",
+          "p": "The heart of a regulated utility?",
+          "a": "The net plant value on which a regulator lets the utility earn a return.",
+          "b": "Utilities grow earnings mainly by growing rate base — investing in plant.",
+          "c": "Plant accounting accuracy is everything — why utilities run PowerPlan alongside or within Oracle Fusion.",
+          "d": "Your whole book lives here — Exelon, Southern, Duke, NextEra, AES, CMS all grow earnings by growing rate base.",
+          "ex": "Unitil's ~$1.5B+ net utility plant IS its rate base. Earnings ≈ allowed ROE × rate base, so growing the plant grows earnings. Roughly: 9.5% allowed × rate base ≈ the return it's permitted to earn."
+        },
+        {
+          "t": "Allowed ROE",
+          "p": "Who sets a utility's profit?",
+          "a": "The return on equity a regulator permits in a rate case.",
+          "b": "Actual ROE is judged against this allowed number — the scorecard.",
+          "c": "Compare the company's real ROE to its allowed ROE to gauge regulatory health.",
+          "d": "Multi-state holders like Exelon (ComEd, PECO, BGE, Pepco) litigate a separate allowed ROE in each state — usually ~9–10%.",
+          "ex": "Actual vs allowed: Unitil ROE = $47.1M ÷ $512.5M = 9.2%, against a typical allowed ~9–10%. Earning right at allowed signals a healthy regulatory relationship."
+        },
+        {
+          "t": "Capital Intensity",
+          "p": "Why is CFO/capex below 1× normal here?",
+          "a": "Utilities spend more on plant than operations generate, year after year.",
+          "b": "They fund the gap with debt and equity, grow rate base, earn a return on it.",
+          "c": "The entire utility model — exactly what Unitil's CFO/capex of ~0.74× showed.",
+          "d": "Unitil spends ~35% of revenue on capex with CFO/capex near 0.74× — the textbook regulated-utility profile.",
+          "ex": "Unitil FY2024: capex $175.0M ÷ revenue $494.8M = 35% capex intensity; CFO ÷ capex = $130.0M ÷ $175.0M = 0.74×. Below 1× — operations don't cover the build. Textbook utility."
+        },
+        {
+          "t": "Regulatory Assets & Liabilities",
+          "p": "Balance-sheet items unique to utilities?",
+          "a": "Costs or benefits deferred to future periods because regulators allow recovery or require return.",
+          "b": "They smooth earnings and exist only because of regulation.",
+          "c": "They complicate the close and reporting — a clear modernization driver.",
+          "d": "These deferrals — large at Dominion, Duke and Southern — are exactly why utilities need strong ERP and regulatory accounting.",
+          "ex": "Illustration: a utility spends $100M on storm restoration but the regulator lets it recover the cost over 5 years. It parks a $100M regulatory asset and bills ~$20M/year — an account that exists only because a regulator allows it."
+        },
+        {
+          "t": "Pass-Through Costs",
+          "p": "Why isn't fuel a profit lever?",
+          "a": "Fuel, purchased power, and water supply are recovered from customers, not marked up.",
+          "b": "It's why utility 'gross margin' strips out these pass-throughs.",
+          "c": "Revenue optics can mislead — focus on margin after pass-throughs.",
+          "d": "Fuel and purchased-power recovery — think Georgia Power or PSEG — is why headline revenue can swing without touching profit.",
+          "ex": "Why utility gross margin misleads: Unitil's $235.0M 'COGS' is largely fuel and purchased power passed through at cost. Strip it out and judge margin after pass-throughs — not the headline 52.5%."
+        },
+        {
+          "t": "Water Utilities",
+          "p": "What makes water capital even heavier?",
+          "a": "Very long-lived assets (pipes, treatment) and sustained rate-base investment.",
+          "b": "Aging infrastructure means decades of capex and rate-base growth.",
+          "c": "Long asset lives stress fixed-asset and regulatory accounting — fertile ERP ground.",
+          "d": "Water names in your book — H2O America (ex-SJW), Connecticut Water, Maine Water, Aquarion, Veolia, United Water — carry the longest asset lives.",
+          "ex": "Illustration: a water main can be depreciated over 50–100 years, versus ~30–40 for power plant. Longer asset lives mean decades of sustained rate-base investment — and heavy fixed-asset and regulatory accounting."
+        }
+      ]
+    },
+    {
+      "n": "Sector: Berkshire Hathaway",
+      "ic": "🏛️",
+      "color": "#9A6700",
+      "tl": "Sector & ERP angle",
+      "cards": [
+        {
+          "t": "The Conglomerate Model",
+          "p": "What kind of company is Berkshire?",
+          "a": "A holding company owning dozens of businesses plus a large equity portfolio.",
+          "b": "Its results are the sum of wildly different subsidiaries.",
+          "c": "Each sub often runs its own systems — a consolidation and standardization opportunity.",
+          "d": "Berkshire spans utilities (BHE), distribution (McLane, TTI/Mouser) and brands (Duracell, Acme Brick, Brooks, Justin) — many on your account list.",
+          "ex": "Illustration: Berkshire's result is the SUM of dozens of businesses — insurance + BNSF rail + BHE utilities + manufacturing + a huge equity portfolio. No single margin describes it; you read each segment on its own."
+        },
+        {
+          "t": "Decentralization",
+          "p": "How does Berkshire run its subsidiaries?",
+          "a": "Extreme decentralization — subs operate autonomously with a tiny HQ.",
+          "b": "Capital allocation is centralized; operations are not.",
+          "c": "Fragmented finance systems = the CAO's consolidation headache and your opening.",
+          "d": "BHE's utilities run autonomously — as do Duracell, Acme Brick and Brooks — under a tiny HQ, so finance systems stay fragmented.",
+          "ex": "Illustration: a headquarters of only a few dozen people oversees hundreds of thousands of employees across the subsidiaries — so each sub keeps its own finance systems. That fragmentation is precisely the consolidation and standardization opening."
+        },
+        {
+          "t": "Insurance Float",
+          "p": "Berkshire's secret financing engine?",
+          "a": "Premiums held before claims are paid — money Berkshire invests meanwhile.",
+          "b": "Low- or no-cost financing that fuels investments.",
+          "c": "Float is a balance-sheet liability that behaves like free capital — a vivid working-capital lesson.",
+          "d": "Berkshire's float helps fund capital-heavy businesses like BHE's utility build-out — cheap capital meeting rate base.",
+          "ex": "Illustration: if insurers hold $100 of premiums before paying claims, Berkshire invests that $100 in the meantime — low- or no-cost financing. Float behaves like free capital: a balance-sheet liability that quietly funds investments."
+        },
+        {
+          "t": "Owner Earnings",
+          "p": "Buffett's preferred profit measure?",
+          "a": "Reported earnings plus non-cash charges, minus maintenance capex.",
+          "b": "Approximates true distributable cash — a cousin of free cash flow.",
+          "c": "It reframes the income statement through a cash-and-capex lens. Speak it to finance leaders.",
+          "d": "For a capital-heavy utility like BHE, maintenance capex is large, so owner earnings sit well below reported earnings.",
+          "ex": "Owner earnings ≈ Net income + non-cash charges − maintenance capex. Illustration: profit $10 + depreciation $4 − maintenance capex $5 = $9 owner earnings. For capital-heavy BHE, large maintenance capex pulls owner earnings below reported profit."
+        },
+        {
+          "t": "Capital Allocation",
+          "p": "Berkshire's core skill?",
+          "a": "Deciding where the cash from subsidiaries is reinvested across the empire.",
+          "b": "The single biggest driver of long-run shareholder value.",
+          "c": "Reliable subsidiary-level data is the raw material for good capital allocation.",
+          "d": "Berkshire pours capital into BHE precisely because regulated utilities offer steady, rate-base-driven returns.",
+          "ex": "Illustration: cash thrown off by subs (say insurance + rail) gets redeployed where returns are best — often into BHE's regulated utility build-out, because rate base delivers steady returns. That reinvestment decision is the core skill."
+        },
+        {
+          "t": "The Subsidiaries",
+          "p": "Where do energy and your deals fit?",
+          "a": "BNSF rail, Berkshire Hathaway Energy (utilities!), McLane and TTI distribution, Duracell, Acme Brick, Brooks, Justin, and more.",
+          "b": "BHE links Berkshire back to the utilities unit; McLane is a real Oracle case.",
+          "c": "Standardizing finance across these subs is exactly the story you're already selling.",
+          "d": "BHE is the utilities link; McLane, TTI/Mouser, Duracell, CORT and Acme Brick are all on your account list.",
+          "ex": "Illustration: BHE links Berkshire straight back to the utilities unit, and McLane (distribution) is a real Oracle ERP case. Standardizing finance across such different subs is exactly the story you're already selling."
+        }
+      ]
+    }
+  ],
+  "solutions": [
+    {
+      "n": "Oracle Fusion Cloud Applications",
+      "ic": "☁️",
+      "color": "#C74634",
+      "tl": "Discovery hook",
+      "dl": "🔗 The suite",
+      "cards": [
+        {
+          "t": "Oracle Fusion Cloud Applications",
+          "p": "What is the Fusion suite, in one line?",
+          "a": "Oracle's complete cloud (SaaS) business suite — ERP, EPM, HCM, SCM and CX — built on one common data and security model.",
+          "b": "One vendor, one suite, one source of truth: finance, HR, supply chain and customer data stop living in silos.",
+          "c": "Open with 'how many separate systems run your finance, HR and supply chain today?' — fragmentation is the opening.",
+          "d": "The pillars: ERP (finance), EPM (planning & close), HCM (people), SCM (supply chain), CX (front office)."
+        },
+        {
+          "t": "One Data Model",
+          "p": "Why does 'one suite' actually matter?",
+          "a": "Every Fusion app shares a single data model and security model, so modules connect without custom integration.",
+          "b": "Finance, HR and operations reconcile automatically — no integration tax, no data that disagrees between systems.",
+          "c": "If their finance and HR numbers never quite match, that mismatch is the pain you solve.",
+          "d": "Contrast with bolting together separate ERP, HR and CRM products from different vendors."
+        },
+        {
+          "t": "Quarterly Updates",
+          "p": "How does Oracle deliver new capability?",
+          "a": "Fusion ships new features every quarter (e.g. the 25x/26x releases) — no disruptive 're-implementation' upgrades.",
+          "b": "Customers get continuous innovation and stay current automatically, instead of falling years behind on-prem.",
+          "c": "Ask when they last upgraded their on-prem ERP — multi-year upgrade pain reframes 'cloud' as relief.",
+          "d": "Same quarterly cadence underpins ERP, HCM, SCM, EPM and CX together."
+        },
+        {
+          "t": "Fusion AI & Agentic Apps",
+          "p": "What's Oracle's AI story in Fusion?",
+          "a": "AI is embedded across the suite, plus new Fusion Agentic Applications — objective-based workspaces where AI agents collaborate to reach an outcome.",
+          "b": "It automates routine finance, HR and supply-chain work — a concrete productivity and cost message.",
+          "c": "Ask where teams are stuck in manual, repetitive work — that's the agentic-AI use case.",
+          "d": "Recent releases added agentic apps across ERP, HCM, SCM and CX."
+        },
+        {
+          "t": "Cloud vs EBS / PeopleSoft",
+          "p": "Where does Fusion fit for legacy Oracle shops?",
+          "a": "Fusion Cloud is the modern SaaS successor to on-prem Oracle E-Business Suite, PeopleSoft and JD Edwards.",
+          "b": "It gives legacy customers a clear, supported modernization path off aging on-prem systems.",
+          "c": "'Running EBS or PeopleSoft?' instantly frames the cloud-migration conversation.",
+          "d": "Utilities often run decades-old on-prem finance — a prime Fusion ERP modernization target."
+        }
+      ]
+    },
+    {
+      "n": "Oracle Cloud ERP",
+      "ic": "📊",
+      "color": "#0572CE",
+      "tl": "Discovery hook",
+      "dl": "⚡ Utility angle",
+      "cards": [
+        {
+          "t": "Oracle Cloud ERP",
+          "p": "What does Cloud ERP cover?",
+          "a": "Cloud financial management plus procurement, project management, and risk management — the finance system of record.",
+          "b": "It runs the close, reporting and controls every CFO is judged on. This is the core of most Oracle deals.",
+          "c": "Lead with 'how many days does your financial close take?' — a slow close surfaces pain fast.",
+          "d": "Utilities layer FERC and state-commission reporting on top of the standard close."
+        },
+        {
+          "t": "Financials: GL, AP, AR, FA",
+          "p": "What's inside the financials core?",
+          "a": "General Ledger, Payables, Receivables, Fixed Assets and Cash Management — the books and sub-ledgers.",
+          "b": "It's where the three statements you teach actually get produced and tied out.",
+          "c": "Connect it back: this is the engine behind the income statement, balance sheet and cash flow.",
+          "d": "Fixed Assets matters enormously to a utility — net plant IS the rate base."
+        },
+        {
+          "t": "Procurement & Source-to-Pay",
+          "p": "Why does procurement ride with ERP?",
+          "a": "Sourcing, purchasing, supplier management and payables in one source-to-pay flow.",
+          "b": "Tighter spend control and supplier risk visibility — direct margin and working-capital impact.",
+          "c": "Tie to working capital: faster, controlled procure-to-pay releases cash.",
+          "d": "Capital-heavy utilities buy enormous volumes of plant and materials — procurement scale is real."
+        },
+        {
+          "t": "Risk Management & SOX",
+          "p": "How does ERP make controls easier?",
+          "a": "Advanced Financial Controls and Access Controls automate segregation-of-duties and continuous monitoring.",
+          "b": "Executives personally certify controls under SOX — automation cuts audit cost and material-weakness risk.",
+          "c": "This is the SOX & segregation-of-duties card from the Close unit, made into a product.",
+          "d": "Utilities answer to both the SEC and state commissions — double the audit scrutiny."
+        },
+        {
+          "t": "AI in ERP",
+          "p": "What does agentic AI do for finance?",
+          "a": "AI agents automate invoice processing, anomaly detection, and account reconciliation inside the close.",
+          "b": "It compresses days-to-close and reduces manual error — a measurable ROI story.",
+          "c": "Pair with the reconciliation card: the 'spreadsheet graveyard' is exactly what AI eliminates.",
+          "d": "Reconciling regulatory assets/liabilities is utility-specific manual work AI can streamline."
+        }
+      ]
+    },
+    {
+      "n": "Energy & Water: Customer Cloud Service",
+      "ic": "💧",
+      "color": "#006B72",
+      "tl": "Discovery hook",
+      "dl": "🔗 Integrates with",
+      "cards": [
+        {
+          "t": "Customer Cloud Service (CCS)",
+          "p": "What is Oracle Utilities CCS?",
+          "a": "A cloud customer information system (CIS) — customer care, service orders, metering and billing in one SaaS product for utilities of all sizes.",
+          "b": "It's the utility's revenue and customer-engagement engine — billing accuracy and customer experience live here.",
+          "c": "Ask 'how old is your CIS / billing system?' — most utilities run aging on-prem CIS.",
+          "d": "Part of Oracle Energy and Water (formerly Oracle Utilities)."
+        },
+        {
+          "t": "CIS + MDM + ODM in One",
+          "p": "What makes CCS more than a billing system?",
+          "a": "CCS combines Customer Care & Billing, Meter Data Management, and Operational Device Management as a single solution.",
+          "b": "Three systems become one — far fewer integrations to build, run and audit.",
+          "c": "If they run separate CIS, meter-data and device systems, the consolidation story is compelling.",
+          "d": "Pre-built integration to head-end and AMI (smart meter) systems is included."
+        },
+        {
+          "t": "Billing for Regulated Rates",
+          "p": "Why is utility billing uniquely hard?",
+          "a": "CCS handles complex regulated rate structures, multiple service types, and pass-through cost recovery.",
+          "b": "Regulated rates and fuel/purchased-power recovery make billing logic far more complex than a normal invoice.",
+          "c": "Tie to the pass-through-costs card: this is where regulated revenue actually gets calculated.",
+          "d": "Supports one-to-many service types (electric, gas, water) on a single platform."
+        },
+        {
+          "t": "Service Orders & Customer Care",
+          "p": "What about the customer side?",
+          "a": "Service order management plus multi-channel customer communication (web, mobile, contact center).",
+          "b": "Customer satisfaction and regulator-watched service metrics depend on this workflow.",
+          "c": "Ask about their self-service and contact-center experience — friction there is a CX opening.",
+          "d": "Captures data from multiple sources for a single view of the customer."
+        },
+        {
+          "t": "Cloud vs On-Prem CC&B / C2M",
+          "p": "How does CCS relate to legacy products?",
+          "a": "CCS is the SaaS evolution of on-prem Customer Care & Billing (CC&B) and Customer to Meter (C2M).",
+          "b": "It gives existing CC&B/C2M customers a cloud path without abandoning the platform they know.",
+          "c": "'On CC&B on-premises?' immediately frames CCS as the cloud move.",
+          "d": "Many of your utility accounts still run on-prem CC&B today."
+        }
+      ]
+    },
+    {
+      "n": "Energy & Water: Network & Meter Data",
+      "ic": "⚡",
+      "color": "#9A6700",
+      "tl": "Discovery hook",
+      "dl": "🔗 Integrates with",
+      "cards": [
+        {
+          "t": "Network Management System (NMS)",
+          "p": "What is Oracle Utilities NMS?",
+          "a": "Real-time outage and distribution management for the electric grid — combining outage (OMS) and distribution (DMS) management.",
+          "b": "Grid reliability and outage response are board-level and regulator-watched — NMS runs them.",
+          "c": "Ask 'how do you manage outages and restoration today?' — reliability is always top-of-mind.",
+          "d": "Pairs with CCS so customer outage calls and the grid view stay in sync."
+        },
+        {
+          "t": "Outage Management (OMS)",
+          "p": "What does the OMS half do?",
+          "a": "Predicts and locates outages, manages field crews, and orchestrates restoration.",
+          "b": "It directly drives SAIDI/SAIFI reliability metrics that regulators and customers judge utilities on.",
+          "c": "Reliability scores tie to rate cases — better outage response supports the regulated return story.",
+          "d": "Outage calls flow from CCS customers into NMS for a unified response."
+        },
+        {
+          "t": "Distribution Management (DMS)",
+          "p": "What does the DMS half do?",
+          "a": "Monitors and controls the distribution network and supports distributed energy resources (DER).",
+          "b": "Grid modernization and rooftop-solar/EV growth make active distribution control essential.",
+          "c": "Tie to rate base: grid-modernization capex is exactly the rate-base growth utilities earn on.",
+          "d": "Supports the shift to a two-way grid as renewables and DER scale."
+        },
+        {
+          "t": "Meter Data Management (MDM)",
+          "p": "What problem does MDM solve?",
+          "a": "Collects, validates (VEE), and stores massive volumes of smart-meter / AMI interval data.",
+          "b": "Accurate validated meter data is the foundation of correct billing and grid analytics.",
+          "c": "Ask about their AMI rollout — meter data volume explodes and needs industrial-scale management.",
+          "d": "Feeds validated reads straight into CCS billing; also available within CCS."
+        },
+        {
+          "t": "CCS ↔ NMS Integration",
+          "p": "Why does the integration matter?",
+          "a": "Pre-built integration links the customer/metering system (CCS) to the grid system (NMS).",
+          "b": "One connected view of customer and grid — outages, service orders and metering stay consistent.",
+          "c": "The integration story is the differentiator: customer + grid + meter data on one Oracle stack.",
+          "d": "Documented in Oracle's Customer-to-Meter to Network Management System integration guides."
+        }
+      ]
+    },
+    {
+      "n": "Oracle Cloud HCM",
+      "ic": "👥",
+      "color": "#6A3E8E",
+      "tl": "Discovery hook",
+      "dl": "⚡ Utility angle",
+      "cards": [
+        {
+          "t": "Oracle Cloud HCM",
+          "p": "What does Cloud HCM cover?",
+          "a": "A complete cloud suite for the whole employee lifecycle — core HR, payroll, talent, and workforce management.",
+          "b": "People are a utility's largest cost after capital; one HR system replaces a pile of point tools.",
+          "c": "Ask 'how many separate systems touch an employee from hire to retire?'",
+          "d": "An aging utility workforce and wave of retirements make this urgent."
+        },
+        {
+          "t": "Global HR & Payroll",
+          "p": "What's the system-of-record layer?",
+          "a": "A single global HR record plus Oracle Payroll for org, pay and compliance.",
+          "b": "One source of truth for the workforce, instead of reconciling HR and payroll across systems.",
+          "c": "Probe multi-entity, multi-state payroll complexity.",
+          "d": "Utilities span regulated subsidiaries and unionized workforces with complex pay rules."
+        },
+        {
+          "t": "Talent Management",
+          "p": "How does Oracle help win the talent war?",
+          "a": "Recruiting, Onboarding, Performance, Compensation, Career Development and Succession in one module.",
+          "b": "Attracting and keeping scarce skilled labor (linemen, engineers) is existential for utilities.",
+          "c": "'What's your time-to-fill for safety-critical roles?'",
+          "d": "Succession planning matters as experienced field crews retire."
+        },
+        {
+          "t": "Workforce Management",
+          "p": "Where does labor cost get controlled?",
+          "a": "Time, labor, scheduling and absence management.",
+          "b": "Directly controls overtime, labor cost and compliance.",
+          "c": "Overtime and scheduling pain in field operations is a fast opening.",
+          "d": "Storm and outage response demands flexible, rapid crew scheduling."
+        },
+        {
+          "t": "Oracle ME (Employee Experience)",
+          "p": "What's Oracle's employee-experience play?",
+          "a": "Oracle ME — Journeys, Touchpoints, Celebrate and Communicate — guided, GenAI-assisted employee experiences.",
+          "b": "Engagement and a modern experience retain talent and lift productivity.",
+          "c": "'How do new hires get onboarded today?'",
+          "d": "Deskless field workers need a mobile-first experience."
+        }
+      ]
+    },
+    {
+      "n": "Oracle Cloud SCM",
+      "ic": "📦",
+      "color": "#1B7A47",
+      "tl": "Discovery hook",
+      "dl": "⚡ Utility angle",
+      "cards": [
+        {
+          "t": "Oracle Cloud SCM",
+          "p": "What does Cloud SCM span?",
+          "a": "A connected suite across planning, procurement, inventory, manufacturing, logistics and order management.",
+          "b": "Resilient supply chains; for capital projects, materials availability drives the schedule.",
+          "c": "'How do you manage materials for capital projects?'",
+          "d": "Utilities procure huge volumes of poles, transformers, cable and meters."
+        },
+        {
+          "t": "Supply Chain Planning",
+          "p": "What does planning solve?",
+          "a": "Demand and supply planning with machine learning to balance inventory, capacity and materials.",
+          "b": "Avoids both stockouts and excess by predicting what's needed where.",
+          "c": "Long-lead-time equipment is a planning nightmare — surface it.",
+          "d": "Grid build-out hinges on planning scarce long-lead components like transformers."
+        },
+        {
+          "t": "Inventory Management",
+          "p": "What does inventory give you?",
+          "a": "Visibility into every item and movement, automated replenishment, and serial/lot tracking.",
+          "b": "Cuts carrying cost and stockouts — right materials, right place, right time.",
+          "c": "Spare-parts and MRO inventory across service territories is a common pain.",
+          "d": "Utilities stock critical spares across many yards and substations."
+        },
+        {
+          "t": "Procurement (Source-to-Pay)",
+          "p": "How does SCM procurement help?",
+          "a": "Sourcing, supplier management, purchasing and payables with built-in AI.",
+          "b": "Enforces compliant spend, best-supplier selection and margin protection.",
+          "c": "Ties to ERP — supplier risk and maverick spend are openings.",
+          "d": "Massive regulated capital-procurement programs make this high-stakes."
+        },
+        {
+          "t": "Maintenance & Logistics",
+          "p": "What about assets and movement?",
+          "a": "Supply Chain Execution (costing, manufacturing, maintenance, quality) plus Logistics (warehouse, transportation, global trade).",
+          "b": "Executes precisely from material handling to delivery and asset upkeep.",
+          "c": "Asset maintenance (EAM) for plant is the utility-relevant angle.",
+          "d": "Maintaining a vast distributed asset base is core to utility operations."
+        }
+      ]
+    },
+    {
+      "n": "Oracle Cloud EPM",
+      "ic": "📈",
+      "color": "#C8902E",
+      "tl": "Discovery hook",
+      "dl": "🔗 Ties to finance",
+      "cards": [
+        {
+          "t": "Oracle Cloud EPM",
+          "p": "What is EPM, above ERP?",
+          "a": "The planning, consolidation & close, reconciliation and reporting layer that sits above the ERP ledger.",
+          "b": "It's the CFO's forecasting and close engine — it directly operationalizes the finance you teach.",
+          "c": "'How long does your forecast and close cycle take?'",
+          "d": "EPM's modules ARE the Close & Controls unit, turned into products."
+        },
+        {
+          "t": "Planning",
+          "p": "What does EPM Planning do?",
+          "a": "Connected planning with dashboards, predictive planning and machine learning.",
+          "b": "Faster, more accurate forecasts make cash flow predictable.",
+          "c": "Tie to the free-cash-flow card — predictability earns CFO trust.",
+          "d": "Utilities plan multi-year rate-base capital programs here."
+        },
+        {
+          "t": "Financial Consolidation & Close",
+          "p": "Which finance card is this?",
+          "a": "Streamlines consolidation, intercompany eliminations and the financial close.",
+          "b": "It's the 'consolidation & eliminations' card as a shipping product.",
+          "c": "Multi-entity holding companies (Exelon, AEP, Southern) feel this pain most.",
+          "d": "Layers regulatory reporting on top of GAAP consolidation."
+        },
+        {
+          "t": "Account Reconciliation",
+          "p": "What kills the spreadsheet graveyard?",
+          "a": "Reconciliation compliance, period management and automated transaction matching.",
+          "b": "It's the 'account reconciliation' card automated end to end.",
+          "c": "'How many accounts are reconciled in spreadsheets each month?'",
+          "d": "Reconciling regulatory assets and liabilities is utility-specific work."
+        },
+        {
+          "t": "EDM & Narrative Reporting",
+          "p": "What governs data and the story?",
+          "a": "Enterprise Data Management governs master data like the chart of accounts; Narrative Reporting authors and publishes financial & regulatory reports.",
+          "b": "A clean CoA plus collaborative reporting — the 'chart of accounts' card as a product.",
+          "c": "A sprawling, messy CoA breaks consolidation and comparability.",
+          "d": "Maps to the FERC Uniform System of Accounts utilities must follow."
+        }
+      ]
+    },
+    {
+      "n": "Oracle Cloud CX",
+      "ic": "🤝",
+      "color": "#C74634",
+      "tl": "Discovery hook",
+      "dl": "⚡ Utility angle",
+      "cards": [
+        {
+          "t": "Oracle Cloud CX",
+          "p": "What is CX, beyond CRM?",
+          "a": "A connected front-office suite — Sales, Service, Marketing and CPQ — that goes past traditional CRM.",
+          "b": "Customer experience is increasingly regulator-watched for utilities, and central for any seller.",
+          "c": "'How do you handle customer interactions across channels?'",
+          "d": "Covers residential and C&I customer experience, distinct from CCS billing."
+        },
+        {
+          "t": "Oracle Sales",
+          "p": "What's the revenue engine?",
+          "a": "Sales, quoting, order management, billing and renewals on one platform with better forecast accuracy.",
+          "b": "Predictable revenue and a reliable buying experience.",
+          "c": "B2B and C&I sales motions are the entry point.",
+          "d": "Utility commercial & industrial key-account management lives here."
+        },
+        {
+          "t": "Oracle Service",
+          "p": "How does service work?",
+          "a": "B2C Service, Field Service and Intelligent Advisor for lasting customer relationships.",
+          "b": "Efficient, consistent service across channels and the field.",
+          "c": "Field-service scheduling and dispatch is a tangible pain.",
+          "d": "Utilities run large field-service organizations."
+        },
+        {
+          "t": "Oracle Marketing",
+          "p": "What's in the marketing stack?",
+          "a": "Eloqua (B2B automation), Responsys (B2C campaigns) and Unity Customer Data Platform.",
+          "b": "Personalized engagement built on unified customer data.",
+          "c": "Program campaigns (energy efficiency, demand response) need targeting.",
+          "d": "Utility customer programs depend on segmented, timely communication."
+        },
+        {
+          "t": "Oracle CPQ",
+          "p": "What does CPQ fix?",
+          "a": "Configure, Price, Quote — configure the right products and produce accurate quotes; connects to Commerce, ERP and Order Management.",
+          "b": "Faster, accurate quotes shorten the sales cycle and protect margin.",
+          "c": "Complex product and pricing scenarios are the trigger.",
+          "d": "Complex C&I rate and product quoting benefits most."
+        }
+      ]
+    },
+    {
+      "n": "Oracle Integration Cloud (OIC)",
+      "ic": "🔌",
+      "color": "#0572CE",
+      "tl": "Discovery hook",
+      "dl": "🔗 Connects",
+      "cards": [
+        {
+          "t": "Oracle Integration Cloud (OIC)",
+          "p": "What is OIC in one line?",
+          "a": "One service that unifies application integration, process automation, visual app building and integration analytics.",
+          "b": "It connects SaaS and on-prem so the Fusion suite and legacy systems actually talk.",
+          "c": "'How do your cloud and on-prem systems talk today?'",
+          "d": "Connects utility CCS/NMS to Fusion ERP and HCM."
+        },
+        {
+          "t": "Adapters, Recipes & Accelerators",
+          "p": "Why is OIC fast to build with?",
+          "a": "Prebuilt adapters plus Recipes (templates) and Accelerators connect apps roughly six times faster.",
+          "b": "Less custom code and a shorter time-to-value.",
+          "c": "A big integration backlog or high integration cost is the opening.",
+          "d": "Utilities juggle many systems — CIS, GIS, NMS, ERP — that all need connecting."
+        },
+        {
+          "t": "Process Automation",
+          "p": "What does the process side do?",
+          "a": "Structured and unstructured process automation plus case management.",
+          "b": "Automates cross-application workflows end to end.",
+          "c": "Manual handoffs between systems signal the need.",
+          "d": "Streamlines utility back-office processes across departments."
+        },
+        {
+          "t": "Event & Data Integration",
+          "p": "How does OIC stay real-time?",
+          "a": "Subscribe to Fusion business events to trigger downstream actions; supports real-time, batch and data integration.",
+          "b": "Event-driven integration keeps systems in sync as things happen.",
+          "c": "Data-sync latency between systems is a concrete complaint.",
+          "d": "Keeps meter, customer and grid data consistent across the stack."
+        },
+        {
+          "t": "End-to-End Visibility",
+          "p": "What about monitoring?",
+          "a": "Technical and business end-to-end data-flow visibility and integration insight.",
+          "b": "See and quantify transactions in business terms, not just logs.",
+          "c": "'Can you trace one transaction across all your systems?'",
+          "d": "Supports audit and compliance traceability utilities require."
+        }
+      ]
+    },
+    {
+      "n": "Oracle University",
+      "ic": "🎓",
+      "color": "#006B72",
+      "tl": "Why it matters to you",
+      "dl": "🎓 Subscriptions",
+      "cards": [
+        {
+          "t": "Oracle University / MyLearn",
+          "p": "What is Oracle University?",
+          "a": "Oracle's training and certification platform (MyLearn) — role-based learning paths, hands-on labs and live expert sessions.",
+          "b": "Adoption and value realization depend on trained users; it de-risks the whole deal.",
+          "c": "'How will your team get trained and certified before go-live?'",
+          "d": "Offers a mix of free and paid subscription content."
+        },
+        {
+          "t": "Cloud Learning Subscriptions",
+          "p": "What's the subscription model?",
+          "a": "Unlimited digital training: the Cloud Applications subscription covers ERP/EPM/HCM/SCM/CX; the Technology subscription covers OCI, Database, Java, MySQL and APEX.",
+          "b": "Cost-effective, organization-wide enablement that scales with the customer.",
+          "c": "Frame it as the enablement-budget conversation.",
+          "d": "Each subscription includes certification exam attempts."
+        },
+        {
+          "t": "Certifications",
+          "p": "Why do certifications matter?",
+          "a": "Role-based certifications validate skills across Fusion apps and OCI.",
+          "b": "Certified teams implement faster and make fewer costly mistakes.",
+          "c": "Tie to staffing and partner (SI) capability.",
+          "d": "Certifications are a credibility signal for staff and implementation partners."
+        },
+        {
+          "t": "Hands-on Labs & Training on Demand",
+          "p": "How do learners practice?",
+          "a": "Training on Demand plus hands-on labs in real Oracle environments.",
+          "b": "Teams practice safely in a sandbox before go-live.",
+          "c": "Position it as go-live risk reduction.",
+          "d": "Materials are machine-translated into 20+ languages."
+        },
+        {
+          "t": "Adoption Dashboards",
+          "p": "How do you prove ROI on training?",
+          "a": "Admin dashboards track subscriber activation and consumption at macro and micro levels.",
+          "b": "Measure enablement ROI and keep adoption on track across the org.",
+          "c": "'How will you measure user adoption after go-live?'",
+          "d": "Ties training to realized value — a renewal and expansion story."
+        }
+      ]
+    },
+    {
+      "n": "Use Cases: Customer Stories",
+      "ic": "🏆",
+      "color": "#1B7A47",
+      "tl": "How to use it in a pitch",
+      "dl": "🧩 Oracle products",
+      "exl": "📊 By the numbers",
+      "cards": [
+        {
+          "t": "Evergy",
+          "p": "How did a 1.4M-customer utility roll out time-of-use rates?",
+          "a": "Evergy — serving ~1.4 million customers across Kansas and Missouri — worked with Oracle Opower on behavioral energy insights, proactive alerts and digital self-service to support its move to default time-of-use (TOU) rates.",
+          "b": "Adoption was strong: about 30% of customers pre-enrolled in a TOU rate and ~80% enrolled through digital self-service — a smooth, customer-centric transition.",
+          "c": "Lead with this when a customer-experience or rate-change project comes up — proof that digital engagement drives rate-program adoption.",
+          "d": "Oracle Opower (Utilities Customer Experience).",
+          "ex": "~1.4M customers · 30% pre-enrolled in TOU · 80% enrolled via digital self-service."
+        },
+        {
+          "t": "JXN Water",
+          "p": "A water utility replaced its whole billing platform — how fast?",
+          "a": "JXN Water (Jackson, Mississippi) needed to migrate 65,000 customers to a brand-new system, deploying Oracle Utilities Customer Cloud Service and Advanced Meter Service as its meter-to-cash platform.",
+          "b": "The cloud, open-platform approach let JXN stand up a reliable meter-to-cash system in an eight-month timeframe — fast for a full CIS replacement.",
+          "c": "Perfect for a utility on an aging CIS worried about migration risk — cloud CCS goes live in months, not years.",
+          "d": "Oracle Utilities Customer Cloud Service (CCS) + Advanced Meter Service.",
+          "ex": "65,000 customers migrated to a new meter-to-cash platform in ~8 months."
+        },
+        {
+          "t": "Exelon",
+          "p": "How does a multi-state utility giant standardize its systems?",
+          "a": "Exelon — parent of ComEd, PECO, BGE and Pepco, among others — is deploying Oracle Energy and Water across its multi-state enterprise, and was recognized in Oracle's 2024 Energy and Water Awards.",
+          "b": "One platform across many regulated subsidiaries cuts fragmentation and standardizes customer and grid operations at enterprise scale.",
+          "c": "Exelon is on your account list — lead with a peer story: a top US utility holding company is standardizing on Oracle.",
+          "d": "Oracle Energy and Water (enterprise-wide).",
+          "ex": "Rollout spans Exelon's multi-state operating companies (ComEd, PECO, BGE, Pepco, and more)."
+        },
+        {
+          "t": "Opower at Scale",
+          "p": "What's the proof utility energy programs actually deliver?",
+          "a": "Oracle Opower runs AI-driven energy-efficiency and customer-engagement programs for utilities across North America — personalized insights, alerts and behavioral load-shaping.",
+          "b": "The aggregate impact is the ultimate proof point: tens of millions of households engaged, billions in customer bill savings, and measurable energy savings that support grid resiliency.",
+          "c": "When a prospect doubts customer programs deliver ROI, cite the portfolio-level numbers — a proven, at-scale platform.",
+          "d": "Oracle Opower (Utilities Customer Experience / Energy Efficiency).",
+          "ex": "~45M North American households benefiting; ~44 TWh saved ≈ $4.3B in customer bill savings since 2009."
+        },
+        {
+          "t": "Santee Cooper",
+          "p": "What did South Carolina's largest public power provider modernize?",
+          "a": "Santee Cooper, South Carolina's largest public power provider, implemented Oracle Utilities Customer Cloud Service to modernize customer operations for its electric account holders.",
+          "b": "Its nightly billing now runs on average about three hours faster, and communication overhead between modules dropped sharply.",
+          "c": "Great for a public-power or co-op prospect worried about batch-billing windows and system sprawl.",
+          "d": "Oracle Utilities Customer Cloud Service (CCS).",
+          "ex": "Nightly billing ~3 hours faster; module-to-module overhead sharply reduced."
+        },
+        {
+          "t": "Lubbock Power & Light",
+          "p": "How did a 108-year-old municipal utility enter retail competition?",
+          "a": "After more than 108 years as Lubbock's municipal electric provider, LP&L transitioned to a retail-competition business model backed by Oracle's utility customer and Advanced Metering Infrastructure (AMI) technology.",
+          "b": "Oracle's platform gave LP&L the customer and metering foundation to offer competitive retail electricity options for the first time.",
+          "c": "Use it for a municipal utility facing market or regulatory change — Oracle supports a whole new business model, not just a billing swap.",
+          "d": "Oracle Utilities customer platform + Advanced Meter Infrastructure (AMI).",
+          "ex": "Enabled a shift to retail electric competition after 108 years as a municipal provider."
+        },
+        {
+          "t": "City of St. Petersburg",
+          "p": "How does a city utility manage assets and storm reporting?",
+          "a": "The City of St. Petersburg uses Oracle Utilities Work and Asset Cloud Service (WACS) to simplify operations and maximize asset performance across its utility services.",
+          "b": "It manages 500,000+ assets, tracks nearly 50,000 timesheet entries, and generates FEMA-compliant reports — critical for disaster cost recovery.",
+          "c": "Strong for water or municipal prospects with heavy asset bases and storm/FEMA reporting needs.",
+          "d": "Oracle Utilities Work and Asset Cloud Service (WACS).",
+          "ex": "500,000+ assets managed; ~50,000 timesheet entries; FEMA-compliant reporting."
+        },
+        {
+          "t": "American Electric Power (AEP)",
+          "p": "How does a 5.6M-customer utility unify customer experience?",
+          "a": "AEP — powering 5.6 million customers across 11 states — consolidated nine different vendor solutions onto Oracle Opower for a single customer-experience platform, and is migrating to Oracle Utilities Customer Cloud Service for meter-to-cash.",
+          "b": "One secure data model now spans energy efficiency, digital self-service, high-bill alerts, rate comparisons, and equity/affordability outreach.",
+          "c": "AEP is on your account list — a flagship peer story: consolidating nine vendors onto one Oracle platform.",
+          "d": "Oracle Opower + Utilities Customer Cloud Service (CCS) + Customer Experience.",
+          "ex": "5.6M customers, 11 states; nine vendor solutions consolidated onto one Opower platform."
+        },
+        {
+          "t": "Portland General Electric",
+          "p": "How did an Oregon utility lift customer satisfaction?",
+          "a": "Portland General Electric used Oracle solutions to deliver more personalized, proactive customer service and heightened engagement — earning recognition in Oracle's 2024 Energy and Water Awards.",
+          "b": "It exceeded customer expectations through efficient issue resolution and proactive communication.",
+          "c": "Pair it with Evergy for a customer-experience transformation story.",
+          "d": "Oracle Utilities Customer Experience.",
+          "ex": "Recognized in Oracle's 2024 Energy and Water Awards for customer engagement."
+        },
+        {
+          "t": "SoCalGas",
+          "p": "What did the largest US gas utility achieve with energy reports?",
+          "a": "Southern California Gas (SoCalGas) sends Opower Home Energy Reports to customers each month to help them understand and reduce natural gas use.",
+          "b": "The program cut natural gas use by 10 million therms since 2013 and saved customers more than $11 million on their bills.",
+          "c": "A perfect proof point for a gas utility weighing an energy-efficiency or behavioral program.",
+          "d": "Oracle Opower (Home Energy Reports).",
+          "ex": "10M therms of gas saved since 2013 ≈ $11M+ in customer bill savings."
+        },
+        {
+          "t": "Con Edison",
+          "p": "How does a big-city utility get value from smart meters?",
+          "a": "Con Edison uses Oracle's Advanced Metering solutions to help customers understand the information and value delivered by their smart meters.",
+          "b": "Turning raw AMI data into clear customer insight drives engagement and smart-meter ROI.",
+          "c": "Good for a utility mid-AMI-rollout wondering how to make meter data useful to customers.",
+          "d": "Oracle Utilities Advanced Metering.",
+          "ex": "Smart-meter data turned into customer-facing insight at metro scale."
+        },
+        {
+          "t": "SMUD",
+          "p": "How is a community utility tackling decarbonization?",
+          "a": "Sacramento Municipal Utility District (SMUD), a community-owned electric utility, is partnering with Oracle Energy and Water on a customer-centric decarbonization solution — earning a 2023 Oracle Sustainability Award.",
+          "b": "It pairs clean-energy goals with a strong customer experience instead of treating them as separate tracks.",
+          "c": "Lead with SMUD when sustainability or decarbonization is on the customer's agenda.",
+          "d": "Oracle Energy and Water (customer decarbonization).",
+          "ex": "2023 Oracle Sustainability Award for customer-centric decarbonization."
+        },
+        {
+          "t": "National Grid",
+          "p": "How did a major utility make energy reports actually get read?",
+          "a": "National Grid piloted its first-ever video energy reports on Oracle Utilities Opower — emailing personalized videos to 33,000 Upstate New York customers — and ran a multichannel heat-pump adoption campaign on the same platform.",
+          "b": "The video reports earned 12× the click-through rate of standard digital energy reports, and 100,000+ customers saw the heat-pump content.",
+          "c": "Use it when engagement or program adoption (electrification, heat pumps) is the goal — richer content drives far higher response.",
+          "d": "Oracle Utilities Opower (video energy reports + energy efficiency).",
+          "ex": "33,000 customers in the video pilot; 12× the click-through of standard reports; 100,000+ heat-pump program participants."
+        },
+        {
+          "t": "Xcel Energy",
+          "p": "Which platform did Xcel pick for customer engagement?",
+          "a": "Xcel Energy selected the AI-enabled Oracle Opower customer-engagement platform to support its energy programs, strengthen customer experiences, and improve grid resiliency.",
+          "b": "One AI platform ties energy programs, customer experience, and grid resiliency together instead of running them as separate efforts.",
+          "c": "A recent, marquee multi-state utility win — good for a 'why Opower' shortlist conversation.",
+          "d": "Oracle Opower customer-engagement platform (AI-enabled).",
+          "ex": "Selected Oracle Opower to power energy programs, CX, and grid resiliency (announced Dec 2025)."
+        },
+        {
+          "t": "Puget Sound Energy",
+          "p": "Who goes first on a new Opower capability?",
+          "a": "Puget Sound Energy (PSE) in Washington is among the first providers to roll out the new Bill Advisor solution on the Oracle Opower platform.",
+          "b": "Bill Advisor proactively helps customers understand and manage their bills — cutting confusion and costly high-bill calls.",
+          "c": "Position PSE as an early-adopter proof point when a prospect worries about being first on new features.",
+          "d": "Oracle Opower (Bill Advisor).",
+          "ex": "Among the first utilities live on Opower's new Bill Advisor solution."
+        },
+        {
+          "t": "Essential Energy",
+          "p": "How does an Australian network operator modernize?",
+          "a": "Essential Energy, an Australian electricity distributor, was recognized at Oracle's Customer Edge Summit for using modern digital technology to simplify operations, transform customer experience, and maximize asset performance.",
+          "b": "It shows the Oracle Energy and Water story extends well beyond North America to large international network operators.",
+          "c": "Use it to prove global scale and relevance for a multinational or non-US prospect.",
+          "d": "Oracle Energy and Water.",
+          "ex": "Recognized at Oracle Customer Edge for operations, CX, and asset-performance gains."
+        },
+        {
+          "t": "FedEx",
+          "p": "How does a global logistics leader modernize finance?",
+          "a": "FedEx moved core enterprise functions to the cloud with Oracle Fusion Cloud ERP, EPM, SCM and Analytics — making finance as innovative as its customer-facing operations.",
+          "b": "With real-time data, FedEx responds to business changes about 2× faster and better supports both organic and acquired growth.",
+          "c": "A marquee cross-industry name for the 'one connected suite' story — finance, planning and supply chain on Oracle.",
+          "d": "Oracle Fusion Cloud ERP, EPM, SCM & Analytics.",
+          "ex": "Responds to change ~2× faster with real-time enterprise data."
+        },
+        {
+          "t": "Dropbox",
+          "p": "What happens when a tech firm consolidates finance on Oracle?",
+          "a": "Dropbox adopted Oracle Cloud to modernize and automate its finance operations.",
+          "b": "It cut transaction processing costs by ~80% and eliminated manual effort — freeing finance for higher-value work.",
+          "c": "Use the 80% figure for any 'automate the close / cut processing cost' conversation.",
+          "d": "Oracle Fusion Cloud ERP.",
+          "ex": "~80% reduction in transaction processing costs."
+        },
+        {
+          "t": "TrueBlue",
+          "p": "Why unify HR and finance on one platform?",
+          "a": "Staffing leader TrueBlue unified HR and finance on Oracle Fusion Cloud (HCM + ERP), giving employees and managers direct access to data.",
+          "b": "Productivity rose in both the back office and customer-facing roles once people could reach the data they needed — a truly connected enterprise.",
+          "c": "The go-to story for the HCM + ERP 'one data model' pitch — people and finance data in one place.",
+          "d": "Oracle Fusion Cloud HCM + ERP.",
+          "ex": "Productivity gains in both back-office and customer-facing roles after unifying HR + finance."
+        },
+        {
+          "t": "Al Jomaih Holding",
+          "p": "How does a diversified conglomerate run on one suite?",
+          "a": "Al Jomaih Holding, a large diversified group, implemented Oracle Fusion Cloud ERP, SCM, HCM and EPM together, with Oracle Customer Success Services supporting deployment and adoption.",
+          "b": "It gained better reporting visibility, a stronger employee experience, and faster, data-driven decisions across its business units.",
+          "c": "A strong analog for a Berkshire-style multi-business group standardizing finance across subsidiaries.",
+          "d": "Oracle Fusion Cloud ERP, SCM, HCM & EPM (full suite).",
+          "ex": "Full Fusion suite live across multiple business units; faster data-driven decisions."
+        }
+      ]
+    },
+    {
+      "n": "Berkshire Hathaway Wins",
+      "ic": "🏛️",
+      "color": "#9A6700",
+      "tl": "Why Oracle won",
+      "dl": "🧩 Oracle products",
+      "exl": "📊 Expected results",
+      "cards": [
+        {
+          "t": "TTI, Inc.",
+          "p": "How did a 40-year AS400 distributor modernize?",
+          "a": "TTI is a world-leading authorized distributor of electronic components. Its 40-year-old, heavily customized AS400 system was slowing business growth and its financial processes.",
+          "b": "Leadership modernized finance (starting with the GL), then carried the momentum into procurement — lowering TCO, cutting manual work, and speeding the financial close and time to market.",
+          "c": "Won over SAP on functionality and future roadmap; success at sister company Mouser (since 2014) plus a complete end-to-end platform sealed it.",
+          "d": "Oracle ERP Cloud + Procurement Cloud.",
+          "ex": "Retired AS400/COBOL dependency; automated manual processes; built-in AI now in use at TTI."
+        },
+        {
+          "t": "Mouser Electronics",
+          "p": "What happens when a build-first shop moves to SaaS?",
+          "a": "Mouser is a global authorized distributor of semiconductors and electronic components. Its custom in-house ERP was hard to change and slowed the business.",
+          "b": "Since 2014 Mouser has grown its Oracle footprint year over year — from financials and procurement to HR modernization and customer engagement — cutting silos and manual work.",
+          "c": "Won on functionality vs SAP and in-house development; pre-built configurations beat costly custom builds, with an attractive AI roadmap.",
+          "d": "Oracle ERP, Analytics, Risk; SCM (Supply Planning, Execution, Order Mgmt, Transportation); HCM; EPM; Eloqua.",
+          "ex": "End-to-end suite across every business unit; less custom code, faster time to market."
+        },
+        {
+          "t": "CTB",
+          "p": "How do you turn a licensing problem into an expansion?",
+          "a": "CTB manufactures and supplies systems that help feed a growing population, running 14 brands across 46 facilities. It had been over-utilizing its Oracle subscription and C-suite confidence was wavering, with an RFP looming.",
+          "b": "Oracle resolved the overutilization by switching the licensing metric (Hosted Named User to Hosted Employee), unlocking an organization-wide Fusion rollout at a fraction of the cost — with no disruptive changes.",
+          "c": "Won on customer relationship and TCO; an 8-month engagement and deep grasp of the license challenge headed off an RFP to SAP.",
+          "d": "Oracle ERP, SCM (incl. CPQ), HCM, EPM.",
+          "ex": "Overutilization and managed-service cost removed; full-organization Fusion rollout unlocked."
+        },
+        {
+          "t": "Forest River",
+          "p": "Can you automate a payroll no one else could?",
+          "a": "Forest River makes RVs, trailers, boats, buses and trucks across 100+ divisions. Its complex hourly/piecework/bonus payroll ran on manual Excel and had exposed it to time-and-labor lawsuits.",
+          "b": "Oracle digitized analog employee data and automated the complex processes other vendors couldn't — accelerating legal response and reducing liability, live in about six months.",
+          "c": "Won on a superior solution and strong executive rapport, replacing ADP and TruePay where competitors said it couldn't be done.",
+          "d": "Oracle HCM Core, Time & Labor, Payroll.",
+          "ex": "~$300k/year in software savings; faster legal response; reduced liability exposure."
+        },
+        {
+          "t": "Shaw Industries",
+          "p": "How does a $6B manufacturer prepare for more M&A?",
+          "a": "Shaw is a $6B carpet manufacturer with 22,000+ employees, wholly owned by Berkshire Hathaway. Acquisitions had piled up legacy ERP and logistics, manual integrations and finance pain its systems couldn't handle.",
+          "b": "A single platform gave Shaw a source of financial truth (Accounting Hub), efficiency and cost control across the board, and readiness for further acquisitions.",
+          "c": "Won on relationship and functionality over Microsoft Dynamics; proven success at sister company Clayton Homes built the trust.",
+          "d": "Oracle ERP (Inventory, Procurement, Accounting Hub, Order Mgmt, OIC), EPM & EDM, SCM (Demand, Supply Planning, Product Mgmt), AI Data Platform.",
+          "ex": "Cost controls across the board; lower inventories and COGS; reduced IT headcount and legacy infrastructure."
+        },
+        {
+          "t": "Pilot Travel Centers",
+          "p": "What replaces a cobbled-together EPM?",
+          "a": "Pilot is the largest network of travel centers in North America (fuel, food, truck maintenance). Its Infor/Lawson EPM was cobbled together, couldn't handle its international arm or complex driver-pay rules, and leaned on manual Excel budgeting.",
+          "b": "Oracle EPM delivered a single system of truth for driver-based planning — reducing information silos, improving planning efficiency, and substantially lowering TCO.",
+          "c": "Won on a comprehensive best-of-suite solution over OneStream; strong references from other Berkshire companies on Oracle EPM were decisive.",
+          "d": "Oracle EPM (with EDM).",
+          "ex": "Single source for driver-based planning; less manual Excel; substantially lower TCO."
+        },
+        {
+          "t": "Clayton Homes",
+          "p": "How does a vertically integrated builder scale on one platform?",
+          "a": "Clayton Homes is a $14B/year vertically integrated home builder, manufacturer, lender and retailer (~23,000 employees), wholly owned by Berkshire Hathaway. Legacy systems blocked enterprise-data insight as operations grew.",
+          "b": "A single, scalable platform gave Clayton one source of truth across very different business units and a strategic technology partnership within Berkshire.",
+          "c": "Won on relationship and functionality over Microsoft Dynamics, SAP and legacy AS400 via a consultative, business-value approach.",
+          "d": "Oracle ERP, EPM, Financial Accounting Hub, SCM, OTM, FDI, CPQ, OIC, OPERA, Oracle University.",
+          "ex": "Move-in time cut from 140 to 60 days; faster market reaction; economies of scale in purchasing."
+        },
+        {
+          "t": "Precision Castparts (PCC)",
+          "p": "How do you standardize the close across divisions?",
+          "a": "PCC is a world leader in structural investment castings and forged components for aircraft engines and gas turbines. Legacy Hyperion, Excel reporting and fragmented divisional systems made consolidation, FX and intercompany eliminations painful.",
+          "b": "Oracle unified EPM across corporate and divisions — improving close, FX/eliminations/cash-flow insight and driver-based planning — with ERP addressing GL and reporting complexity.",
+          "c": "Won by replacing Hyperion, EBS and multiple Trintech/Blackline reconciliation tools with one global approach; an enterprise contract enabled expansion without new cycles.",
+          "d": "Oracle EPM (EPBCS, FCCS, ARCS, Narrative Reporting) + ERP (Accounting & Procurement).",
+          "ex": "Replaced 1 Trintech + 6 Blackline instances with one global ARCS; standardized consolidation and close."
+        },
+        {
+          "t": "HomeServices of America",
+          "p": "How do you modernize HR in a decentralized firm?",
+          "a": "HomeServices of America (HSoA), a Berkshire Hathaway affiliate, is one of the largest US residential real-estate brokerage and homeownership-services providers. It needed an HCM solution for its inefficiencies that fit a decentralized structure.",
+          "b": "A single HCM platform let HSoA own and manage the application with a support model that fit — lowering maintenance and support cost.",
+          "c": "Won on a superior solution and the CHRO relationship (she had implemented Fusion HCM at Ritchie Brothers) over UKG and Workday.",
+          "d": "Oracle HCM Core, Time & Labor, Payroll, Recruiting, Booster, Compensation, Help Desk, Talent & HCM Analytics.",
+          "ex": "Single HCM platform HSoA owns and manages; lower maintenance and support cost."
+        }
+      ]
+    }
+  ]
+}

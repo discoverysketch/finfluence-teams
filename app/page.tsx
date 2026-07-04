@@ -1,5 +1,6 @@
 import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
+import Link from "next/link";
 
 // Authed home. Middleware already guarantees a session here; we load the profile
 // (tenant + role) to confirm provisioning and branch by role later.
@@ -35,9 +36,13 @@ export default async function Home() {
           </p>
         )}
       </div>
-      <p style={{ color: "var(--ink2)", marginTop: 24, fontSize: 13 }}>
-        Phase 1 scaffold. Next: port the learning path + Company Challenge and back progress with
-        the database. See <code>SPEC.md</code>.
+      <p style={{ marginTop: 20 }}>
+        <Link href="/learn" className="btn" style={{ display: "inline-block", textDecoration: "none" }}>
+          Go to the learning path →
+        </Link>
+      </p>
+      <p style={{ color: "var(--ink2)", marginTop: 16, fontSize: 13 }}>
+        Content is served from the database. Next: card-swipe UI + progress tracking. See <code>SPEC.md</code>.
       </p>
       <form action="/auth/signout" method="post" style={{ marginTop: 16 }}>
         <button className="btn" style={{ background: "var(--charcoal)" }}>
