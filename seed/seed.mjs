@@ -45,13 +45,13 @@ async function seedDecks(decks) {
   for (const deck of decks) {
     const { data: unit, error: ue } = await db
       .from("units")
-      .insert({ pack_id: pack.id, title: deck.n, order: unitOrder++, icon: deck.ic ?? null })
+      .insert({ pack_id: pack.id, title: deck.n, order: unitOrder++, icon: deck.ic ?? null, is_seeded: true })
       .select("id")
       .single();
     if (ue) throw ue;
     unitCount++;
     const rows = deck.cards.map((c, i) => ({
-      unit_id: unit.id, type: "flashcard", front: c.t, body_json: backBody(c, deck), order: i,
+      unit_id: unit.id, type: "flashcard", front: c.t, body_json: backBody(c, deck), order: i, is_seeded: true,
     }));
     const { error: ce } = await db.from("cards").insert(rows);
     if (ce) throw ce;

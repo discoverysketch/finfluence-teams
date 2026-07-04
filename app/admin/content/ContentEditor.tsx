@@ -2,7 +2,7 @@
 import { useEffect, useState, useCallback } from "react";
 import { createClient } from "@/lib/supabase/client";
 
-type Unit = { id: string; title: string; icon: string | null; order: number };
+type Unit = { id: string; title: string; icon: string | null; order: number; is_seeded: boolean };
 type Body = {
   prompt?: string; whatItIs?: string; whyItMatters?: string;
   link?: string; utility?: string; worked?: string;
@@ -25,9 +25,12 @@ export default function ContentEditor() {
   const [pdfB64, setPdfB64] = useState<string | null>(null);
   const [fileName, setFileName] = useState("");
 
+  const core = units.filter((u) => u.is_seeded);
+  const custom = units.filter((u) => !u.is_seeded);
+
   const loadUnits = useCallback(async (pid: string) => {
-    const { data } = await supabase.from("units").select("id,title,icon,ord:order").eq("pack_id", pid);
-    setUnits(((data ?? []) as any[]).map((u) => ({ id: u.id, title: u.title, icon: u.icon, order: u.ord })).sort((a, b) => a.order - b.order));
+    const { data } = await supabase.from("units").select("id,title,icon,ord:order,is_seeded").eq("pack_id", pid);
+    setUnits(((data ?? []) as any[]).map((u) => ({ id: u.id, title: u.title, icon: u.icon, order: u.ord, is_seeded: u.is_seeded })).sort((a, b) => a.order - b.order));
   }, [supabase]);
 
   const loadCards = useCallback(async (unitId: string) => {
@@ -42,17 +45,19 @@ export default function ContentEditor() {
     })();
   }, [supabase, loadUnits]);
 
-  async function selectUnit(u: Unit) { setSel(u); setEditing(null); await loadCards(u.id); }
+  async function selectUnit(u: Unit) { setSel(u); setEditing(null); setDrafts([]); clearFile(); await loadCards(u.id); }
 
-  async function addUnit() {
-    const title = window.prompt("New unit title:"); if (!title || !packId) return;
-    const { error } = await supabase.from("units").insert({ pack_id: packId, title, order: units.length, icon: "📘" });
+  async function addConcept() {
+    const title = window.prompt("Name your concept (e.g. “Our Q3 pricing story”):"); if (!title || !packId) return;
+    const { data, error } = await supabase.from("units").insert({ pack_id: packId, title, order: units.length, icon: "⭐", is_seeded: false }).select("id,title,icon,ord:order,is_seeded").single();
     if (error) return setMsg(error.message);
     await loadUnits(packId);
+    if (data) await selectUnit({ id: data.id, title: data.title, icon: data.icon, order: (data as any).ord, is_seeded: data.is_seeded });
   }
   async function renameUnit(u: Unit) {
-    const title = window.prompt("Rename unit:", u.title); if (!title || !packId) return;
+    const title = window.prompt("Rename concept:", u.title); if (!title || !packId) return;
     await supabase.from("units").update({ title }).eq("id", u.id); await loadUnits(packId);
+    if (sel?.id === u.id) setSel({ ...sel, title });
   }
   async function deleteUnit(u: Unit) {
     if (!window.confirm(`Delete "${u.title}" and all its cards?`) || !packId) return;
@@ -65,7 +70,7 @@ export default function ContentEditor() {
     const payload = { front: c.front, concept_tag: c.concept_tag || null, body_json: c.body_json };
     const res = c.id
       ? await supabase.from("cards").update(payload).eq("id", c.id)
-      : await supabase.from("cards").insert({ ...payload, unit_id: sel.id, type: "flashcard", order: cards.length });
+      : await supabase.from("cards").insert({ ...payload, unit_id: sel.id, type: "flashcard", order: cards.length, is_seeded: false });
     if (res.error) return setMsg(res.error.message);
     setEditing(null); await loadCards(sel.id);
   }
@@ -104,7 +109,7 @@ export default function ContentEditor() {
       reader.readAsText(f);
     }
   }
-  function clearFile() { setPdfB64(null); setFileName(""); setGenSrc(""); }
+  function clearFile() { setPdfB64(null); setFileName(""); }
 
   async function generate() {
     if (!sel) return;
@@ -131,7 +136,7 @@ export default function ContentEditor() {
     if (!sel) return;
     const c = drafts[idx];
     const { error } = await supabase.from("cards").insert({
-      unit_id: sel.id, type: "flashcard", order: cards.length,
+      unit_id: sel.id, type: "flashcard", order: cards.length, is_seeded: false,
       front: c.front, concept_tag: c.concept_tag || null, body_json: c.body_json,
     });
     if (error) return setMsg(error.message);
@@ -141,7 +146,7 @@ export default function ContentEditor() {
   async function approveAll() {
     if (!sel || !drafts.length) return;
     const rows = drafts.map((c, i) => ({
-      unit_id: sel.id, type: "flashcard", order: cards.length + i,
+      unit_id: sel.id, type: "flashcard", order: cards.length + i, is_seeded: false,
       front: c.front, concept_tag: c.concept_tag || null, body_json: c.body_json,
     }));
     const { error } = await supabase.from("cards").insert(rows);
@@ -154,8 +159,29 @@ export default function ContentEditor() {
     <div>
       {msg && <div className="card" style={{ borderColor: "var(--red)", color: "var(--red)", marginBottom: 12 }}>{msg}</div>}
 
-      <div className="edsec">Units</div>
-      {units.map((u) => (
+      {/* ---------- Core curriculum: locked reference ---------- */}
+      <div className="edsec">Core curriculum · 🔒 built-in</div>
+      <p style={{ fontSize: 12, color: "var(--ink2)", margin: "0 0 8px" }}>
+        The shipped FinFluency curriculum. It powers Acumen scores and the manager dashboard, so it isn&apos;t editable here.
+      </p>
+      {core.map((u) => (
+        <div key={u.id} className="card" style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 6, padding: "10px 12px", background: "#F7F4EE" }}>
+          <div style={{ flex: 1, fontWeight: 700, color: "var(--ink2)" }}>{u.icon} {u.title}</div>
+          <span style={{ fontSize: 10, fontWeight: 700, color: "#8A7E6E", background: "#EDE7DA", borderRadius: 5, padding: "3px 8px" }}>🔒 Built-in</span>
+        </div>
+      ))}
+
+      {/* ---------- Custom concepts: the editable area ---------- */}
+      <div className="edsec" style={{ marginTop: 26 }}>Your concepts</div>
+      <p style={{ fontSize: 12, color: "var(--ink2)", margin: "0 0 8px" }}>
+        Add your own topics and cards — pricing stories, product notes, objection handling, anything. They appear in the learning path as <b>practice</b> (they don&apos;t affect Acumen scores).
+      </p>
+      {custom.length === 0 && (
+        <div className="card" style={{ background: "#FAF6EE", borderColor: "#E6CF94", color: "#7A5B12", fontSize: 13 }}>
+          No custom concepts yet. Create one below, then add cards by hand or generate them from a document with AI.
+        </div>
+      )}
+      {custom.map((u) => (
         <div key={u.id} className="card" style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 6, padding: "10px 12px", outline: sel?.id === u.id ? "2px solid var(--red)" : "none" }}>
           <button onClick={() => selectUnit(u)} style={{ flex: 1, textAlign: "left", background: "none", border: "none", cursor: "pointer", fontWeight: 700 }}>
             {u.icon} {u.title}
@@ -164,9 +190,9 @@ export default function ContentEditor() {
           <button className="mini del" onClick={() => deleteUnit(u)}>✕</button>
         </div>
       ))}
-      <button className="btn" style={{ marginTop: 6 }} onClick={addUnit}>+ Add unit</button>
+      <button className="btn" style={{ marginTop: 6 }} onClick={addConcept}>+ New concept</button>
 
-      {sel && (
+      {sel && !sel.is_seeded && (
         <div className="card" style={{ marginTop: 24, background: "#FAF6EE", borderColor: "#E6CF94" }}>
           <div className="edsec" style={{ marginTop: 0 }}>✨ Generate cards with AI</div>
           <p style={{ fontSize: 12, color: "var(--ink2)", margin: "0 0 10px" }}>
@@ -211,7 +237,7 @@ export default function ContentEditor() {
               </div>
               {drafts.map((d, i) => (
                 <div key={i} className="card" style={{ marginTop: 8, padding: "10px 12px", background: "#fff" }}>
-                  <div style={{ fontWeight: 700, fontSize: 14 }}>{d.front} {d.concept_tag && <span style={{ fontSize: 10, fontWeight: 700, color: "#fff", background: "var(--blue)", borderRadius: 4, padding: "1px 6px", verticalAlign: "middle" }}>{d.concept_tag}</span>}</div>
+                  <div style={{ fontWeight: 700, fontSize: 14 }}>{d.front}</div>
                   {d.body_json?.whatItIs && <div style={{ fontSize: 12.5, color: "var(--ink2)", marginTop: 3 }}>{d.body_json.whatItIs}</div>}
                   <div style={{ display: "flex", gap: 6, marginTop: 8 }}>
                     <button className="mini" style={{ borderColor: "var(--green)", color: "#135a34" }} onClick={() => approveDraft(i)}>✓ Save</button>
@@ -225,7 +251,7 @@ export default function ContentEditor() {
         </div>
       )}
 
-      {sel && (
+      {sel && !sel.is_seeded && (
         <div style={{ marginTop: 24 }}>
           <div className="edsec">Cards in “{sel.title}”</div>
           {cards.map((c) => (

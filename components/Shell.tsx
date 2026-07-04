@@ -18,7 +18,8 @@ export default async function Shell({
     const [{ data: prof }, { data: events }, { count: mastered }] = await Promise.all([
       supabase.from("users").select("tenant_id, tenants(display_mode)").eq("id", user.id).maybeSingle(),
       supabase.from("score_events").select("concept_tag,correct").eq("user_id", user.id),
-      supabase.from("progress").select("*", { count: "exact", head: true }).eq("status", "mastered").eq("user_id", user.id),
+      // Only seeded (core) cards count toward Acumen; custom concepts are practice-only.
+      supabase.from("progress").select("cards!inner(is_seeded)", { count: "exact", head: true }).eq("status", "mastered").eq("user_id", user.id).eq("cards.is_seeded", true),
     ]);
     const t: any = (prof as any)?.tenants;
     mode = (Array.isArray(t) ? t[0]?.display_mode : t?.display_mode) || "playful";

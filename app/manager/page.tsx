@@ -16,7 +16,8 @@ export default async function ManagerPage() {
 
   const [{ data: memberData }, { data: progData }, { data: evData }] = await Promise.all([
     supabase.from("users").select("id,email,role").eq("tenant_id", me.tenant_id).order("email"),
-    supabase.from("progress").select("user_id").eq("status", "mastered"),
+    // Seeded (core) cards only — custom concepts are practice-only and don't count.
+    supabase.from("progress").select("user_id, cards!inner(is_seeded)").eq("status", "mastered").eq("cards.is_seeded", true),
     supabase.from("score_events").select("user_id,concept_tag,correct"),
   ]);
   const members = (memberData ?? []) as Member[];
