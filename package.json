@@ -9,7 +9,8 @@
     "lint": "next lint",
     "typecheck": "tsc --noEmit",
     "extract": "node seed/extract.cjs",
-    "seed": "node --env-file=.env.local seed/seed.mjs"
+    "seed": "node --env-file=.env.local seed/seed.mjs",
+    "load-directory": "node --env-file=.env.local seed/load-sec-directory.mjs"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.110.0",

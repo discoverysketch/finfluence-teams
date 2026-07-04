@@ -4,7 +4,7 @@ import MuteButton from "./MuteButton";
 import { createClient } from "@/lib/supabase/server";
 import { overallAcumen, tier, level, type Ev } from "@/lib/acumen";
 
-type Tab = "home" | "path" | "challenge" | "content";
+type Tab = "home" | "path" | "challenge" | "accounts" | "content";
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
 export default async function Shell({
@@ -51,6 +51,7 @@ export default async function Shell({
       <nav className="nav">
         <Link href="/learn" className={cls("path")}><span className="ni">🗺️</span>Path</Link>
         <Link href="/challenge" className={cls("challenge")}><span className="ni">🎯</span>Challenge</Link>
+        <Link href="/territory" className={cls("accounts")}><span className="ni">🏢</span>Accounts</Link>
         {isAdmin && <Link href="/admin/content" className={cls("content")}><span className="ni">✏️</span>Content</Link>}
         <Link href="/" className={cls("home")}><span className="ni">👤</span>Me</Link>
       </nav>

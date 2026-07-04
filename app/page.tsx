@@ -41,6 +41,7 @@ export default async function Home() {
       <p style={{ marginTop: 20, display: "flex", gap: 10, flexWrap: "wrap" }}>
         <Link href="/learn" className="btn">Learning path →</Link>
         <Link href="/challenge" className="btn" style={{ background: "var(--teal)" }}>Company Challenge →</Link>
+        <Link href="/territory" className="btn" style={{ background: "var(--gold)", color: "var(--ink)" }}>🏢 My accounts</Link>
         {isManager && (
           <Link href="/manager" className="btn" style={{ background: "var(--blue)" }}>📊 Team dashboard</Link>
         )}
