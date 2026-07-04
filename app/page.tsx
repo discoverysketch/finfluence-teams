@@ -41,7 +41,10 @@ export default async function Home() {
         <Link href="/learn" className="btn">Learning path →</Link>
         <Link href="/challenge" className="btn" style={{ background: "var(--teal)" }}>Company Challenge →</Link>
         {isAdmin && (
-          <Link href="/admin/content" className="btn" style={{ background: "var(--charcoal)" }}>✏️ Content editor</Link>
+          <>
+            <Link href="/admin/content" className="btn" style={{ background: "var(--charcoal)" }}>✏️ Content editor</Link>
+            <Link href="/admin/team" className="btn" style={{ background: "var(--purple)" }}>👥 Team roster</Link>
+          </>
         )}
       </p>
 
