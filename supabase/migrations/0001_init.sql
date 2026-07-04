@@ -2,19 +2,7 @@
 -- RLS-first: every tenant-scoped table has policies defined here, before any UI.
 -- Shared entity directory rows (entities.created_by_tenant IS NULL) are readable by all tenants.
 -- NOTE: pg_trgm + trigram GIN indexes for fuzzy entity matching are added in Phase 5, not here.
-
--- ============================================================
--- Helper functions (SECURITY DEFINER so they bypass RLS on public.users)
--- ============================================================
-create or replace function public.current_tenant_id() returns uuid
-  language sql stable security definer set search_path = public as $$
-  select tenant_id from public.users where id = auth.uid()
-$$;
-
-create or replace function public.app_role() returns text
-  language sql stable security definer set search_path = public as $$
-  select role from public.users where id = auth.uid()
-$$;
+-- NOTE: helper functions are defined AFTER the tables they reference (see below), then policies.
 
 -- ============================================================
 -- Core tenancy
@@ -190,7 +178,15 @@ alter table public.progress       enable row level security;
 alter table public.challenge_runs enable row level security;
 alter table public.score_events   enable row level security;
 
--- Convenience: is the current user a manager/admin?
+-- ===== Helper functions (defined after tables; SECURITY DEFINER bypasses RLS on public.users) =====
+create or replace function public.current_tenant_id() returns uuid
+  language sql stable security definer set search_path = public as $$
+  select tenant_id from public.users where id = auth.uid()
+$$;
+create or replace function public.app_role() returns text
+  language sql stable security definer set search_path = public as $$
+  select role from public.users where id = auth.uid()
+$$;
 create or replace function public.is_manager_admin() returns boolean
   language sql stable as $$ select public.app_role() in ('manager','admin') $$;
 
