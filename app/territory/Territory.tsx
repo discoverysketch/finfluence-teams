@@ -14,6 +14,19 @@ function TierBadge({ t }: { t: string | null }) {
   return <span style={{ background: TIER_COLOR[tier] || "#8A7E6E", color: "#fff", fontSize: 10, fontWeight: 700, borderRadius: 4, padding: "2px 6px" }}>Tier {tier}</span>;
 }
 
+const LABELS: Record<string, string> = {
+  revenue: "Revenue", operatingIncome: "Operating income", netIncome: "Net income", interestExpense: "Interest expense",
+  totalAssets: "Total assets", totalLiabilities: "Total liabilities", totalEquity: "Total equity",
+  cash: "Cash", currentAssets: "Current assets", currentLiabilities: "Current liabilities",
+  totalDebt: "Total debt", operatingCashFlow: "Op. cash flow", capex: "Capex", cogs: "COGS",
+};
+function fmtM(v: number) {
+  const a = Math.abs(v);
+  if (a >= 1000) return `${v < 0 ? "-" : ""}$${(a / 1000).toFixed(1)}B`;
+  return `${v < 0 ? "-" : ""}$${Math.round(a)}M`;
+}
+type FactState = { loading?: boolean; error?: string; company?: string; period?: string; source_url?: string; items?: { key: string; value: number }[] };
+
 export default function Territory({ listId, initial }: { listId: string; initial: Account[] }) {
   const supabase = createClient();
   const router = useRouter();
@@ -21,8 +34,25 @@ export default function Territory({ listId, initial }: { listId: string; initial
   const [rows, setRows] = useState<MatchRow[] | null>(null);
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState("");
+  const [openId, setOpenId] = useState<string | null>(null);
+  const [facts, setFacts] = useState<Record<string, FactState>>({});
 
   const existingIds = new Set(initial.map((a) => a.entity?.id).filter(Boolean));
+
+  async function loadFacts(a: Account) {
+    const eid = a.entity?.id;
+    if (!eid) return;
+    if (openId === a.id) { setOpenId(null); return; }
+    setOpenId(a.id);
+    if (facts[a.id]?.items || facts[a.id]?.error) return; // already fetched
+    setFacts((f) => ({ ...f, [a.id]: { loading: true } }));
+    try {
+      const r = await fetch(`/api/entity-facts?entityId=${eid}`);
+      const j = await r.json();
+      if (!r.ok) { setFacts((f) => ({ ...f, [a.id]: { error: j.error || "Couldn't load." } })); return; }
+      setFacts((f) => ({ ...f, [a.id]: { company: j.company, period: j.period, source_url: j.source_url, items: j.facts } }));
+    } catch { setFacts((f) => ({ ...f, [a.id]: { error: "Network error." } })); }
+  }
 
   function parseNames(text: string): string[] {
     const seen = new Set<string>();
@@ -136,16 +166,46 @@ export default function Territory({ listId, initial }: { listId: string; initial
         Your book · {initial.length}
       </div>
       {initial.length === 0 && <div style={{ fontSize: 13, color: "var(--muted)" }}>No accounts yet.</div>}
-      {initial.map((a) => (
-        <div key={a.id} className="card" style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 6, padding: "10px 12px" }}>
-          <div style={{ flex: 1, minWidth: 0 }}>
-            <div style={{ fontWeight: 700, fontSize: 14 }}>{a.entity?.canonical_name || "Unknown"}{a.entity?.ticker ? <span style={{ color: "var(--muted)", fontWeight: 600 }}> · {a.entity.ticker}</span> : null}</div>
-            {a.entity?.hq_state && <div style={{ fontSize: 12, color: "var(--ink2)" }}>{a.entity.hq_state}</div>}
+      {initial.map((a) => {
+        const fs = facts[a.id];
+        return (
+          <div key={a.id}>
+            <div className="card" style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: openId === a.id ? 0 : 6, padding: "10px 12px" }}>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontWeight: 700, fontSize: 14 }}>{a.entity?.canonical_name || "Unknown"}{a.entity?.ticker ? <span style={{ color: "var(--muted)", fontWeight: 600 }}> · {a.entity.ticker}</span> : null}</div>
+                {a.entity?.hq_state && <div style={{ fontSize: 12, color: "var(--ink2)" }}>{a.entity.hq_state}</div>}
+              </div>
+              {a.entity?.data_tier && <TierBadge t={a.entity.data_tier} />}
+              {a.entity?.id && <button className="mini" onClick={() => loadFacts(a)}>{openId === a.id ? "Hide" : "📊 Financials"}</button>}
+              <button className="mini del" onClick={() => remove(a.id)}>✕</button>
+            </div>
+            {openId === a.id && (
+              <div className="card" style={{ marginTop: 0, marginBottom: 6, background: "#FBF8F2", borderTopLeftRadius: 0, borderTopRightRadius: 0 }}>
+                {fs?.loading && <div style={{ fontSize: 13, color: "var(--ink2)" }}>Pulling SEC data…</div>}
+                {fs?.error && <div style={{ fontSize: 13, color: "var(--red)" }}>{fs.error}</div>}
+                {fs?.items && (
+                  <>
+                    <div style={{ fontSize: 12, color: "var(--muted)", fontWeight: 600, marginBottom: 6 }}>{fs.period} · $ millions</div>
+                    {fs.items.length === 0 ? (
+                      <div style={{ fontSize: 13, color: "var(--ink2)" }}>No figures reported.</div>
+                    ) : (
+                      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "3px 16px" }}>
+                        {fs.items.map((it) => (
+                          <div key={it.key} style={{ display: "flex", justifyContent: "space-between", borderBottom: "1px solid #F0EAE0", padding: "3px 0" }}>
+                            <span style={{ fontSize: 12.5, color: "var(--ink2)" }}>{LABELS[it.key] || it.key}</span>
+                            <span style={{ fontSize: 13, fontWeight: 700, fontFamily: "ui-monospace, monospace" }}>{fmtM(it.value)}</span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                    {fs.source_url && <a href={fs.source_url} target="_blank" rel="noreferrer" style={{ display: "inline-block", marginTop: 8, fontSize: 12, color: "var(--blue)", fontWeight: 700 }}>SEC filings ↗</a>}
+                  </>
+                )}
+              </div>
+            )}
           </div>
-          {a.entity?.data_tier && <TierBadge t={a.entity.data_tier} />}
-          <button className="mini del" onClick={() => remove(a.id)}>✕</button>
-        </div>
-      ))}
+        );
+      })}
     </div>
   );
 }
