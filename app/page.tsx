@@ -12,6 +12,7 @@ export default async function Home() {
   const { data: profile } = await supabase
     .from("users").select("email, role, tenant_id").eq("id", user.id).maybeSingle();
   const isAdmin = profile?.role === "admin";
+  const isManager = profile?.role === "admin" || profile?.role === "manager";
 
   // mastered count for a little motivation
   const { count: masteredCount } = await supabase
@@ -40,6 +41,9 @@ export default async function Home() {
       <p style={{ marginTop: 20, display: "flex", gap: 10, flexWrap: "wrap" }}>
         <Link href="/learn" className="btn">Learning path →</Link>
         <Link href="/challenge" className="btn" style={{ background: "var(--teal)" }}>Company Challenge →</Link>
+        {isManager && (
+          <Link href="/manager" className="btn" style={{ background: "var(--blue)" }}>📊 Team dashboard</Link>
+        )}
         {isAdmin && (
           <>
             <Link href="/admin/content" className="btn" style={{ background: "var(--charcoal)" }}>✏️ Content editor</Link>
