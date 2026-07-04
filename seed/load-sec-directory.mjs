@@ -28,13 +28,19 @@ const rows = Object.values(json)
     created_by_tenant: null,
   }));
 
-console.log(`Fetched ${rows.length} SEC filers. Upserting into the shared directory…`);
+// Some CIKs appear twice (multiple share-class tickers). Keep one row per CIK
+// so a single upsert batch never touches the same row twice.
+const byCik = new Map();
+for (const r of rows) if (!byCik.has(r.cik)) byCik.set(r.cik, r);
+const deduped = [...byCik.values()];
+
+console.log(`Fetched ${rows.length} SEC filers (${deduped.length} unique CIKs). Upserting into the shared directory…`);
 let done = 0;
-for (let i = 0; i < rows.length; i += 500) {
-  const chunk = rows.slice(i, i + 500);
+for (let i = 0; i < deduped.length; i += 500) {
+  const chunk = deduped.slice(i, i + 500);
   const { error } = await db.from("entities").upsert(chunk, { onConflict: "cik" });
   if (error) { console.error("\nUpsert error near row", i, "-", error.message); process.exit(1); }
   done += chunk.length;
-  process.stdout.write(`\r  ${done}/${rows.length}`);
+  process.stdout.write(`\r  ${done}/${deduped.length}`);
 }
-console.log(`\nDone. ${rows.length} tier-A entities in the shared directory.`);
+console.log(`\nDone. ${deduped.length} tier-A entities in the shared directory.`);
