@@ -1,5 +1,5 @@
 "use client";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
 import { SFX, sparkle, unlockAudio } from "@/lib/sfx";
@@ -19,8 +19,11 @@ export default function Lesson({
   const [i, setI] = useState(0);
   const [flipped, setFlipped] = useState(false);
   const [mastered, setMastered] = useState<Set<string>>(new Set(masteredIds));
-  const [saving, setSaving] = useState(false);
   const supabase = createClient();
+  const flipRef = useRef<HTMLDivElement>(null);
+  const yesRef = useRef<HTMLDivElement>(null);
+  const noRef = useRef<HTMLDivElement>(null);
+  const drag = useRef({ sx: 0, dx: 0, on: false, moved: false, busy: false });
 
   if (cards.length === 0) {
     return <main className="container"><p>No cards in this unit.</p><Link href="/learn">← Back to path</Link></main>;
@@ -29,15 +32,13 @@ export default function Lesson({
   if (i >= cards.length) {
     const count = cards.filter((c) => mastered.has(c.id)).length;
     return (
-      <main className="container">
+      <main className="container" style={{ textAlign: "center" }}>
         <h1>{unitIcon} {unitTitle}</h1>
-        <div className="card">
-          <p style={{ fontSize: 20, fontWeight: 700, margin: 0 }}>Nice work! 🎉</p>
-          <p>You&apos;ve mastered <b>{count}</b> of <b>{cards.length}</b> cards in this unit — saved to your account.</p>
-        </div>
-        <p style={{ marginTop: 16, display: "flex", gap: 10 }}>
+        <div className="card"><p style={{ fontSize: 20, fontWeight: 700, margin: 0 }}>Nice work! 🎉</p>
+          <p>You&apos;ve mastered <b>{count}</b> of <b>{cards.length}</b> cards — saved to your account.</p></div>
+        <p style={{ marginTop: 16, display: "flex", gap: 10, justifyContent: "center" }}>
           <button className="btn" onClick={() => { setI(0); setFlipped(false); }}>Run it again</button>
-          <Link href="/learn" className="btn" style={{ background: "var(--charcoal)", textDecoration: "none" }}>Back to path</Link>
+          <Link href="/learn" className="btn" style={{ background: "var(--charcoal)" }}>Back to path</Link>
         </p>
       </main>
     );
@@ -46,62 +47,91 @@ export default function Lesson({
   const card = cards[i];
   const b = card.body_json;
 
-  async function mark(gotIt: boolean) {
-    if (gotIt) {
-      setSaving(true);
+  function reset(el: HTMLDivElement | null) {
+    if (el) { el.style.transition = "transform .35s, opacity .35s"; el.style.transform = ""; el.style.opacity = "1"; }
+    if (yesRef.current) yesRef.current.style.opacity = "0";
+    if (noRef.current) noRef.current.style.opacity = "0";
+  }
+  function onDown(e: React.PointerEvent<HTMLDivElement>) {
+    if (drag.current.busy) return;
+    drag.current = { sx: e.clientX, dx: 0, on: true, moved: false, busy: false };
+    const el = flipRef.current; if (el) { el.style.transition = "none"; el.setPointerCapture?.(e.pointerId); }
+  }
+  function onMove(e: React.PointerEvent<HTMLDivElement>) {
+    const d = drag.current; if (!d.on) return;
+    d.dx = e.clientX - d.sx; if (Math.abs(d.dx) > 6) d.moved = true;
+    const el = flipRef.current; if (el) el.style.transform = `translate(${d.dx}px, ${Math.abs(d.dx) * 0.04}px) rotate(${d.dx * 0.05}deg)`;
+    if (yesRef.current) yesRef.current.style.opacity = String(d.dx > 0 ? Math.min(d.dx / 90, 1) : 0);
+    if (noRef.current) noRef.current.style.opacity = String(d.dx < 0 ? Math.min(-d.dx / 90, 1) : 0);
+  }
+  function onUp() {
+    const d = drag.current; if (!d.on) return; d.on = false;
+    const el = flipRef.current;
+    if (!d.moved) { unlockAudio(); SFX.flip(); setFlipped((f) => !f); reset(el); return; }
+    if (d.dx > 90) commit(1);
+    else if (d.dx < -90) commit(-1);
+    else reset(el);
+  }
+  function commit(dir: 1 | -1) {
+    drag.current.busy = true;
+    const el = flipRef.current;
+    if (el) { el.style.transition = "transform .35s, opacity .35s"; el.style.transform = `translate(${dir * 600}px, ${dir * 40}px) rotate(${dir * 30}deg)`; el.style.opacity = "0"; }
+    setTimeout(() => finish(dir), 300);
+  }
+  async function finish(dir: 1 | -1) {
+    if (dir > 0) {
       await supabase.from("progress").upsert(
         { user_id: userId, card_id: card.id, status: "mastered", updated_at: new Date().toISOString() },
-        { onConflict: "user_id,card_id" }
-      );
+        { onConflict: "user_id,card_id" });
       setMastered((prev) => new Set(prev).add(card.id));
-      setSaving(false);
       SFX.correct();
       if (typeof window !== "undefined") sparkle(window.innerWidth / 2, window.innerHeight * 0.4);
-    } else {
-      SFX.wrong();
-    }
+    } else { SFX.wrong(); }
     const last = i + 1 >= cards.length;
     setFlipped(false);
     setI(i + 1);
+    drag.current.busy = false;
     if (last) SFX.win();
   }
 
   return (
-    <main className="container">
-      <p style={{ fontSize: 13 }}><Link href="/learn">← Path</Link> · card {i + 1} of {cards.length}</p>
-      <h2 style={{ fontSize: 16, margin: "4px 0 12px" }}>{unitIcon} {unitTitle}</h2>
+    <main className="container" style={{ display: "flex", flexDirection: "column", minHeight: "calc(100vh - 130px)" }}>
+      <p style={{ fontSize: 13 }}><Link href="/learn">← Path</Link> · card {i + 1} of {cards.length}{mastered.has(card.id) && <span style={{ color: "#1B7A47" }}> · mastered ✓</span>}</p>
+      <h2 style={{ fontSize: 15, margin: "0 0 4px" }}>{unitIcon} {unitTitle}</h2>
 
-      <div className="card" onClick={() => { unlockAudio(); SFX.flip(); setFlipped((f) => !f); }} style={{ cursor: "pointer", minHeight: 240 }}>
-        {!flipped ? (
-          <div style={{ display: "flex", flexDirection: "column", height: "100%", minHeight: 210 }}>
-            <div style={{ fontSize: 24, fontWeight: 700 }}>{card.front}</div>
-            {b?.prompt && <p style={{ color: "var(--ink2)", marginTop: 10, fontSize: 15 }}>{b.prompt}</p>}
-            <p style={{ marginTop: "auto", fontSize: 12, fontWeight: 700, color: "#8A7E6E" }}>Tap to flip</p>
+      <div className="stage">
+        <div className="flip" key={i} ref={flipRef} onPointerDown={onDown} onPointerMove={onMove} onPointerUp={onUp} onPointerCancel={onUp}>
+          <div className="stamp yes" ref={yesRef}>GOT IT</div>
+          <div className="stamp no" ref={noRef}>REVIEW</div>
+          <div className={`flip-inner ${flipped ? "flipped" : ""}`}>
+            <div className="face front">
+              <div className="term">{card.front}</div>
+              <div className="rule" />
+              {b?.prompt && <div className="prompt">{b.prompt}</div>}
+              <div className="tapper">Tap to <b style={{ color: "var(--red)" }}>flip</b> · swipe to answer</div>
+            </div>
+            <div className="face back">
+              <div style={{ fontWeight: 700, marginBottom: 8 }}>{card.front}</div>
+              <div className="rule" />
+              {b?.whatItIs && <p style={{ margin: "6px 0", fontSize: 14 }}><b style={{ color: "var(--blue)" }}>What it is:</b> {b.whatItIs}</p>}
+              {b?.whyItMatters && <p style={{ margin: "6px 0", fontSize: 14 }}><b style={{ color: "var(--purple)" }}>Why it matters:</b> {b.whyItMatters}</p>}
+              {b?.link && <p style={{ margin: "6px 0", fontSize: 14 }}><b>{b.linkLabel || "Link"}:</b> {b.link}</p>}
+              {b?.utility && <p style={{ margin: "6px 0", fontSize: 14 }}><b>{b.utilityLabel || "⚡ Utility lens"}:</b> {b.utility}</p>}
+              {b?.worked && <p style={{ margin: "6px 0", fontSize: 14, background: "#F7F2E9", borderLeft: "3px solid var(--gold)", borderRadius: 6, padding: "8px 10px" }}><b>{b.workedLabel || "🧮 Worked example"}:</b> {b.worked}</p>}
+            </div>
           </div>
-        ) : (
-          <div style={{ fontSize: 14, lineHeight: 1.5 }}>
-            <div style={{ fontWeight: 700, marginBottom: 8 }}>{card.front}</div>
-            {b?.whatItIs && <p style={{ margin: "6px 0" }}><b style={{ color: "var(--blue,#0572CE)" }}>What it is:</b> {b.whatItIs}</p>}
-            {b?.whyItMatters && <p style={{ margin: "6px 0" }}><b style={{ color: "var(--purple,#6A3E8E)" }}>Why it matters:</b> {b.whyItMatters}</p>}
-            {b?.link && <p style={{ margin: "6px 0" }}><b>{b.linkLabel || "Link"}:</b> {b.link}</p>}
-            {b?.utility && <p style={{ margin: "6px 0" }}><b>{b.utilityLabel || "⚡ Utility lens"}:</b> {b.utility}</p>}
-            {b?.worked && (
-              <p style={{ margin: "6px 0", background: "#F7F2E9", borderLeft: "3px solid var(--gold)", borderRadius: 6, padding: "8px 10px" }}>
-                <b>{b.workedLabel || "🧮 Worked example"}:</b> {b.worked}
-              </p>
-            )}
-          </div>
-        )}
+        </div>
       </div>
 
-      <div style={{ display: "flex", gap: 10, marginTop: 16, justifyContent: "center" }}>
-        <button className="btn" style={{ background: "#fff", color: "#9A6700", border: "2px solid #9A6700" }} onClick={() => mark(false)}>↩ Review</button>
-        <button className="btn" style={{ background: "var(--charcoal)" }} onClick={() => setFlipped((f) => !f)}>⟳ Flip</button>
-        <button className="btn" style={{ background: "#1B7A47" }} disabled={saving} onClick={() => mark(true)}>✓ Got it</button>
+      <div style={{ display: "flex", gap: 14, justifyContent: "center", padding: "14px 0" }}>
+        <button aria-label="Review" onClick={() => commit(-1)} style={btn("#fff", "#9A6700", "2px solid #9A6700")}>↩</button>
+        <button aria-label="Flip" onClick={() => { unlockAudio(); SFX.flip(); setFlipped((f) => !f); }} style={btn("var(--red)", "#fff")}>⟳</button>
+        <button aria-label="Got it" onClick={() => commit(1)} style={btn("#1B7A47", "#fff")}>✓</button>
       </div>
-      {mastered.has(card.id) && (
-        <p style={{ textAlign: "center", color: "#1B7A47", marginTop: 8, fontSize: 12 }}>Already mastered ✓</p>
-      )}
     </main>
   );
+}
+
+function btn(bg: string, color: string, border = "none"): React.CSSProperties {
+  return { background: bg, color, border, borderRadius: "50%", width: 56, height: 56, fontSize: 22, fontWeight: 700, cursor: "pointer", boxShadow: "0 6px 16px rgba(40,30,15,.22)" };
 }
