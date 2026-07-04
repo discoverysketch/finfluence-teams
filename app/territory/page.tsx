@@ -36,6 +36,7 @@ export default async function TerritoryPage() {
       {(accts?.length ?? 0) > 0 && (
         <p style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 14 }}>
           <Link href="/territory/duel" className="btn" style={{ background: "var(--red)" }}>⚔️ Peer Duel</Link>
+          <Link href="/territory/cfo" className="btn" style={{ background: "var(--charcoal)" }}>💼 CFO Simulator</Link>
           <Link href="/territory/board" className="btn" style={{ background: "var(--blue)" }}>🗺️ Territory Board</Link>
         </p>
       )}
