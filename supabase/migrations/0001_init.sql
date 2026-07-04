@@ -1,8 +1,7 @@
 -- FinFluency Teams — initial schema + Row-Level Security (SPEC §3)
 -- RLS-first: every tenant-scoped table has policies defined here, before any UI.
 -- Shared entity directory rows (entities.created_by_tenant IS NULL) are readable by all tenants.
-
-create extension if not exists pg_trgm;
+-- NOTE: pg_trgm + trigram GIN indexes for fuzzy entity matching are added in Phase 5, not here.
 
 -- ============================================================
 -- Helper functions (SECURITY DEFINER so they bypass RLS on public.users)
@@ -89,7 +88,6 @@ create table public.entities (
   created_by_tenant  uuid references public.tenants(id),      -- NULL = shared directory
   created_at         timestamptz not null default now()
 );
-create index entities_name_trgm on public.entities using gin (canonical_name gin_trgm_ops);
 create index entities_tenant on public.entities (created_by_tenant);
 
 create table public.entity_aliases (
@@ -98,7 +96,6 @@ create table public.entity_aliases (
   alias     text not null,
   source    text check (source in ('user','gleif','sec','eia'))
 );
-create index entity_aliases_trgm on public.entity_aliases using gin (alias gin_trgm_ops);
 
 create table public.entity_facts (
   id         uuid primary key default gen_random_uuid(),
