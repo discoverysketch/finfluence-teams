@@ -2,6 +2,7 @@
 import { useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { buildQuiz, SAMPLE, FORMULAS, CHTAG, cf$, type Fin, type Question } from "@/lib/challenge";
+import { SFX, sparkle, unlockAudio } from "@/lib/sfx";
 
 const PICKS = ["NEE", "EXC", "SO", "DUK", "D", "AEP", "VST", "AES", "CMS", "UTL", "BRK.B"];
 
@@ -40,8 +41,15 @@ export default function Challenge({ userId }: { userId: string }) {
 
   function choose(i: number) {
     if (chosen != null) return;
+    unlockAudio();
     setChosen(i);
     setAnswers((a) => [...a, i]);
+    if (qs[qi].options[i].ok) {
+      SFX.correct();
+      if (typeof window !== "undefined") sparkle(window.innerWidth / 2, 220);
+    } else {
+      SFX.wrong();
+    }
   }
 
   async function next() {
@@ -57,6 +65,7 @@ export default function Challenge({ userId }: { userId: string }) {
         qs.map((q, idx) => ({ user_id: userId, concept_tag: q.concept, correct: answers[idx] === q.answer, difficulty: "med", source_mode: "single" }))
       );
     } catch { /* non-fatal */ }
+    (score / qs.length >= 0.6 ? SFX.win : SFX.wrong)();
     setPhase("result");
   }
 

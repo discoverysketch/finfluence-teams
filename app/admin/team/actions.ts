@@ -44,6 +44,14 @@ export async function updateRole(formData: FormData) {
   revalidatePath("/admin/team");
 }
 
+export async function setDisplayMode(formData: FormData) {
+  const mode = String(formData.get("mode") || "playful");
+  if (!["playful", "professional"].includes(mode)) return;
+  const { tenantId } = await requireAdmin();
+  await createAdminClient().from("tenants").update({ display_mode: mode }).eq("id", tenantId);
+  revalidatePath("/", "layout");
+}
+
 export async function removeMember(formData: FormData) {
   const id = String(formData.get("id") || "");
   const { tenantId, adminId } = await requireAdmin();

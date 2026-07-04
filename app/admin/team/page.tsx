@@ -1,7 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import Shell from "@/components/Shell";
-import { inviteMember, updateRole, removeMember } from "./actions";
+import { inviteMember, updateRole, removeMember, setDisplayMode } from "./actions";
 
 type Member = { id: string; email: string; role: string };
 
@@ -20,15 +20,31 @@ export default async function TeamPage() {
     );
   }
 
-  const { data: memberData } = await supabase
-    .from("users").select("id,email,role").eq("tenant_id", me.tenant_id).order("email");
+  const [{ data: memberData }, { data: tenant }] = await Promise.all([
+    supabase.from("users").select("id,email,role").eq("tenant_id", me.tenant_id).order("email"),
+    supabase.from("tenants").select("display_mode").eq("id", me.tenant_id).maybeSingle(),
+  ]);
   const members = (memberData ?? []) as Member[];
-
+  const mode = tenant?.display_mode ?? "playful";
   const roleOptions = ["rep", "manager", "admin"];
 
   return (
     <Shell active="home" isAdmin>
       <h1>Team <span style={{ color: "var(--red)" }}>roster</span></h1>
+
+      <div className="card" style={{ marginBottom: 12 }}>
+        <div style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".6px", color: "var(--muted)", marginBottom: 8 }}>Display mode</div>
+        <div style={{ display: "flex", gap: 8 }}>
+          <form action={setDisplayMode}>
+            <input type="hidden" name="mode" value="playful" />
+            <button className="btn" style={{ padding: "8px 14px", fontSize: 13, background: mode === "playful" ? "var(--red)" : "#fff", color: mode === "playful" ? "#fff" : "var(--ink2)", border: "1px solid var(--border)" }}>🎮 Playful (XP &amp; levels)</button>
+          </form>
+          <form action={setDisplayMode}>
+            <input type="hidden" name="mode" value="professional" />
+            <button className="btn" style={{ padding: "8px 14px", fontSize: 13, background: mode === "professional" ? "var(--charcoal)" : "#fff", color: mode === "professional" ? "#fff" : "var(--ink2)", border: "1px solid var(--border)" }}>💼 Professional (Acumen)</button>
+          </form>
+        </div>
+      </div>
       <p style={{ color: "var(--ink2)", fontSize: 13, marginTop: 0 }}>
         {members.length} member{members.length === 1 ? "" : "s"} · invites send a magic-link email; new people also just log in with their email.
       </p>

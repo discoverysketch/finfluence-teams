@@ -2,6 +2,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
+import { SFX, sparkle, unlockAudio } from "@/lib/sfx";
 
 type Body = {
   prompt?: string; whatItIs?: string; whyItMatters?: string;
@@ -54,9 +55,15 @@ export default function Lesson({
       );
       setMastered((prev) => new Set(prev).add(card.id));
       setSaving(false);
+      SFX.correct();
+      if (typeof window !== "undefined") sparkle(window.innerWidth / 2, window.innerHeight * 0.4);
+    } else {
+      SFX.wrong();
     }
+    const last = i + 1 >= cards.length;
     setFlipped(false);
     setI(i + 1);
+    if (last) SFX.win();
   }
 
   return (
@@ -64,7 +71,7 @@ export default function Lesson({
       <p style={{ fontSize: 13 }}><Link href="/learn">← Path</Link> · card {i + 1} of {cards.length}</p>
       <h2 style={{ fontSize: 16, margin: "4px 0 12px" }}>{unitIcon} {unitTitle}</h2>
 
-      <div className="card" onClick={() => setFlipped((f) => !f)} style={{ cursor: "pointer", minHeight: 240 }}>
+      <div className="card" onClick={() => { unlockAudio(); SFX.flip(); setFlipped((f) => !f); }} style={{ cursor: "pointer", minHeight: 240 }}>
         {!flipped ? (
           <div style={{ display: "flex", flexDirection: "column", height: "100%", minHeight: 210 }}>
             <div style={{ fontSize: 24, fontWeight: 700 }}>{card.front}</div>
