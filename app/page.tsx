@@ -36,10 +36,15 @@ export default async function Home() {
           </p>
         )}
       </div>
-      <p style={{ marginTop: 20 }}>
+      <p style={{ marginTop: 20, display: "flex", gap: 10, flexWrap: "wrap" }}>
         <Link href="/learn" className="btn" style={{ display: "inline-block", textDecoration: "none" }}>
           Go to the learning path →
         </Link>
+        {profile?.role === "admin" && (
+          <Link href="/admin/content" className="btn" style={{ display: "inline-block", textDecoration: "none", background: "var(--charcoal)" }}>
+            ✏️ Content editor
+          </Link>
+        )}
       </p>
       <p style={{ color: "var(--ink2)", marginTop: 16, fontSize: 13 }}>
         Content is served from the database. Next: card-swipe UI + progress tracking. See <code>SPEC.md</code>.
