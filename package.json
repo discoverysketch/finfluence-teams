@@ -10,7 +10,8 @@
     "typecheck": "tsc --noEmit",
     "extract": "node seed/extract.cjs",
     "seed": "node --env-file=.env.local seed/seed.mjs",
-    "load-directory": "node --env-file=.env.local seed/load-sec-directory.mjs"
+    "load-directory": "node --env-file=.env.local seed/load-sec-directory.mjs",
+    "cache-peers": "node --env-file=.env.local --experimental-strip-types seed/cache-peers.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.110.0",

@@ -1,5 +1,6 @@
 import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
+import Link from "next/link";
 import Shell from "@/components/Shell";
 import Territory, { type Account } from "./Territory";
 
@@ -30,8 +31,11 @@ export default async function TerritoryPage() {
     <Shell active="accounts" isAdmin={isAdmin}>
       <h1>My <span style={{ color: "var(--red)" }}>accounts</span></h1>
       <p style={{ color: "var(--ink2)", fontSize: 13, marginTop: 0 }}>
-        Paste your account names — I&apos;ll match each to the SEC filer directory. Confirmed accounts feed learning and (soon) peer duels &amp; territory planning.
+        Paste your account names — I&apos;ll match each to the SEC filer directory. Confirmed accounts feed learning, peer duels &amp; territory planning.
       </p>
+      {(accts?.length ?? 0) > 0 && (
+        <Link href="/territory/duel" className="btn" style={{ background: "var(--red)", marginBottom: 14, display: "inline-block" }}>⚔️ Peer Duel</Link>
+      )}
       <Territory listId={list?.id ?? ""} initial={(accts ?? []) as unknown as Account[]} />
     </Shell>
   );
