@@ -18,6 +18,10 @@ export default function ContentEditor() {
   const [cards, setCards] = useState<Card[]>([]);
   const [editing, setEditing] = useState<Card | null>(null);
   const [msg, setMsg] = useState("");
+  const [genSrc, setGenSrc] = useState("");
+  const [genCount, setGenCount] = useState(5);
+  const [genLoading, setGenLoading] = useState(false);
+  const [drafts, setDrafts] = useState<Card[]>([]);
 
   const loadUnits = useCallback(async (pid: string) => {
     const { data } = await supabase.from("units").select("id,title,icon,ord:order").eq("pack_id", pid);
@@ -71,6 +75,47 @@ export default function ContentEditor() {
   const setBody = (k: keyof Body, v: string) =>
     setEditing((e) => (e ? { ...e, body_json: { ...(e.body_json ?? {}), [k]: v } } : e));
 
+  async function generate() {
+    if (!sel) return;
+    setGenLoading(true); setMsg(""); setDrafts([]);
+    try {
+      const r = await fetch("/api/generate-cards", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ source: genSrc, unitTitle: sel.title, count: genCount }),
+      });
+      const j = await r.json();
+      if (!r.ok) { setMsg(j.error || "Generation failed."); return; }
+      const raw = (j.cards ?? []) as any[];
+      setDrafts(raw.map((c) => ({
+        id: "", front: c.front || "", concept_tag: c.concept_tag || null, order: 0,
+        body_json: { prompt: c.prompt, whatItIs: c.whatItIs, whyItMatters: c.whyItMatters, link: c.link, utility: c.utility, worked: c.worked },
+      })));
+    } catch { setMsg("Couldn't reach the generator."); }
+    finally { setGenLoading(false); }
+  }
+  async function approveDraft(idx: number) {
+    if (!sel) return;
+    const c = drafts[idx];
+    const { error } = await supabase.from("cards").insert({
+      unit_id: sel.id, type: "flashcard", order: cards.length,
+      front: c.front, concept_tag: c.concept_tag || null, body_json: c.body_json,
+    });
+    if (error) return setMsg(error.message);
+    setDrafts((d) => d.filter((_, i) => i !== idx));
+    await loadCards(sel.id);
+  }
+  async function approveAll() {
+    if (!sel || !drafts.length) return;
+    const rows = drafts.map((c, i) => ({
+      unit_id: sel.id, type: "flashcard", order: cards.length + i,
+      front: c.front, concept_tag: c.concept_tag || null, body_json: c.body_json,
+    }));
+    const { error } = await supabase.from("cards").insert(rows);
+    if (error) return setMsg(error.message);
+    setDrafts([]); await loadCards(sel.id);
+  }
+  function editDraft(idx: number) { setEditing(drafts[idx]); setDrafts((d) => d.filter((_, i) => i !== idx)); }
+
   return (
     <div>
       {msg && <div className="card" style={{ borderColor: "var(--red)", color: "var(--red)", marginBottom: 12 }}>{msg}</div>}
@@ -86,6 +131,47 @@ export default function ContentEditor() {
         </div>
       ))}
       <button className="btn" style={{ marginTop: 6 }} onClick={addUnit}>+ Add unit</button>
+
+      {sel && (
+        <div className="card" style={{ marginTop: 24, background: "#FAF6EE", borderColor: "#E6CF94" }}>
+          <div className="edsec" style={{ marginTop: 0 }}>✨ Generate cards with AI</div>
+          <p style={{ fontSize: 12, color: "var(--ink2)", margin: "0 0 8px" }}>
+            Paste source material (a briefing, article, or filing excerpt). Claude drafts cards for <b>{sel.title}</b> — you review and approve each before it saves. Nothing is published automatically.
+          </p>
+          <textarea value={genSrc} onChange={(e) => setGenSrc(e.target.value)} rows={5} placeholder="Paste the source text here…"
+            style={{ width: "100%", border: "1px solid var(--border)", borderRadius: 8, padding: 8, fontFamily: "inherit", fontSize: 13 }} />
+          <div style={{ display: "flex", gap: 8, alignItems: "center", marginTop: 8 }}>
+            <label style={{ fontSize: 12, fontWeight: 700, color: "var(--ink2)" }}>Cards:
+              <select value={genCount} onChange={(e) => setGenCount(Number(e.target.value))} style={{ width: "auto", marginLeft: 6, padding: "4px 8px" }}>
+                {[3, 4, 5, 6, 7, 8].map((n) => <option key={n} value={n}>{n}</option>)}
+              </select>
+            </label>
+            <button className="btn" disabled={genLoading || genSrc.trim().length < 40} onClick={generate}>
+              {genLoading ? "Drafting…" : "Draft cards"}
+            </button>
+          </div>
+
+          {drafts.length > 0 && (
+            <div style={{ marginTop: 14 }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                <div className="edsec" style={{ margin: 0 }}>{drafts.length} draft{drafts.length === 1 ? "" : "s"} — review before saving</div>
+                <button className="mini" style={{ borderColor: "var(--green)", color: "#135a34" }} onClick={approveAll}>✓ Approve all</button>
+              </div>
+              {drafts.map((d, i) => (
+                <div key={i} className="card" style={{ marginTop: 8, padding: "10px 12px", background: "#fff" }}>
+                  <div style={{ fontWeight: 700, fontSize: 14 }}>{d.front} {d.concept_tag && <span style={{ fontSize: 10, fontWeight: 700, color: "#fff", background: "var(--blue)", borderRadius: 4, padding: "1px 6px", verticalAlign: "middle" }}>{d.concept_tag}</span>}</div>
+                  {d.body_json?.whatItIs && <div style={{ fontSize: 12.5, color: "var(--ink2)", marginTop: 3 }}>{d.body_json.whatItIs}</div>}
+                  <div style={{ display: "flex", gap: 6, marginTop: 8 }}>
+                    <button className="mini" style={{ borderColor: "var(--green)", color: "#135a34" }} onClick={() => approveDraft(i)}>✓ Save</button>
+                    <button className="mini" onClick={() => editDraft(i)}>Edit first</button>
+                    <button className="mini del" onClick={() => setDrafts((x) => x.filter((_, j) => j !== i))}>Discard</button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
 
       {sel && (
         <div style={{ marginTop: 24 }}>
