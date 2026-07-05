@@ -26,6 +26,8 @@ function fmtM(v: number) {
   return `${v < 0 ? "-" : ""}$${Math.round(a)}M`;
 }
 type FactState = { loading?: boolean; error?: string; company?: string; period?: string; source_url?: string; items?: { key: string; value: number }[] };
+type Profile = { canonical_name: string; entity_type: string; hq_state: string; ownership: string; est_size: string; segment: string; summary: string; sources: { title: string; url: string }[]; confidence: string };
+const TYPE_LABEL: Record<string, string> = { iou: "Investor-owned utility", ipp: "Independent power producer", coop: "Cooperative", muni: "Municipal", retailer: "Retailer", other: "Other" };
 
 export default function Territory({ listId, initial }: { listId: string; initial: Account[] }) {
   const supabase = createClient();
@@ -36,6 +38,11 @@ export default function Territory({ listId, initial }: { listId: string; initial
   const [msg, setMsg] = useState("");
   const [openId, setOpenId] = useState<string | null>(null);
   const [facts, setFacts] = useState<Record<string, FactState>>({});
+  const [pName, setPName] = useState("");
+  const [pHint, setPHint] = useState("");
+  const [researching, setResearching] = useState(false);
+  const [draft, setDraft] = useState<Profile | null>(null);
+  const [savingP, setSavingP] = useState(false);
 
   const existingIds = new Set(initial.map((a) => a.entity?.id).filter(Boolean));
 
@@ -109,6 +116,28 @@ export default function Territory({ listId, initial }: { listId: string; initial
     router.refresh();
   }
 
+  async function research() {
+    if (pName.trim().length < 2) return;
+    setResearching(true); setMsg(""); setDraft(null);
+    try {
+      const r = await fetch("/api/entity-profile", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name: pName, hint: pHint }) });
+      const j = await r.json();
+      if (!r.ok) setMsg(j.error || "Research failed."); else setDraft(j.profile);
+    } catch { setMsg("Network error."); }
+    finally { setResearching(false); }
+  }
+  async function saveProfile() {
+    if (!draft || !listId) return;
+    setSavingP(true); setMsg("");
+    try {
+      const r = await fetch("/api/save-profile", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ profile: draft, listId }) });
+      const j = await r.json();
+      if (!r.ok) { setMsg(j.error || "Save failed."); return; }
+      setDraft(null); setPName(""); setPHint(""); router.refresh();
+    } catch { setMsg("Network error."); }
+    finally { setSavingP(false); }
+  }
+
   const matched = rows?.filter((r) => r.selectedId !== "none").length ?? 0;
 
   return (
@@ -158,6 +187,48 @@ export default function Territory({ listId, initial }: { listId: string; initial
           <button className="btn" disabled={busy} onClick={confirm} style={{ marginTop: 4 }}>
             {busy ? "Saving…" : `Confirm & save ${rows.filter((r) => r.selectedId !== "none" && !existingIds.has(r.selectedId)).length} account(s)`}
           </button>
+        </div>
+      )}
+
+      {/* Tier D: private / non-SEC research */}
+      <div style={{ fontSize: 11, fontWeight: 700, color: "#8A7E6E", textTransform: "uppercase", letterSpacing: ".6px", margin: "24px 0 8px" }}>
+        Private / non-SEC account
+      </div>
+      <div className="card" style={{ background: "#FAF6EE", borderColor: "#E6CF94" }}>
+        <p style={{ fontSize: 12, color: "var(--ink2)", margin: "0 0 8px" }}>
+          No SEC match (co-op, municipal, private IPP, retailer)? Claude web-researches a <b>sourced</b> profile you review before saving. Can take up to ~2 minutes.
+        </p>
+        <input value={pName} onChange={(e) => setPName(e.target.value)} placeholder="Company name, e.g. Pedernales Electric Cooperative" style={{ marginBottom: 8 }} />
+        <input value={pHint} onChange={(e) => setPHint(e.target.value)} placeholder="Optional hint — state, parent company…" style={{ marginBottom: 8 }} />
+        <button className="btn" disabled={researching || pName.trim().length < 2} onClick={research}>{researching ? "Researching the web…" : "🔍 Research"}</button>
+      </div>
+
+      {draft && (
+        <div className="card" style={{ marginTop: 8 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}>
+            <div style={{ flex: 1, fontWeight: 800, fontSize: 15 }}>{draft.canonical_name}</div>
+            <TierBadge t="D" />
+            <span style={{ fontSize: 10, fontWeight: 700, color: "#fff", background: draft.confidence === "high" ? "var(--green)" : draft.confidence === "medium" ? "var(--gold)" : "#8A7E6E", borderRadius: 4, padding: "2px 6px" }}>{draft.confidence} confidence</span>
+          </div>
+          <div style={{ display: "grid", gridTemplateColumns: "auto 1fr", gap: "3px 10px", fontSize: 13, marginBottom: 6 }}>
+            {draft.entity_type && (<><b style={{ color: "var(--ink2)" }}>Type</b><span>{TYPE_LABEL[draft.entity_type] || draft.entity_type}</span></>)}
+            {draft.hq_state && (<><b style={{ color: "var(--ink2)" }}>HQ</b><span>{draft.hq_state}</span></>)}
+            {draft.ownership && (<><b style={{ color: "var(--ink2)" }}>Ownership</b><span>{draft.ownership}</span></>)}
+            {draft.est_size && (<><b style={{ color: "var(--ink2)" }}>Size</b><span>{draft.est_size}</span></>)}
+            {draft.segment && (<><b style={{ color: "var(--ink2)" }}>Segment</b><span>{draft.segment}</span></>)}
+          </div>
+          {draft.summary && <p style={{ fontSize: 13.5, lineHeight: 1.5, margin: "0 0 8px" }}>{draft.summary}</p>}
+          {draft.sources?.length > 0 && (
+            <div style={{ fontSize: 12, marginBottom: 10 }}>
+              <b style={{ color: "var(--ink2)" }}>Sources:</b>{" "}
+              {draft.sources.map((s, i) => <a key={i} href={s.url} target="_blank" rel="noreferrer" style={{ color: "var(--blue)", marginRight: 8 }}>{s.title?.slice(0, 24) || "source"} ↗</a>)}
+            </div>
+          )}
+          {draft.confidence === "low" && <div style={{ fontSize: 12, color: "#9A6700", marginBottom: 8 }}>⚠️ Low confidence — verify before relying on this.</div>}
+          <div style={{ display: "flex", gap: 8 }}>
+            <button className="btn" disabled={savingP} onClick={saveProfile}>{savingP ? "Saving…" : "Save to my book"}</button>
+            <button className="mini del" onClick={() => setDraft(null)}>Discard</button>
+          </div>
         </div>
       )}
 
