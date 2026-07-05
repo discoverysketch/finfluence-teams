@@ -248,6 +248,7 @@ export default function Territory({ listId, initial }: { listId: string; initial
               </div>
               {a.entity?.data_tier && <TierBadge t={a.entity.data_tier} />}
               {a.entity?.id && <button className="mini" onClick={() => loadFacts(a)}>{openId === a.id ? "Hide" : "📊 Financials"}</button>}
+              {a.entity?.id && <a className="mini" href={`/territory/plan/${a.entity.id}`} style={{ textDecoration: "none", display: "inline-block" }}>📄 Plan</a>}
               <button className="mini del" onClick={() => remove(a.id)}>✕</button>
             </div>
             {openId === a.id && (
