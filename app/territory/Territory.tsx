@@ -43,6 +43,9 @@ export default function Territory({ listId, initial }: { listId: string; initial
   const [researching, setResearching] = useState(false);
   const [draft, setDraft] = useState<Profile | null>(null);
   const [savingP, setSavingP] = useState(false);
+  const [stage, setStage] = useState("");
+  const [prog, setProg] = useState(0);
+  const [elapsed, setElapsed] = useState(0);
 
   const existingIds = new Set(initial.map((a) => a.entity?.id).filter(Boolean));
 
@@ -118,13 +121,32 @@ export default function Territory({ listId, initial }: { listId: string; initial
 
   async function research() {
     if (pName.trim().length < 2) return;
-    setResearching(true); setMsg(""); setDraft(null);
+    setResearching(true); setMsg(""); setDraft(null); setStage("Starting…"); setProg(5); setElapsed(0);
+    const t0 = Date.now();
+    const tick = setInterval(() => setElapsed(Math.round((Date.now() - t0) / 1000)), 1000);
+    const creep = setInterval(() => setProg((p) => (p < 92 ? p + (p < 60 ? 0.7 : 0.3) : p)), 400);
     try {
       const r = await fetch("/api/entity-profile", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name: pName, hint: pHint }) });
-      const j = await r.json();
-      if (!r.ok) setMsg(j.error || "Research failed."); else setDraft(j.profile);
+      if (!r.ok || !r.body) { const j = await r.json().catch(() => ({})); setMsg(j.error || "Research failed."); return; }
+      const reader = r.body.getReader(); const dec = new TextDecoder(); let buf = ""; let terminal = false;
+      for (;;) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buf += dec.decode(value, { stream: true });
+        let nl: number;
+        while ((nl = buf.indexOf("\n")) >= 0) {
+          const line = buf.slice(0, nl).trim(); buf = buf.slice(nl + 1);
+          if (!line) continue;
+          let ev: any; try { ev = JSON.parse(line); } catch { continue; }
+          if (ev.stage === "searching") { setStage("Searching the web…"); setProg((p) => Math.max(p, 14)); }
+          else if (ev.stage === "structuring") { setStage(ev.sources ? `Found ${ev.sources} source${ev.sources === 1 ? "" : "s"} — writing the profile…` : "Writing the profile…"); setProg((p) => Math.max(p, 74)); }
+          else if (ev.stage === "done") { setProg(100); setStage("Done"); setDraft(ev.profile); terminal = true; }
+          else if (ev.stage === "error") { setMsg(ev.error || "Research failed."); terminal = true; }
+        }
+      }
+      if (!terminal) setMsg("Research is taking unusually long — please try again, ideally with a state or parent-company hint.");
     } catch { setMsg("Network error."); }
-    finally { setResearching(false); }
+    finally { clearInterval(tick); clearInterval(creep); setResearching(false); setStage(""); }
   }
   async function saveProfile() {
     if (!draft || !listId) return;
@@ -199,8 +221,18 @@ export default function Territory({ listId, initial }: { listId: string; initial
           No SEC match (co-op, municipal, private IPP, retailer)? Claude web-researches a <b>sourced</b> profile you review before saving. Can take up to ~2 minutes.
         </p>
         <input value={pName} onChange={(e) => setPName(e.target.value)} placeholder="Company name, e.g. Pedernales Electric Cooperative" style={{ marginBottom: 8 }} />
-        <input value={pHint} onChange={(e) => setPHint(e.target.value)} placeholder="Optional hint — state, parent company…" style={{ marginBottom: 8 }} />
-        <button className="btn" disabled={researching || pName.trim().length < 2} onClick={research}>{researching ? "Researching the web…" : "🔍 Research"}</button>
+        <input value={pHint} onChange={(e) => setPHint(e.target.value)} placeholder="Optional hint — state, parent company…" style={{ marginBottom: 8 }} disabled={researching} />
+        <button className="btn" disabled={researching || pName.trim().length < 2} onClick={research}>{researching ? "Researching…" : "🔍 Research"}</button>
+        {researching && (
+          <div style={{ marginTop: 10 }}>
+            <div style={{ height: 8, background: "var(--cream2)", borderRadius: 5, overflow: "hidden" }}>
+              <div style={{ width: `${prog}%`, height: "100%", background: "var(--gold)", transition: "width .4s ease" }} />
+            </div>
+            <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, color: "var(--ink2)", marginTop: 5 }}>
+              <span>{stage || "Starting…"}</span><span>{elapsed}s</span>
+            </div>
+          </div>
+        )}
       </div>
 
       {draft && (

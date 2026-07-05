@@ -1,0 +1,14 @@
+import Anthropic from "@anthropic-ai/sdk";
+const client = new Anthropic();
+const t0 = Date.now();
+const el = () => Math.round((Date.now()-t0)/1000)+"s";
+const q = "Tri-County Electric Cooperative";
+console.log(el(), "stage: searching");
+const research = await client.messages.create({ model:"claude-sonnet-5", max_tokens:2000, tools:[{type:"web_search_20260209",name:"web_search",max_uses:2} as any], messages:[{role:"user",content:`Research "${q}" (US electric co-op, not SEC-filed). Tight paragraph: type, HQ state, members served, one recent item. Cite source URLs.`}] });
+const notes = research.content.filter(b=>b.type==="text").map(b=>(b as any).text).join("\n").trim();
+const sources = new Set((notes.match(/https?:\/\/[^\s)\]]+/g)||[])).size;
+console.log(el(), `stage: structuring (${sources} sources)`);
+const SCHEMA={type:"object",additionalProperties:false,properties:{canonical_name:{type:"string"},entity_type:{type:"string",enum:["iou","ipp","coop","muni","retailer","other"]},hq_state:{type:"string"},ownership:{type:"string"},est_size:{type:"string"},segment:{type:"string"},summary:{type:"string"},sources:{type:"array",items:{type:"object",additionalProperties:false,properties:{title:{type:"string"},url:{type:"string"}},required:["title","url"]}},confidence:{type:"string",enum:["low","medium","high"]}},required:["canonical_name","entity_type","hq_state","ownership","est_size","segment","summary","sources","confidence"]};
+const ex = await client.messages.create({ model:"claude-opus-4-8", max_tokens:1500, output_config:{format:{type:"json_schema",schema:SCHEMA}} as any, system:"Extract a profile from notes; empty string if unknown; coop etc.", messages:[{role:"user",content:`Company: ${q}\n\nNotes:\n${notes}`}] });
+const p = JSON.parse(ex.content.filter(b=>b.type==="text").map(b=>(b as any).text).join(""));
+console.log(el(), "stage: done ->", p.canonical_name, "|", p.entity_type, "|", p.hq_state, "|", p.confidence);
