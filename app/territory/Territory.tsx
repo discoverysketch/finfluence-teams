@@ -73,53 +73,87 @@ export default function Territory({ listId, initial }: { listId: string; initial
     }
   }
 
-  function parseNames(text: string): string[] {
+  // Names contain commas ("NRG Energy, Inc."), so split on newlines when present;
+  // only treat commas as separators for single-line pastes. Strip CSV quotes.
+  function parseNames(text: string): { list: string[]; dupes: number; truncated: number } {
+    const raw = text.includes("\n") ? text.split(/\r?\n/) : text.split(",");
     const seen = new Set<string>();
-    return text.split(/[\n,]/).map((s) => s.trim()).filter((s) => {
-      if (s.length < 2) return false;
+    const list: string[] = [];
+    let dupes = 0;
+    for (const s0 of raw) {
+      const s = s0.trim().replace(/^"(.*)"$/s, "$1").trim();
+      if (s.length < 2) continue;
       const k = s.toLowerCase();
-      if (seen.has(k)) return false; seen.add(k); return true;
-    }).slice(0, 60);
+      if (seen.has(k)) { dupes++; continue; }
+      seen.add(k); list.push(s);
+    }
+    const truncated = Math.max(0, list.length - 200);
+    return { list: list.slice(0, 200), dupes, truncated };
   }
 
+  // First CSV column, honoring quoted fields (names often contain commas).
+  function firstCol(line: string): string {
+    const t = line.trim();
+    if (t.startsWith('"')) { const end = t.indexOf('"', 1); if (end > 0) return t.slice(1, end); }
+    return t.split(",")[0];
+  }
   function onFile(f: File | undefined) {
     if (!f) return;
     const reader = new FileReader();
-    reader.onload = () => {
-      // take the first column of each CSV line
-      const text = String(reader.result || "").split(/\r?\n/).map((l) => l.split(",")[0]).join("\n");
-      setNames(text);
-    };
+    reader.onload = () => setNames(String(reader.result || "").split(/\r?\n/).map(firstCol).join("\n"));
     reader.readAsText(f);
   }
 
+  const [parseNote, setParseNote] = useState("");
+
   async function match() {
-    const list = parseNames(names);
+    const { list, dupes, truncated } = parseNames(names);
     if (!list.length) { setMsg("Paste at least one account name."); return; }
     setBusy(true); setMsg("");
+    setParseNote([
+      dupes ? `${dupes} exact duplicate${dupes === 1 ? "" : "s"} removed` : "",
+      truncated ? `first 200 kept (${truncated} over the limit skipped)` : "",
+    ].filter(Boolean).join(" · "));
     try {
       const out: MatchRow[] = [];
-      for (const name of list) {
-        const { data } = await supabase.rpc("match_entities", { q: name, lim: 6 });
-        const candidates = (data ?? []) as Cand[];
-        out.push({ name, candidates, selectedId: candidates[0]?.id ?? "none" });
+      for (let i = 0; i < list.length; i += 10) {
+        const chunk = await Promise.all(list.slice(i, i + 10).map(async (name) => {
+          const { data } = await supabase.rpc("match_entities", { q: name, lim: 6 });
+          const candidates = (data ?? []) as Cand[];
+          // Only preselect confident matches — low-similarity top hits are often the
+          // wrong company (e.g. "TXU Energy" → TXNM at 50%); default those to None.
+          const top = candidates[0];
+          return { name, candidates, selectedId: top && top.score >= 0.55 ? top.id : "none" };
+        }));
+        out.push(...chunk);
       }
       setRows(out);
     } catch { setMsg("Matching failed — is the directory loaded?"); }
     finally { setBusy(false); }
   }
 
+  // Several names can resolve to the SAME company ("NRG Energy" + "NRG Energy, Inc.")
+  // — add each matched entity once, and skip ones already in the book.
+  function uniqueToAdd(rs: MatchRow[]): string[] {
+    const seen = new Set<string>();
+    const out: string[] = [];
+    for (const r of rs) {
+      const id = r.selectedId;
+      if (!id || id === "none" || existingIds.has(id) || seen.has(id)) continue;
+      seen.add(id); out.push(id);
+    }
+    return out;
+  }
+
   async function confirm() {
     if (!rows) return;
-    const toAdd = rows
-      .filter((r) => r.selectedId && r.selectedId !== "none" && !existingIds.has(r.selectedId))
-      .map((r) => ({ list_id: listId, entity_id: r.selectedId }));
-    if (!toAdd.length) { setMsg("Nothing new to add — pick at least one match."); return; }
+    const ids = uniqueToAdd(rows);
+    if (!ids.length) { setMsg("Nothing new to add — pick at least one match."); return; }
     setBusy(true);
-    const { error } = await supabase.from("accounts").insert(toAdd);
+    const { error } = await supabase.from("accounts").insert(ids.map((entity_id) => ({ list_id: listId, entity_id })));
     setBusy(false);
     if (error) { setMsg(error.message); return; }
-    setRows(null); setNames(""); router.refresh();
+    setRows(null); setNames(""); setParseNote(""); router.refresh();
   }
 
   async function remove(id: string) {
@@ -194,29 +228,41 @@ export default function Territory({ listId, initial }: { listId: string; initial
       {rows && (
         <div>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
-            <div style={{ fontSize: 12, color: "var(--ink2)", fontWeight: 600 }}>{matched} of {rows.length} matched · review below</div>
-            <button className="mini" onClick={() => { setRows(null); setMsg(""); }}>← Start over</button>
-          </div>
-          {rows.map((r, i) => (
-            <div key={i} className="card" style={{ marginBottom: 8, padding: "12px 14px" }}>
-              <div style={{ fontWeight: 700, fontSize: 15, marginBottom: 6 }}>{r.name}</div>
-              {r.candidates.length === 0 ? (
-                <div style={{ fontSize: 13, color: "var(--muted)" }}>No directory match. It&apos;ll be skipped (private-profile flow coming soon).</div>
-              ) : (
-                <select value={r.selectedId} onChange={(e) => setRows((rs) => rs!.map((x, j) => j === i ? { ...x, selectedId: e.target.value } : x))}
-                  style={{ width: "100%", padding: "8px 10px", fontSize: 13.5 }}>
-                  {r.candidates.map((c) => (
-                    <option key={c.id} value={c.id}>
-                      {c.canonical_name}{c.ticker ? ` (${c.ticker})` : ""} · Tier {c.data_tier || "?"} · {Math.round(c.score * 100)}% match
-                    </option>
-                  ))}
-                  <option value="none">— None of these —</option>
-                </select>
-              )}
+            <div style={{ fontSize: 12, color: "var(--ink2)", fontWeight: 600 }}>
+              {matched} of {rows.length} matched · review below
+              {parseNote && <span style={{ color: "var(--muted)", fontWeight: 500 }}> · {parseNote}</span>}
             </div>
-          ))}
+            <button className="mini" onClick={() => { setRows(null); setMsg(""); setParseNote(""); }}>← Start over</button>
+          </div>
+          {rows.map((r, i) => {
+            const selId = r.selectedId;
+            const inBook = selId !== "none" && existingIds.has(selId);
+            const dupOf = selId !== "none" && !inBook ? rows.find((x, j) => j < i && x.selectedId === selId) : undefined;
+            return (
+              <div key={i} className="card" style={{ marginBottom: 8, padding: "12px 14px", opacity: inBook || dupOf ? 0.75 : 1 }}>
+                <div style={{ fontWeight: 700, fontSize: 15, marginBottom: 6 }}>{r.name}</div>
+                {r.candidates.length === 0 ? (
+                  <div style={{ fontSize: 13, color: "var(--muted)" }}>No directory match — skipped here. Use the &quot;Private / non-SEC account&quot; research below.</div>
+                ) : (
+                  <>
+                    <select value={r.selectedId} onChange={(e) => setRows((rs) => rs!.map((x, j) => j === i ? { ...x, selectedId: e.target.value } : x))}
+                      style={{ width: "100%", padding: "8px 10px", fontSize: 13.5 }}>
+                      {r.candidates.map((c) => (
+                        <option key={c.id} value={c.id}>
+                          {c.canonical_name}{c.ticker ? ` (${c.ticker})` : ""} · Tier {c.data_tier || "?"} · {Math.round(c.score * 100)}% match
+                        </option>
+                      ))}
+                      <option value="none">— None of these —</option>
+                    </select>
+                    {inBook && <div style={{ fontSize: 12, color: "#1B7A47", fontWeight: 600, marginTop: 5 }}>✓ Already in your book — will be skipped</div>}
+                    {dupOf && <div style={{ fontSize: 12, color: "#9A6700", fontWeight: 600, marginTop: 5 }}>⚠ Same company as “{dupOf.name}” — added once</div>}
+                  </>
+                )}
+              </div>
+            );
+          })}
           <button className="btn" disabled={busy} onClick={confirm} style={{ marginTop: 4 }}>
-            {busy ? "Saving…" : `Confirm & save ${rows.filter((r) => r.selectedId !== "none" && !existingIds.has(r.selectedId)).length} account(s)`}
+            {busy ? "Saving…" : `Confirm & save ${uniqueToAdd(rows).length} account(s)`}
           </button>
         </div>
       )}
