@@ -120,6 +120,10 @@ export default function Territory({ listId, initial }: { listId: string; initial
         const chunk = await Promise.all(list.slice(i, i + 10).map(async (name) => {
           const { data } = await supabase.rpc("match_entities", { q: name, lim: 6 });
           const candidates = (data ?? []) as Cand[];
+          // Weak alias hits (<85%) are often generic-word noise ("NV Energy" partial-
+          // matching anything with "Energy") — sink them below direct name matches.
+          const adj = (c: Cand) => (c.matched_alias && c.score < 0.85 ? c.score * 0.6 : c.score);
+          candidates.sort((a, b) => adj(b) - adj(a));
           // Only preselect confident matches — low-similarity top hits are often the
           // wrong company (e.g. "TXU Energy" → TXNM at 50%); default those to None.
           // Fuzzy ALIAS hits need a higher bar: similarly-named subsidiaries of
