@@ -13,6 +13,7 @@
     "load-directory": "node --env-file=.env.local seed/load-sec-directory.mjs",
     "cache-peers": "node --env-file=.env.local --experimental-strip-types seed/cache-peers.ts",
     "warm-directory": "node --env-file=.env.local --experimental-strip-types seed/warm-directory.ts",
+    "seed-aliases": "node --env-file=.env.local --experimental-strip-types seed/seed-aliases.ts",
     "test:isolation": "node --env-file=.env.local seed/test-isolation.mjs"
   },
   "dependencies": {

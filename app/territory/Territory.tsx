@@ -6,7 +6,7 @@ import { createClient } from "@/lib/supabase/client";
 
 type Ent = { id: string; canonical_name: string; ticker: string | null; data_tier: string | null; entity_type: string | null; hq_state: string | null };
 export type Account = { id: string; rep_notes: string | null; crm_stage: string | null; entity: Ent | null };
-type Cand = { id: string; canonical_name: string; ticker: string | null; cik: string | null; entity_type: string | null; data_tier: string | null; hq_state: string | null; score: number };
+type Cand = { id: string; canonical_name: string; ticker: string | null; cik: string | null; entity_type: string | null; data_tier: string | null; hq_state: string | null; score: number; matched_alias?: string | null };
 type MatchRow = { name: string; candidates: Cand[]; selectedId: string };
 
 const TIER_COLOR: Record<string, string> = { A: "#1B7A47", B: "#0572CE", C: "#9A6700", D: "#8A7E6E" };
@@ -249,7 +249,7 @@ export default function Territory({ listId, initial }: { listId: string; initial
                       style={{ width: "100%", padding: "8px 10px", fontSize: 13.5 }}>
                       {r.candidates.map((c) => (
                         <option key={c.id} value={c.id}>
-                          {c.canonical_name}{c.ticker ? ` (${c.ticker})` : ""} · Tier {c.data_tier || "?"} · {Math.round(c.score * 100)}% match
+                          {c.canonical_name}{c.ticker ? ` (${c.ticker})` : ""}{c.matched_alias ? ` · matches “${c.matched_alias}”` : ""} · Tier {c.data_tier || "?"} · {Math.round(c.score * 100)}% match
                         </option>
                       ))}
                       <option value="none">— None of these —</option>
