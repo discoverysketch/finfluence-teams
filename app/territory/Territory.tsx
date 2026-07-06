@@ -122,8 +122,11 @@ export default function Territory({ listId, initial }: { listId: string; initial
           const candidates = (data ?? []) as Cand[];
           // Only preselect confident matches — low-similarity top hits are often the
           // wrong company (e.g. "TXU Energy" → TXNM at 50%); default those to None.
+          // Fuzzy ALIAS hits need a higher bar: similarly-named subsidiaries of
+          // different parents can cross-match ("...of NM" → "...of Colorado" alias).
           const top = candidates[0];
-          return { name, candidates, selectedId: top && top.score >= 0.55 ? top.id : "none" };
+          const confident = top && top.score >= (top.matched_alias ? 0.8 : 0.55);
+          return { name, candidates, selectedId: confident ? top.id : "none" };
         }));
         out.push(...chunk);
       }
