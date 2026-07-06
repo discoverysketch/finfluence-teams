@@ -117,9 +117,21 @@ export default function Territory({ listId, initial }: { listId: string; initial
     try {
       const out: MatchRow[] = [];
       for (let i = 0; i < list.length; i += 10) {
+        const norm = (s: string) => s.toLowerCase().replace(/[^a-z0-9 ]/g, " ")
+          .replace(/\b(the|inc|corp|corporation|co|company|companies|ltd|llc|lp|plc|holdings?|group)\b/g, " ")
+          .replace(/\s+/g, " ").trim();
         const chunk = await Promise.all(list.slice(i, i + 10).map(async (name) => {
           const { data } = await supabase.rpc("match_entities", { q: name, lim: 6 });
-          const candidates = (data ?? []) as Cand[];
+          const qn = norm(name);
+          // If the official name IS the typed name (minus suffixes), it's a direct
+          // match even when a subsidiary alias happened to score highest — don't let
+          // the alias tag drag it under the stricter alias bar ("Duke Energy" vs
+          // "Duke Energy CORP" tagged via "Duke Energy Ohio").
+          const candidates = ((data ?? []) as Cand[]).map((c) => {
+            const cn = norm(c.canonical_name);
+            return c.matched_alias && (cn === qn || cn.startsWith(qn + " ") || qn.startsWith(cn + " "))
+              ? { ...c, matched_alias: null } : c;
+          });
           // Weak alias hits (<85%) are often generic-word noise ("NV Energy" partial-
           // matching anything with "Energy") — sink them below direct name matches.
           const adj = (c: Cand) => (c.matched_alias && c.score < 0.85 ? c.score * 0.6 : c.score);
