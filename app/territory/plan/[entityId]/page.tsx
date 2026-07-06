@@ -4,7 +4,37 @@ import Link from "next/link";
 import { ensureEntityFacts, type FactMap } from "@/lib/facts";
 import { rankPeers } from "@/lib/lookalike";
 import { conceptScores, type Ev } from "@/lib/acumen";
+import { fetchPrices, type PriceSeries } from "@/lib/stock";
 import Plays from "./Plays";
+
+// Print-friendly inline-SVG sparkline (no client JS — renders in Save-as-PDF).
+function Sparkline({ s }: { s: PriceSeries }) {
+  const W = 640, H = 90, P = 4;
+  const vals = s.points.map((p) => p.c);
+  const min = Math.min(...vals), max = Math.max(...vals);
+  const x = (i: number) => P + (i / (s.points.length - 1)) * (W - 2 * P);
+  const y = (v: number) => (max === min ? H / 2 : P + (1 - (v - min) / (max - min)) * (H - 2 * P));
+  const d = s.points.map((p, i) => `${i ? "L" : "M"}${x(i).toFixed(1)},${y(p.c).toFixed(1)}`).join(" ");
+  const first = s.points[0], chg = first ? ((s.price - first.c) / first.c) * 100 : 0;
+  return (
+    <div style={{ marginBottom: 12 }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
+        <span style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".5px", color: "var(--muted)" }}>Share price · 2y</span>
+        <span style={{ fontSize: 14, fontWeight: 800 }}>
+          ${s.price.toFixed(2)}{" "}
+          <span style={{ color: chg >= 0 ? "#1B7A47" : "var(--red)", fontSize: 12 }}>{chg >= 0 ? "+" : ""}{chg.toFixed(0)}% 2y</span>{" "}
+          <span style={{ fontSize: 11, color: "var(--muted)", fontWeight: 600 }}>through {s.asOf}</span>
+        </span>
+      </div>
+      <svg viewBox={`0 0 ${W} ${H}`} style={{ width: "100%", height: "auto", display: "block" }} role="img" aria-label="2-year share price">
+        <path d={d} fill="none" stroke="#B23A2E" strokeWidth={2} />
+      </svg>
+      <div style={{ display: "flex", justifyContent: "space-between", fontSize: 10, color: "var(--muted)" }}>
+        <span>{first?.d}</span><span>{s.asOf}</span>
+      </div>
+    </div>
+  );
+}
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 const fmtM = (v?: number) => (v == null ? "—" : `${v < 0 ? "-" : ""}$${Math.abs(v) >= 1000 ? (Math.abs(v) / 1000).toFixed(1) + "B" : Math.round(Math.abs(v)) + "M"}`);
@@ -23,6 +53,7 @@ export default async function PlanPage({ params }: { params: Promise<{ entityId:
   const target = await ensureEntityFacts(supabase, entityId);
   const facts: FactMap = target.ok ? target.facts : {};
   const period = target.ok ? target.period : null;
+  const prices = ent.ticker ? await fetchPrices(ent.ticker) : null;
 
   // closest peer (needs financials)
   let peer: { name: string; ticker: string | null; facts: FactMap; similarity: number } | null = null;
@@ -72,6 +103,7 @@ export default async function PlanPage({ params }: { params: Promise<{ entityId:
 
       {/* Snapshot */}
       <h2 style={{ fontSize: 15 }}>Snapshot</h2>
+      {prices && prices.points.length > 1 && <Sparkline s={prices} />}
       {target.ok ? (
         <>
           <div style={{ fontSize: 12, color: "var(--muted)", fontWeight: 600, marginBottom: 6 }}>{period} · $ millions</div>
