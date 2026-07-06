@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import Link from "next/link";
 import Shell from "@/components/Shell";
 import Finn from "@/components/Finn";
+import NotificationsCard from "@/components/NotificationsCard";
 
 export default async function Home() {
   const supabase = await createClient();
@@ -52,6 +53,8 @@ export default async function Home() {
           </>
         )}
       </p>
+
+      <NotificationsCard userId={user.id} />
 
       <form action="/auth/signout" method="post" style={{ marginTop: 24 }}>
         <button className="btn" style={{ background: "none", color: "var(--ink2)", border: "1px solid var(--border)", fontSize: 13, padding: "9px 16px" }}>

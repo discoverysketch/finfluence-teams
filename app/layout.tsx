@@ -1,9 +1,16 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import "./globals.css";
+import PwaSetup from "@/components/PwaSetup";
 
 export const metadata: Metadata = {
   title: "FinFluency Teams",
   description: "Finance fluency + territory intelligence for sales teams.",
+  manifest: "/manifest.webmanifest",
+  icons: { apple: "/icons/apple-touch-icon.png" },
+};
+
+export const viewport: Viewport = {
+  themeColor: "#B23A2E",
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
@@ -16,7 +23,10 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           rel="stylesheet"
         />
       </head>
-      <body>{children}</body>
+      <body>
+        <PwaSetup />
+        {children}
+      </body>
     </html>
   );
 }
