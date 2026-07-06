@@ -5,12 +5,14 @@
 const UA = { "User-Agent": "FinFluency dan.wain1@gmail.com", "Accept-Encoding": "gzip, deflate" };
 let TICKERS: any = null;
 
+export type FiscalYear = { label: string; revenue?: number; operatingIncome?: number; netIncome?: number; operatingCashFlow?: number; capex?: number };
 export type Financials = {
   company: string; cik: string; period: string;
   revenue?: number; cogs?: number; operatingIncome?: number; netIncome?: number; interestExpense?: number;
   totalAssets?: number; totalLiabilities?: number; totalEquity?: number;
   cash?: number; currentAssets?: number; currentLiabilities?: number;
   totalDebt?: number; operatingCashFlow?: number; capex?: number;
+  fy?: FiscalYear; // most recent full fiscal year (10-K, ~annual) for flow items
 };
 
 async function getCik(ticker: string) {
@@ -64,6 +66,14 @@ export async function fetchFinancials(arg: string | { cik: string; title: string
     const t = pool[0];
     return { val: t.val, end: t.end, fy: t.fy, fp: t.fp, days: days(t.start, t.end) };
   };
+  // Most recent FULL fiscal year (10-K, ~365-day duration) for flow items.
+  const pickAnnual = (concepts: string[]) => {
+    const all: any[] = [];
+    concepts.forEach((c, ci) => { const arr = usd(c); if (arr) for (const x of arr) if (x.start && x.end && x.form === "10-K") { const d = days(x.start, x.end); if (d >= 350 && d <= 380) all.push({ ...x, _ci: ci }); } });
+    if (!all.length) return null;
+    all.sort(sortRows);
+    return { val: all[0].val, fy: all[0].fy };
+  };
   const M = (v: any) => (v == null ? undefined : Math.round((v / 1e6) * 10) / 10);
 
   const rev = pickDuration(["RevenueFromContractWithCustomerExcludingAssessedTax", "Revenues", "RegulatedAndUnregulatedOperatingRevenue", "RevenueFromContractWithCustomerIncludingAssessedTax", "SalesRevenueNet"]);
@@ -97,8 +107,22 @@ export async function fetchFinancials(arg: string | { cik: string; title: string
   }
   period += " · SEC EDGAR";
 
+  // Annual (full fiscal year) flow figures.
+  const revA = pickAnnual(["RevenueFromContractWithCustomerExcludingAssessedTax", "Revenues", "RegulatedAndUnregulatedOperatingRevenue", "RevenueFromContractWithCustomerIncludingAssessedTax", "SalesRevenueNet"]);
+  const opIncA = pickAnnual(["OperatingIncomeLoss"]);
+  const niA = pickAnnual(["NetIncomeLoss", "ProfitLoss"]);
+  const cfoA = pickAnnual(["NetCashProvidedByUsedInOperatingActivities", "NetCashProvidedByUsedInOperatingActivitiesContinuingOperations"]);
+  const capexA = pickAnnual(["PaymentsToAcquirePropertyPlantAndEquipment", "PaymentsForCapitalImprovements", "PaymentsToAcquireProductiveAssets"]);
+  const fyNum = (revA || niA || opIncA || cfoA)?.fy;
+  const fy = fyNum ? {
+    label: `FY${fyNum}`,
+    revenue: M(revA?.val), operatingIncome: M(opIncA?.val), netIncome: M(niA?.val),
+    operatingCashFlow: M(cfoA?.val), capex: capexA ? -Math.abs(M(capexA.val)!) : undefined,
+  } : undefined;
+  if (fy) Object.keys(fy).forEach((k) => (fy as any)[k] === undefined && k !== "label" && delete (fy as any)[k]);
+
   const data: any = {
-    company: found.title, cik: found.cik, period,
+    company: found.title, cik: found.cik, period, fy,
     revenue: M(rev?.val), cogs: M(cogs?.val), operatingIncome: M(opInc?.val), netIncome: M(ni?.val), interestExpense: M(intexp?.val),
     totalAssets: M(assets?.val), totalLiabilities: M(liab?.val), totalEquity: M(equity?.val),
     cash: M(cash?.val), currentAssets: M(ca?.val), currentLiabilities: M(cl?.val),

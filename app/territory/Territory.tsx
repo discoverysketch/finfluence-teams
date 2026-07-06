@@ -1,6 +1,7 @@
 "use client";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer } from "recharts";
 import { createClient } from "@/lib/supabase/client";
 
 type Ent = { id: string; canonical_name: string; ticker: string | null; data_tier: string | null; entity_type: string | null; hq_state: string | null };
@@ -14,18 +15,16 @@ function TierBadge({ t }: { t: string | null }) {
   return <span style={{ background: TIER_COLOR[tier] || "#8A7E6E", color: "#fff", fontSize: 10, fontWeight: 700, borderRadius: 4, padding: "2px 6px" }}>Tier {tier}</span>;
 }
 
-const LABELS: Record<string, string> = {
-  revenue: "Revenue", operatingIncome: "Operating income", netIncome: "Net income", interestExpense: "Interest expense",
-  totalAssets: "Total assets", totalLiabilities: "Total liabilities", totalEquity: "Total equity",
-  cash: "Cash", currentAssets: "Current assets", currentLiabilities: "Current liabilities",
-  totalDebt: "Total debt", operatingCashFlow: "Op. cash flow", capex: "Capex", cogs: "COGS",
-};
 function fmtM(v: number) {
   const a = Math.abs(v);
   if (a >= 1000) return `${v < 0 ? "-" : ""}$${(a / 1000).toFixed(1)}B`;
   return `${v < 0 ? "-" : ""}$${Math.round(a)}M`;
 }
-type FactState = { loading?: boolean; error?: string; company?: string; period?: string; source_url?: string; items?: { key: string; value: number }[] };
+type Stock = { loading?: boolean; error?: string; points?: { d: string; c: number }[]; price?: number; currency?: string; asOf?: string };
+type FactState = { loading?: boolean; error?: string; company?: string; period?: string; source_url?: string; asOf?: string; annualLabel?: string | null; items?: { key: string; value: number }[]; stock?: Stock };
+const fmtDate = (s?: string) => { if (!s) return ""; const d = new Date(s); return isNaN(+d) ? "" : d.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }); };
+const FY_ROWS: [string, string][] = [["fy_revenue", "Revenue"], ["fy_operatingIncome", "Operating income"], ["fy_netIncome", "Net income"], ["fy_operatingCashFlow", "Op. cash flow"], ["fy_capex", "Capex"]];
+const BAL_ROWS: [string, string][] = [["totalAssets", "Total assets"], ["totalEquity", "Total equity"], ["totalDebt", "Total debt"], ["cash", "Cash"]];
 type Profile = { canonical_name: string; entity_type: string; hq_state: string; ownership: string; est_size: string; segment: string; summary: string; sources: { title: string; url: string }[]; confidence: string };
 const TYPE_LABEL: Record<string, string> = { iou: "Investor-owned utility", ipp: "Independent power producer", coop: "Cooperative", muni: "Municipal", retailer: "Retailer", other: "Other" };
 
@@ -60,8 +59,18 @@ export default function Territory({ listId, initial }: { listId: string; initial
       const r = await fetch(`/api/entity-facts?entityId=${eid}`);
       const j = await r.json();
       if (!r.ok) { setFacts((f) => ({ ...f, [a.id]: { error: j.error || "Couldn't load." } })); return; }
-      setFacts((f) => ({ ...f, [a.id]: { company: j.company, period: j.period, source_url: j.source_url, items: j.facts } }));
-    } catch { setFacts((f) => ({ ...f, [a.id]: { error: "Network error." } })); }
+      setFacts((f) => ({ ...f, [a.id]: { company: j.company, period: j.period, source_url: j.source_url, items: j.facts, asOf: j.asOf, annualLabel: j.annualLabel } }));
+    } catch { setFacts((f) => ({ ...f, [a.id]: { error: "Network error." } })); return; }
+    // Stock price (only when there's a ticker).
+    const tk = a.entity?.ticker;
+    if (tk) {
+      setFacts((f) => ({ ...f, [a.id]: { ...f[a.id], stock: { loading: true } } }));
+      try {
+        const sr = await fetch(`/api/stock?ticker=${encodeURIComponent(tk)}`);
+        const sj = await sr.json();
+        setFacts((f) => ({ ...f, [a.id]: { ...f[a.id], stock: sr.ok ? { points: sj.points, price: sj.price, currency: sj.currency, asOf: sj.asOf } : { error: sj.error || "No price." } } }));
+      } catch { setFacts((f) => ({ ...f, [a.id]: { ...f[a.id], stock: { error: "Price unavailable." } } })); }
+    }
   }
 
   function parseNames(text: string): string[] {
@@ -283,30 +292,69 @@ export default function Territory({ listId, initial }: { listId: string; initial
               {a.entity?.id && <a className="mini" href={`/territory/plan/${a.entity.id}`} style={{ textDecoration: "none", display: "inline-block" }}>📄 Plan</a>}
               <button className="mini del" onClick={() => remove(a.id)}>✕</button>
             </div>
-            {openId === a.id && (
-              <div className="card" style={{ marginTop: 0, marginBottom: 6, background: "#FBF8F2", borderTopLeftRadius: 0, borderTopRightRadius: 0 }}>
-                {fs?.loading && <div style={{ fontSize: 13, color: "var(--ink2)" }}>Pulling SEC data…</div>}
-                {fs?.error && <div style={{ fontSize: 13, color: "var(--red)" }}>{fs.error}</div>}
-                {fs?.items && (
-                  <>
-                    <div style={{ fontSize: 12, color: "var(--muted)", fontWeight: 600, marginBottom: 6 }}>{fs.period} · $ millions</div>
-                    {fs.items.length === 0 ? (
-                      <div style={{ fontSize: 13, color: "var(--ink2)" }}>No figures reported.</div>
-                    ) : (
-                      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "3px 16px" }}>
-                        {fs.items.map((it) => (
-                          <div key={it.key} style={{ display: "flex", justifyContent: "space-between", borderBottom: "1px solid #F0EAE0", padding: "3px 0" }}>
-                            <span style={{ fontSize: 12.5, color: "var(--ink2)" }}>{LABELS[it.key] || it.key}</span>
-                            <span style={{ fontSize: 13, fontWeight: 700, fontFamily: "ui-monospace, monospace" }}>{fmtM(it.value)}</span>
+            {openId === a.id && (() => {
+              const fmap: Record<string, number> = fs?.items ? Object.fromEntries(fs.items.map((i) => [i.key, i.value])) : {};
+              const fyRows = FY_ROWS.filter(([k]) => fmap[k] != null);
+              const balRows = BAL_ROWS.filter(([k]) => fmap[k] != null);
+              const st = fs?.stock;
+              const Row = ([k, label]: [string, string]) => (
+                <div key={k} style={{ display: "flex", justifyContent: "space-between", borderBottom: "1px solid #F0EAE0", padding: "3px 0" }}>
+                  <span style={{ fontSize: 12.5, color: "var(--ink2)" }}>{label}</span>
+                  <span style={{ fontSize: 13, fontWeight: 700, fontFamily: "ui-monospace, monospace" }}>{fmtM(fmap[k])}</span>
+                </div>
+              );
+              return (
+                <div className="card" style={{ marginTop: 0, marginBottom: 6, background: "#FBF8F2", borderTopLeftRadius: 0, borderTopRightRadius: 0 }}>
+                  {fs?.loading && <div style={{ fontSize: 13, color: "var(--ink2)" }}>Pulling SEC data…</div>}
+                  {fs?.error && <div style={{ fontSize: 13, color: "var(--red)" }}>{fs.error}</div>}
+                  {fs?.items && (
+                    <>
+                      {/* Stock price */}
+                      {st?.loading && <div style={{ fontSize: 12, color: "var(--muted)", marginBottom: 8 }}>Loading price…</div>}
+                      {st?.points && st.points.length > 1 && (
+                        <div style={{ marginBottom: 12 }}>
+                          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
+                            <span style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".5px", color: "var(--muted)" }}>Share price · 2y</span>
+                            <span style={{ fontSize: 15, fontWeight: 800 }}>${st.price?.toFixed(2)} <span style={{ fontSize: 11, color: "var(--muted)", fontWeight: 600 }}>{st.currency} · through {st.asOf}</span></span>
                           </div>
-                        ))}
+                          <ResponsiveContainer width="100%" height={120}>
+                            <LineChart data={st.points} margin={{ top: 6, right: 6, left: 0, bottom: 0 }}>
+                              <XAxis dataKey="d" tick={{ fontSize: 9 }} interval={Math.floor(st.points.length / 5)} tickFormatter={(d) => String(d).slice(0, 7)} />
+                              <YAxis tick={{ fontSize: 9 }} width={40} domain={["auto", "auto"]} tickFormatter={(v) => `$${Math.round(v as number)}`} />
+                              <Tooltip formatter={(v) => `$${(v as number).toFixed(2)}`} labelStyle={{ fontSize: 11 }} contentStyle={{ fontSize: 12 }} />
+                              <Line type="monotone" dataKey="c" stroke="var(--red)" strokeWidth={2} dot={false} />
+                            </LineChart>
+                          </ResponsiveContainer>
+                        </div>
+                      )}
+
+                      {/* Full fiscal year */}
+                      {fyRows.length > 0 && (
+                        <>
+                          <div style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".5px", color: "var(--muted)", marginBottom: 4 }}>Full fiscal year {fs.annualLabel} · $M</div>
+                          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "3px 16px", marginBottom: 10 }}>{fyRows.map(Row)}</div>
+                        </>
+                      )}
+
+                      {/* Balance sheet */}
+                      {balRows.length > 0 && (
+                        <>
+                          <div style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".5px", color: "var(--muted)", marginBottom: 4 }}>Balance sheet · latest ({fs.period?.replace(" · SEC EDGAR", "")}) · $M</div>
+                          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "3px 16px", marginBottom: 8 }}>{balRows.map(Row)}</div>
+                        </>
+                      )}
+
+                      {fyRows.length === 0 && balRows.length === 0 && <div style={{ fontSize: 13, color: "var(--ink2)" }}>No figures reported.</div>}
+
+                      <div style={{ fontSize: 11, color: "var(--muted)", marginTop: 4 }}>
+                        Financials as of {fs.period?.replace(" · SEC EDGAR", "")} · pulled {fmtDate(fs.asOf)}
+                        {fs.source_url && <> · <a href={fs.source_url} target="_blank" rel="noreferrer" style={{ color: "var(--blue)", fontWeight: 700 }}>SEC filings ↗</a></>}
                       </div>
-                    )}
-                    {fs.source_url && <a href={fs.source_url} target="_blank" rel="noreferrer" style={{ display: "inline-block", marginTop: 8, fontSize: 12, color: "var(--blue)", fontWeight: 700 }}>SEC filings ↗</a>}
-                  </>
-                )}
-              </div>
-            )}
+                    </>
+                  )}
+                </div>
+              );
+            })()}
           </div>
         );
       })}

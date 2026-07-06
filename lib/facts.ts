@@ -15,8 +15,9 @@ const METRICS: (keyof Financials)[] = [
 
 export type FactMap = Record<string, number>;
 export type FactsResult =
-  | { ok: true; company: string; period: string; source_url: string; facts: FactMap }
+  | { ok: true; company: string; period: string; source_url: string; facts: FactMap; asOf: string; annualLabel: string | null }
   | { ok: false; status: number; error: string };
+const FY_FLOW = ["revenue", "operatingIncome", "netIncome", "operatingCashFlow", "capex"];
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 export async function ensureEntityFacts(supabase: SupabaseClient, entityId: string): Promise<FactsResult> {
@@ -27,10 +28,14 @@ export async function ensureEntityFacts(supabase: SupabaseClient, entityId: stri
   const { data: existing } = await supabase.from("entity_facts")
     .select("fact_key, value, period, source_url, fetched_at").eq("entity_id", entityId).eq("source", "sec")
     .order("fetched_at", { ascending: false });
-  if (existing && existing.length && Date.now() - new Date(existing[0].fetched_at).getTime() < FRESH_MS) {
+  // Re-fetch if the cache predates the fy_* (annual) rows, so the FY view populates.
+  const hasFy = !!existing?.some((f: any) => String(f.fact_key).startsWith("fy_"));
+  if (existing && existing.length && hasFy && Date.now() - new Date(existing[0].fetched_at).getTime() < FRESH_MS) {
+    const fyRow = existing.find((f: any) => String(f.fact_key).startsWith("fy_"));
     return {
       ok: true, company: ent.canonical_name, period: existing[0].period, source_url: existing[0].source_url,
       facts: Object.fromEntries(existing.map((f: any) => [f.fact_key, Number(f.value)])),
+      asOf: existing[0].fetched_at, annualLabel: fyRow?.period ?? null,
     };
   }
 
@@ -43,10 +48,12 @@ export async function ensureEntityFacts(supabase: SupabaseClient, entityId: stri
   const source_url = `https://www.sec.gov/cgi-bin/browse-edgar?action=getcompany&CIK=${cik}&type=10-K&count=10`;
   const rows = METRICS.filter((k) => fin![k] != null)
     .map((k) => ({ entity_id: entityId, source: "sec", fact_key: k as string, period: fin!.period, value: fin![k] as number, unit: "USD_millions", source_url }));
+  // Full-fiscal-year flow figures, stored as fy_* keys with the FY label as period.
+  if (fin.fy) for (const k of FY_FLOW) { const v = (fin.fy as any)[k]; if (v != null) rows.push({ entity_id: entityId, source: "sec", fact_key: `fy_${k}`, period: fin.fy.label, value: v, unit: "USD_millions", source_url }); }
 
   const admin = createAdminClient();
   await admin.from("entity_facts").delete().eq("entity_id", entityId).eq("source", "sec");
   if (rows.length) await admin.from("entity_facts").insert(rows);
 
-  return { ok: true, company: fin.company, period: fin.period, source_url, facts: Object.fromEntries(rows.map((r) => [r.fact_key, r.value])) };
+  return { ok: true, company: fin.company, period: fin.period, source_url, facts: Object.fromEntries(rows.map((r) => [r.fact_key, r.value])), asOf: new Date().toISOString(), annualLabel: fin.fy?.label ?? null };
 }
