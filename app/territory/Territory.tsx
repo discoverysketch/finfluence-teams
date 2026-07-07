@@ -1,5 +1,6 @@
 "use client";
 import { useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer } from "recharts";
 import { createClient } from "@/lib/supabase/client";
@@ -349,8 +350,13 @@ export default function Territory({ listId, initial }: { listId: string; initial
           <div key={a.id}>
             <div className="card" style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: openId === a.id ? 0 : 6, padding: "10px 12px" }}>
               <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ fontWeight: 700, fontSize: 14 }}>{a.entity?.canonical_name || "Unknown"}{a.entity?.ticker ? <span style={{ color: "var(--muted)", fontWeight: 600 }}> · {a.entity.ticker}</span> : null}</div>
-                {a.entity?.hq_state && <div style={{ fontSize: 12, color: "var(--ink2)" }}>{a.entity.hq_state}</div>}
+                <Link href={`/territory/account/${a.id}`} style={{ color: "inherit", fontWeight: 700, fontSize: 14 }}>
+                  {a.entity?.canonical_name || "Unknown"}{a.entity?.ticker ? <span style={{ color: "var(--muted)", fontWeight: 600 }}> · {a.entity.ticker}</span> : null} <span style={{ color: "var(--muted)" }}>›</span>
+                </Link>
+                <div style={{ fontSize: 12, color: "var(--ink2)" }}>
+                  {a.crm_stage ? <span style={{ background: "#EEF4FB", color: "var(--blue)", borderRadius: 4, padding: "1px 7px", fontWeight: 700, fontSize: 11, marginRight: 6 }}>{a.crm_stage.replace("_", " ")}</span> : null}
+                  {a.entity?.hq_state || ""}
+                </div>
               </div>
               {a.entity?.data_tier && <TierBadge t={a.entity.data_tier} />}
               {a.entity?.id && <button className="mini" onClick={() => loadFacts(a)}>{openId === a.id ? "Hide" : "📊 Financials"}</button>}
