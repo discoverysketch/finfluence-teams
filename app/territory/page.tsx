@@ -38,6 +38,7 @@ export default async function TerritoryPage() {
           <Link href="/territory/duel" className="btn" style={{ background: "var(--red)" }}>⚔️ Peer Duel</Link>
           <Link href="/territory/cfo" className="btn" style={{ background: "var(--charcoal)" }}>💼 CFO Simulator</Link>
           <Link href="/territory/board" className="btn" style={{ background: "var(--blue)" }}>🗺️ Territory Board</Link>
+          <Link href="/territory/whitespace" className="btn" style={{ background: "var(--purple)" }}>🔭 Whitespace</Link>
         </p>
       )}
       <Territory listId={list?.id ?? ""} initial={(accts ?? []) as unknown as Account[]} />
