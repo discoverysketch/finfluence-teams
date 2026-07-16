@@ -31,7 +31,8 @@ export async function middleware(request: NextRequest) {
 
   const path = request.nextUrl.pathname;
   // /api/cron/* self-authenticates with CRON_SECRET (server-to-server; no session).
-  const isPublic = path.startsWith("/login") || path.startsWith("/auth") || path.startsWith("/api/cron");
+  // /styleguide is a static, data-free design reference.
+  const isPublic = path.startsWith("/login") || path.startsWith("/auth") || path.startsWith("/api/cron") || path.startsWith("/styleguide");
 
   if (!user && !isPublic) {
     const url = request.nextUrl.clone();
