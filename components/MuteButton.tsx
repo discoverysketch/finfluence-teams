@@ -1,5 +1,6 @@
 "use client";
 import { useEffect, useState } from "react";
+import { Volume2, VolumeX } from "lucide-react";
 import { soundOn, setSound } from "@/lib/sfx";
 
 export default function MuteButton() {
@@ -11,7 +12,7 @@ export default function MuteButton() {
       aria-label="Toggle sound"
       onClick={() => { const next = !on; setOn(next); setSound(next); }}
     >
-      {on ? "🔊" : "🔇"}
+      {on ? <Volume2 size={16} strokeWidth={2} /> : <VolumeX size={16} strokeWidth={2} />}
     </button>
   );
 }

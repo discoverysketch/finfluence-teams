@@ -8,6 +8,7 @@ import NotificationsCard from "@/components/NotificationsCard";
 import MyTasks, { type Task } from "@/components/MyTasks";
 import { leagueStandings } from "@/lib/league";
 import { conceptScores, CONCEPTS, type Ev } from "@/lib/acumen";
+import { FileBarChart, Trophy, Zap, Target, BookOpenCheck, Map, Building2, LayoutDashboard, PenLine, Users } from "lucide-react";
 
 // My Day: the rep's morning screen — next steps, fresh filings, league standing,
 // and the concept most worth sharpening. Everything links into the deeper tools.
@@ -91,7 +92,7 @@ export default async function Home() {
 
       {(filings ?? []).length > 0 && (
         <>
-          <div className="daysec">📊 Fresh filings</div>
+          <div className="daysec"><FileBarChart size={13} strokeWidth={2.2} /> Fresh filings</div>
           {(filings ?? []).map((f: any) => (
             <Link key={f.id} href={`/challenge/pulse?entity=${f.entity.id}`} style={{ color: "inherit" }}>
               <div className="card" style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 6, padding: "10px 12px" }}>
@@ -109,16 +110,38 @@ export default async function Home() {
       <div className="daysec">Today</div>
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
         <Link href="/challenge/league" style={{ color: "inherit" }}>
-          <div className="card" style={{ padding: "12px 14px", height: "100%" }}>
-            <div style={{ fontSize: 22, fontWeight: 800, color: "var(--red)" }}>{mine ? `#${rank + 1}` : "—"}</div>
-            <div style={{ fontSize: 12, color: "var(--ink2)", fontWeight: 600 }}>league · {mine?.week ?? 0} pts this week</div>
+          <div className="card stat">
+            <span className="statico" style={{ background: "rgba(200,144,46,.14)", color: "var(--gold)" }}><Trophy size={17} strokeWidth={2} /></span>
+            <div>
+              <div className="statn">{mine ? `#${rank + 1}` : "—"}</div>
+              <div className="statl">league rank</div>
+            </div>
+          </div>
+        </Link>
+        <Link href="/challenge/league" style={{ color: "inherit" }}>
+          <div className="card stat">
+            <span className="statico" style={{ background: "rgba(199,70,52,.12)", color: "var(--red)" }}><Zap size={17} strokeWidth={2} /></span>
+            <div>
+              <div className="statn">{mine?.week ?? 0}</div>
+              <div className="statl">pts this week</div>
+            </div>
           </div>
         </Link>
         <Link href={focusUnit ? `/learn/${focusUnit.id}` : "/challenge"} style={{ color: "inherit" }}>
-          <div className="card" style={{ padding: "12px 14px", height: "100%" }}>
-            <div style={{ fontSize: 15, fontWeight: 800 }}>{weakest ? `${label[weakest.key] ?? weakest.key} · ${weakest.score}` : "🎯 Get verified"}</div>
-            <div style={{ fontSize: 12, color: "var(--ink2)", fontWeight: 600 }}>
-              {weakest ? (focusUnit ? `sharpen it in ${focusUnit.title}` : "your weakest concept") : "play a Challenge to build your Acumen"}
+          <div className="card stat">
+            <span className="statico" style={{ background: "rgba(5,114,206,.1)", color: "var(--blue)" }}><Target size={17} strokeWidth={2} /></span>
+            <div>
+              <div className="statn" style={{ fontSize: 15 }}>{weakest ? `${label[weakest.key] ?? weakest.key} · ${weakest.score}` : "Get verified"}</div>
+              <div className="statl">{weakest ? (focusUnit ? `sharpen in ${focusUnit.title}` : "weakest concept") : "play a Challenge"}</div>
+            </div>
+          </div>
+        </Link>
+        <Link href="/learn" style={{ color: "inherit" }}>
+          <div className="card stat">
+            <span className="statico" style={{ background: "rgba(27,122,71,.11)", color: "var(--green)" }}><BookOpenCheck size={17} strokeWidth={2} /></span>
+            <div>
+              <div className="statn">{(prog ?? []).length}</div>
+              <div className="statl">cards mastered</div>
             </div>
           </div>
         </Link>
@@ -126,12 +149,12 @@ export default async function Home() {
 
       <div className="daysec">Go deeper</div>
       <p style={{ display: "flex", gap: 8, flexWrap: "wrap", margin: 0 }}>
-        <Link href="/learn" className="btn" style={{ padding: "9px 14px", fontSize: 13 }}>🗺️ Path</Link>
-        <Link href="/challenge" className="btn" style={{ background: "var(--teal)", padding: "9px 14px", fontSize: 13 }}>🎯 Challenge</Link>
-        <Link href="/territory" className="btn" style={{ background: "var(--gold)", color: "var(--ink)", padding: "9px 14px", fontSize: 13 }}>🏢 Accounts</Link>
-        {isManager && <Link href="/manager" className="btn" style={{ background: "var(--blue)", padding: "9px 14px", fontSize: 13 }}>📊 Team</Link>}
-        {isAdmin && <Link href="/admin/content" className="btn" style={{ background: "var(--charcoal)", padding: "9px 14px", fontSize: 13 }}>✏️ Content</Link>}
-        {isAdmin && <Link href="/admin/team" className="btn" style={{ background: "var(--purple)", padding: "9px 14px", fontSize: 13 }}>👥 Roster</Link>}
+        <Link href="/learn" className="btn btn-i" style={{ padding: "9px 14px", fontSize: 13 }}><Map size={15} strokeWidth={2.2} /> Path</Link>
+        <Link href="/challenge" className="btn btn-i" style={{ background: "var(--teal)", padding: "9px 14px", fontSize: 13 }}><Target size={15} strokeWidth={2.2} /> Challenge</Link>
+        <Link href="/territory" className="btn btn-i" style={{ background: "var(--gold)", color: "var(--ink)", padding: "9px 14px", fontSize: 13 }}><Building2 size={15} strokeWidth={2.2} /> Accounts</Link>
+        {isManager && <Link href="/manager" className="btn btn-i" style={{ background: "var(--blue)", padding: "9px 14px", fontSize: 13 }}><LayoutDashboard size={15} strokeWidth={2.2} /> Team</Link>}
+        {isAdmin && <Link href="/admin/content" className="btn btn-i" style={{ background: "var(--charcoal)", padding: "9px 14px", fontSize: 13 }}><PenLine size={15} strokeWidth={2.2} /> Content</Link>}
+        {isAdmin && <Link href="/admin/team" className="btn btn-i" style={{ background: "var(--purple)", padding: "9px 14px", fontSize: 13 }}><Users size={15} strokeWidth={2.2} /> Roster</Link>}
       </p>
 
       <NotificationsCard userId={user.id} />

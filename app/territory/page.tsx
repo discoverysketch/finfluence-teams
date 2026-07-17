@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import Link from "next/link";
 import Shell from "@/components/Shell";
 import Territory, { type Account } from "./Territory";
+import { Swords, Briefcase, LayoutDashboard, Telescope } from "lucide-react";
 
 export default async function TerritoryPage() {
   const supabase = await createClient();
@@ -35,10 +36,10 @@ export default async function TerritoryPage() {
       </p>
       {(accts?.length ?? 0) > 0 && (
         <p style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 14 }}>
-          <Link href="/territory/duel" className="btn" style={{ background: "var(--red)" }}>⚔️ Peer Duel</Link>
-          <Link href="/territory/cfo" className="btn" style={{ background: "var(--charcoal)" }}>💼 CFO Simulator</Link>
-          <Link href="/territory/board" className="btn" style={{ background: "var(--blue)" }}>🗺️ Territory Board</Link>
-          <Link href="/territory/whitespace" className="btn" style={{ background: "var(--purple)" }}>🔭 Whitespace</Link>
+          <Link href="/territory/duel" className="btn btn-i" style={{ background: "var(--red)", padding: "9px 14px", fontSize: 13 }}><Swords size={15} strokeWidth={2.2} /> Peer Duel</Link>
+          <Link href="/territory/cfo" className="btn btn-i" style={{ background: "var(--charcoal)", padding: "9px 14px", fontSize: 13 }}><Briefcase size={15} strokeWidth={2.2} /> CFO Simulator</Link>
+          <Link href="/territory/board" className="btn btn-i" style={{ background: "var(--blue)", padding: "9px 14px", fontSize: 13 }}><LayoutDashboard size={15} strokeWidth={2.2} /> Territory Board</Link>
+          <Link href="/territory/whitespace" className="btn btn-i" style={{ background: "var(--purple)", padding: "9px 14px", fontSize: 13 }}><Telescope size={15} strokeWidth={2.2} /> Whitespace</Link>
         </p>
       )}
       <Territory listId={list?.id ?? ""} initial={(accts ?? []) as unknown as Account[]} />

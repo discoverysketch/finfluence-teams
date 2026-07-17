@@ -3,6 +3,7 @@ import Finn from "./Finn";
 import MuteButton from "./MuteButton";
 import { createClient } from "@/lib/supabase/server";
 import { overallAcumen, tier, level, type Ev } from "@/lib/acumen";
+import { Map, Target, Building2, UserRound, PenLine } from "lucide-react";
 
 type Tab = "home" | "path" | "challenge" | "accounts" | "content";
 /* eslint-disable @typescript-eslint/no-explicit-any */
@@ -49,11 +50,11 @@ export default async function Shell({
       </header>
       <main className="container">{children}</main>
       <nav className="nav">
-        <Link href="/learn" className={cls("path")}><span className="ni">🗺️</span>Path</Link>
-        <Link href="/challenge" className={cls("challenge")}><span className="ni">🎯</span>Challenge</Link>
-        <Link href="/territory" className={cls("accounts")}><span className="ni">🏢</span>Accounts</Link>
-        {isAdmin && <Link href="/admin/content" className={cls("content")}><span className="ni">✏️</span>Content</Link>}
-        <Link href="/" className={cls("home")}><span className="ni">👤</span>Me</Link>
+        <Link href="/learn" className={cls("path")}><span className="nico"><Map size={20} strokeWidth={1.9} /></span>Path</Link>
+        <Link href="/challenge" className={cls("challenge")}><span className="nico"><Target size={20} strokeWidth={1.9} /></span>Challenge</Link>
+        <Link href="/territory" className={cls("accounts")}><span className="nico"><Building2 size={20} strokeWidth={1.9} /></span>Accounts</Link>
+        {isAdmin && <Link href="/admin/content" className={cls("content")}><span className="nico"><PenLine size={20} strokeWidth={1.9} /></span>Content</Link>}
+        <Link href="/" className={cls("home")}><span className="nico"><UserRound size={20} strokeWidth={1.9} /></span>Me</Link>
       </nav>
     </>
   );

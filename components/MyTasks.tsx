@@ -1,6 +1,7 @@
 "use client";
 import { useState } from "react";
 import Link from "next/link";
+import { ListChecks } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 
 // Open next steps across all accounts (My Day). Check-off updates in place.
@@ -19,7 +20,7 @@ export default function MyTasks({ initial }: { initial: Task[] }) {
 
   return (
     <div style={{ textAlign: "left" }}>
-      <div className="daysec">✅ Next steps · {tasks.length}</div>
+      <div className="daysec"><ListChecks size={13} strokeWidth={2.2} /> Next steps · {tasks.length}</div>
       {tasks.map((t) => {
         const overdue = t.due_at && new Date(t.due_at) < new Date();
         return (

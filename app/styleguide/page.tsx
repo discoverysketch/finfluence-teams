@@ -1,4 +1,5 @@
 import Finn from "@/components/Finn";
+import { Map, Target, Building2, UserRound, Trophy, Zap, BookOpenCheck, Swords, Briefcase, Telescope, Volume2 } from "lucide-react";
 
 // Public, data-free design reference — every shared style in one place so visual
 // changes can be reviewed without signing in. Static markup only.
@@ -9,7 +10,7 @@ export default function Styleguide() {
         <Finn />
         <div className="lvl">Lv <b>4</b></div>
         <div className="xpwrap"><div className="xpbar" style={{ width: "60%" }} /></div>
-        <button className="mutebtn">🔊</button>
+        <button className="mutebtn"><Volume2 size={16} strokeWidth={2} /></button>
       </header>
       <main className="container">
         <h1>Style<span style={{ color: "var(--red)" }}>guide</span></h1>
@@ -33,12 +34,24 @@ export default function Styleguide() {
           </div>
         </a>
 
+        <h2>Stat tiles</h2>
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 4 }}>
+          <div className="card stat">
+            <span className="statico" style={{ background: "rgba(200,144,46,.14)", color: "var(--gold)" }}><Trophy size={17} strokeWidth={2} /></span>
+            <div><div className="statn">#2</div><div className="statl">league rank</div></div>
+          </div>
+          <div className="card stat">
+            <span className="statico" style={{ background: "rgba(27,122,71,.11)", color: "var(--green)" }}><BookOpenCheck size={17} strokeWidth={2} /></span>
+            <div><div className="statn">47</div><div className="statl">cards mastered</div></div>
+          </div>
+        </div>
+
         <h2>Buttons</h2>
         <p style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-          <button className="btn">Primary</button>
-          <button className="btn" style={{ background: "var(--teal)" }}>Teal</button>
-          <button className="btn" style={{ background: "var(--blue)" }}>Blue</button>
-          <button className="btn" style={{ background: "var(--charcoal)" }}>Charcoal</button>
+          <button className="btn btn-i"><Swords size={15} strokeWidth={2.2} /> Primary</button>
+          <button className="btn btn-i" style={{ background: "var(--teal)" }}><Zap size={15} strokeWidth={2.2} /> Teal</button>
+          <button className="btn btn-i" style={{ background: "var(--blue)" }}><Briefcase size={15} strokeWidth={2.2} /> Blue</button>
+          <button className="btn btn-i" style={{ background: "var(--charcoal)" }}><Telescope size={15} strokeWidth={2.2} /> Charcoal</button>
           <button className="btn" disabled>Disabled</button>
         </p>
 
@@ -58,10 +71,10 @@ export default function Styleguide() {
         </p>
       </main>
       <nav className="nav">
-        <a className="on" href="#"><span className="ni">🗺️</span>Path</a>
-        <a href="#"><span className="ni">🎯</span>Challenge</a>
-        <a href="#"><span className="ni">🏢</span>Accounts</a>
-        <a href="#"><span className="ni">👤</span>Me</a>
+        <a className="on" href="#"><span className="nico"><Map size={20} strokeWidth={1.9} /></span>Path</a>
+        <a href="#"><span className="nico"><Target size={20} strokeWidth={1.9} /></span>Challenge</a>
+        <a href="#"><span className="nico"><Building2 size={20} strokeWidth={1.9} /></span>Accounts</a>
+        <a href="#"><span className="nico"><UserRound size={20} strokeWidth={1.9} /></span>Me</a>
       </nav>
     </>
   );

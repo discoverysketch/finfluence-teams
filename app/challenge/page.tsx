@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import Link from "next/link";
 import Shell from "@/components/Shell";
 import Challenge from "./Challenge";
+import { SearchCheck, Activity, Trophy } from "lucide-react";
 
 export default async function ChallengePage() {
   const supabase = await createClient();
@@ -14,9 +15,9 @@ export default async function ChallengePage() {
     <Shell active="challenge" isAdmin={profile?.role === "admin"}>
       <h1>Company <span style={{ color: "var(--red)" }}>Challenge</span></h1>
       <p style={{ display: "flex", gap: 8, flexWrap: "wrap", margin: "10px 0 14px" }}>
-        <Link href="/challenge/detective" className="btn" style={{ background: "var(--charcoal)", padding: "9px 14px", fontSize: 13 }}>🕵️ Metric Detective</Link>
-        <Link href="/challenge/pulse" className="btn" style={{ background: "var(--teal)", padding: "9px 14px", fontSize: 13 }}>📊 Earnings Pulse</Link>
-        <Link href="/challenge/league" className="btn" style={{ background: "var(--gold)", color: "var(--ink)", padding: "9px 14px", fontSize: 13 }}>🏆 League</Link>
+        <Link href="/challenge/detective" className="btn btn-i" style={{ background: "var(--charcoal)", padding: "9px 14px", fontSize: 13 }}><SearchCheck size={15} strokeWidth={2.2} /> Metric Detective</Link>
+        <Link href="/challenge/pulse" className="btn btn-i" style={{ background: "var(--teal)", padding: "9px 14px", fontSize: 13 }}><Activity size={15} strokeWidth={2.2} /> Earnings Pulse</Link>
+        <Link href="/challenge/league" className="btn btn-i" style={{ background: "var(--gold)", color: "var(--ink)", padding: "9px 14px", fontSize: 13 }}><Trophy size={15} strokeWidth={2.2} /> League</Link>
       </p>
       <Challenge userId={user.id} />
     </Shell>
