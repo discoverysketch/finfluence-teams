@@ -34,6 +34,9 @@ const SCHEMA = {
   required: ["cards"],
 };
 
+// Big batches (25 cards from multiple PDFs) can run a few minutes.
+export const maxDuration = 300;
+
 export async function POST(request: Request) {
   // Gate: signed-in admin only.
   const supabase = await createClient();
@@ -46,11 +49,15 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "ANTHROPIC_API_KEY is not set on the server. Add it in .env.local (and Vercel) and redeploy." }, { status: 500 });
   }
 
-  const { source, unitTitle, count, pdfBase64, pdfName } = await request.json().catch(() => ({}));
+  const { source, unitTitle, count, pdfs, pdfBase64 } = await request.json().catch(() => ({}));
   const src = String(source || "").trim();
-  const pdf = typeof pdfBase64 === "string" && pdfBase64.length > 100 ? pdfBase64 : null;
-  if (!pdf && src.length < 40) return NextResponse.json({ error: "Upload a file or paste at least a paragraph of source material." }, { status: 400 });
-  const n = Math.min(Math.max(Number(count) || 5, 1), 8);
+  // Multiple PDFs per batch (each becomes a native document block); cap for
+  // request-size sanity. pdfBase64 kept for backward compat.
+  const pdfArr: string[] = (Array.isArray(pdfs) ? pdfs : [])
+    .filter((s: unknown) => typeof s === "string" && (s as string).length > 100).slice(0, 4);
+  if (typeof pdfBase64 === "string" && pdfBase64.length > 100 && !pdfArr.length) pdfArr.push(pdfBase64);
+  if (!pdfArr.length && src.length < 40) return NextResponse.json({ error: "Upload a file or paste at least a paragraph of source material." }, { status: 400 });
+  const n = Math.min(Math.max(Number(count) || 5, 1), 25);
 
   const client = new Anthropic();
   const system =
@@ -61,24 +68,28 @@ export async function POST(request: Request) {
     "Keep each field to 1-2 sentences. 'front' is the term/concept (2-5 words). 'prompt' is a one-line question shown on the card front. " +
     "'worked' is a short numeric example (use round illustrative numbers if the source lacks them, and say so). " +
     "If a field genuinely doesn't apply, use an empty string.";
-  const prompt = pdf
-    ? `Draft ${n} flashcards for the unit titled "${unitTitle || "Financial Foundations"}" from the attached document.`
-    : `Draft ${n} flashcards for the unit titled "${unitTitle || "Financial Foundations"}" from the source material below.\n\n` +
-      `--- SOURCE ---\n${src.slice(0, 12000)}\n--- END SOURCE ---`;
+  const what =
+    pdfArr.length && src ? `the ${pdfArr.length > 1 ? `${pdfArr.length} attached documents` : "attached document"} and the source text below` :
+    pdfArr.length ? (pdfArr.length > 1 ? `the ${pdfArr.length} attached documents` : "the attached document") :
+    "the source material below";
+  const prompt =
+    `Draft ${n} flashcards for the unit titled "${unitTitle || "Financial Foundations"}" from ${what}. ` +
+    `Cover the material broadly — avoid near-duplicate cards.` +
+    (src ? `\n\n--- SOURCE ---\n${src.slice(0, 24000)}\n--- END SOURCE ---` : "");
 
-  // Claude reads PDFs natively — pass the file as a document block rather than
+  // Claude reads PDFs natively — pass files as document blocks rather than
   // extracting text client-side (better fidelity on tables/filings).
-  const content: Anthropic.MessageParam["content"] = pdf
+  const content: Anthropic.MessageParam["content"] = pdfArr.length
     ? [
-        { type: "document", source: { type: "base64", media_type: "application/pdf", data: pdf } },
-        { type: "text", text: prompt },
+        ...pdfArr.map((data) => ({ type: "document" as const, source: { type: "base64" as const, media_type: "application/pdf" as const, data } })),
+        { type: "text" as const, text: prompt },
       ]
     : prompt;
 
   try {
     const res = await client.messages.create({
       model: "claude-opus-4-8",
-      max_tokens: 16000,
+      max_tokens: 24000,
       thinking: { type: "adaptive" },
       output_config: { format: { type: "json_schema", schema: SCHEMA } },
       system,

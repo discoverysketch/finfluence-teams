@@ -22,8 +22,9 @@ export default function ContentEditor() {
   const [genCount, setGenCount] = useState(5);
   const [genLoading, setGenLoading] = useState(false);
   const [drafts, setDrafts] = useState<Card[]>([]);
-  const [pdfB64, setPdfB64] = useState<string | null>(null);
-  const [fileName, setFileName] = useState("");
+  // Multiple files per batch, mixed types: PDFs go to Claude natively; Word/text
+  // files are extracted client-side and joined into the source text.
+  const [genFiles, setGenFiles] = useState<{ name: string; kind: "pdf" | "text"; b64?: string; text?: string }[]>([]);
 
   const core = units.filter((u) => u.is_seeded);
   const custom = units.filter((u) => !u.is_seeded);
@@ -82,42 +83,59 @@ export default function ContentEditor() {
   const setBody = (k: keyof Body, v: string) =>
     setEditing((e) => (e ? { ...e, body_json: { ...(e.body_json ?? {}), [k]: v } } : e));
 
-  async function onFile(f: File | undefined) {
-    if (!f) return;
+  const readAsB64 = (f: File) => new Promise<string>((res, rej) => { const r = new FileReader(); r.onload = () => res(String(r.result).split(",")[1] || ""); r.onerror = rej; r.readAsDataURL(f); });
+  const readAsText = (f: File) => new Promise<string>((res, rej) => { const r = new FileReader(); r.onload = () => res(String(r.result || "")); r.onerror = rej; r.readAsText(f); });
+
+  async function onFiles(list: FileList | null) {
+    if (!list?.length) return;
     setMsg("");
-    if (f.size > 8 * 1024 * 1024) { setMsg("File is too large — keep it under 8 MB (or paste the text instead)."); return; }
-    const name = f.name.toLowerCase();
-    const isPdf = f.type === "application/pdf" || name.endsWith(".pdf");
-    const isDocx = name.endsWith(".docx");
-    if (name.endsWith(".doc") && !isDocx) { setMsg("Old .doc files aren't supported — save it as .docx or PDF first."); return; }
-    if (isPdf) {
-      const reader = new FileReader();
-      reader.onload = () => { setPdfB64(String(reader.result).split(",")[1] || null); setFileName(f.name); setGenSrc(""); };
-      reader.readAsDataURL(f);
-    } else if (isDocx) {
+    const errs: string[] = [];
+    for (const f of Array.from(list)) {
+      const name = f.name.toLowerCase();
+      if (f.size > 8 * 1024 * 1024) { errs.push(`${f.name}: over 8 MB, skipped`); continue; }
+      if (genFiles.some((g) => g.name === f.name)) continue; // already attached
+      const isPdf = f.type === "application/pdf" || name.endsWith(".pdf");
+      const isDocx = name.endsWith(".docx");
+      if (name.endsWith(".doc") && !isDocx) { errs.push(`${f.name}: old .doc format — save as .docx or PDF`); continue; }
       try {
-        const mod = await import("mammoth/mammoth.browser");
-        const mammoth = (mod as { default?: unknown }).default ?? mod;
-        const arrayBuffer = await f.arrayBuffer();
-        const { value } = await (mammoth as { extractRawText: (o: { arrayBuffer: ArrayBuffer }) => Promise<{ value: string }> }).extractRawText({ arrayBuffer });
-        if (!value.trim()) { setMsg("Couldn't read any text from that Word file."); return; }
-        setGenSrc(value); setPdfB64(null); setFileName(f.name);
-      } catch { setMsg("Couldn't read that Word file — try exporting it to PDF."); }
-    } else {
-      const reader = new FileReader();
-      reader.onload = () => { setGenSrc(String(reader.result || "")); setPdfB64(null); setFileName(f.name); };
-      reader.readAsText(f);
+        if (isPdf) {
+          if (genFiles.filter((g) => g.kind === "pdf").length >= 4) { errs.push(`${f.name}: max 4 PDFs per batch`); continue; }
+          const b64 = await readAsB64(f);
+          if (b64) setGenFiles((gs) => [...gs, { name: f.name, kind: "pdf", b64 }]);
+        } else if (isDocx) {
+          const mod = await import("mammoth/mammoth.browser");
+          const mammoth = (mod as { default?: unknown }).default ?? mod;
+          const arrayBuffer = await f.arrayBuffer();
+          const { value } = await (mammoth as { extractRawText: (o: { arrayBuffer: ArrayBuffer }) => Promise<{ value: string }> }).extractRawText({ arrayBuffer });
+          if (!value.trim()) { errs.push(`${f.name}: no readable text`); continue; }
+          setGenFiles((gs) => [...gs, { name: f.name, kind: "text", text: value }]);
+        } else {
+          const text = await readAsText(f);
+          if (text.trim()) setGenFiles((gs) => [...gs, { name: f.name, kind: "text", text }]);
+        }
+      } catch { errs.push(`${f.name}: couldn't read`); }
     }
+    if (errs.length) setMsg(errs.join(" · "));
   }
-  function clearFile() { setPdfB64(null); setFileName(""); }
+  function removeFile(name: string) { setGenFiles((gs) => gs.filter((g) => g.name !== name)); }
+  function clearFile() { setGenFiles([]); }
+
+  const combinedSource = () => {
+    const parts = genFiles.filter((g) => g.kind === "text").map((g) => `--- FILE: ${g.name} ---\n${g.text}`);
+    if (genSrc.trim()) parts.push(genSrc.trim());
+    return parts.join("\n\n");
+  };
+  const hasSource = () => genFiles.some((g) => g.kind === "pdf") || combinedSource().length >= 40;
 
   async function generate() {
     if (!sel) return;
     setGenLoading(true); setMsg(""); setDrafts([]);
     try {
-      const body = pdfB64
-        ? { pdfBase64: pdfB64, pdfName: fileName, unitTitle: sel.title, count: genCount }
-        : { source: genSrc, unitTitle: sel.title, count: genCount };
+      const body = {
+        pdfs: genFiles.filter((g) => g.kind === "pdf").map((g) => g.b64),
+        source: combinedSource(),
+        unitTitle: sel.title, count: genCount,
+      };
       const r = await fetch("/api/generate-cards", {
         method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify(body),
@@ -196,36 +214,39 @@ export default function ContentEditor() {
         <div className="card" style={{ marginTop: 24, background: "#FAF6EE", borderColor: "#E6CF94" }}>
           <div className="edsec" style={{ marginTop: 0 }}>✨ Generate cards with AI</div>
           <p style={{ fontSize: 12, color: "var(--ink2)", margin: "0 0 10px" }}>
-            Upload a document (or paste text). Claude drafts cards for <b>{sel.title}</b> — you review and approve each before it saves. Nothing is published automatically.
+            Upload one or more documents (mix PDFs, Word, text) and/or paste text. Claude drafts cards for <b>{sel.title}</b> from all of it — you review and approve each before it saves. Nothing is published automatically.
           </p>
 
           <label style={{ display: "inline-flex", alignItems: "center", gap: 8, cursor: "pointer", background: "#fff", border: "1.5px dashed var(--border)", borderRadius: 10, padding: "12px 16px", fontSize: 13, fontWeight: 700, color: "var(--ink2)" }}>
-            📎 Choose a file (PDF, Word, .txt, .md, .csv)
-            <input type="file" accept=".pdf,.docx,.txt,.md,.csv,.text,application/pdf,text/plain,application/vnd.openxmlformats-officedocument.wordprocessingml.document" style={{ display: "none" }}
-              onChange={(e) => { onFile(e.target.files?.[0]); e.target.value = ""; }} />
+            📎 Choose files (PDF, Word, .txt, .md, .csv — several at once)
+            <input type="file" multiple accept=".pdf,.docx,.txt,.md,.csv,.text,application/pdf,text/plain,application/vnd.openxmlformats-officedocument.wordprocessingml.document" style={{ display: "none" }}
+              onChange={(e) => { onFiles(e.target.files); e.target.value = ""; }} />
           </label>
-          {fileName && (
-            <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 8, fontSize: 13 }}>
-              <span style={{ background: "#EEF4FB", color: "var(--blue)", borderRadius: 6, padding: "3px 9px", fontWeight: 700 }}>
-                {pdfB64 ? "📄" : "📝"} {fileName}
-              </span>
-              <button className="mini del" onClick={clearFile}>Remove</button>
+          {genFiles.length > 0 && (
+            <div style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 8, fontSize: 13, flexWrap: "wrap" }}>
+              {genFiles.map((g) => (
+                <span key={g.name} style={{ display: "inline-flex", alignItems: "center", gap: 5, background: "#EEF4FB", color: "var(--blue)", borderRadius: 6, padding: "3px 9px", fontWeight: 700 }}>
+                  {g.kind === "pdf" ? "📄" : "📝"} {g.name}
+                  <button aria-label={`Remove ${g.name}`} onClick={() => removeFile(g.name)} style={{ background: "none", border: "none", color: "var(--red)", cursor: "pointer", fontWeight: 800, padding: 0, fontSize: 13, lineHeight: 1 }}>×</button>
+                </span>
+              ))}
+              {genFiles.length > 1 && <button className="mini del" onClick={clearFile}>Clear all</button>}
             </div>
           )}
 
           <div style={{ fontSize: 11, fontWeight: 700, color: "var(--muted)", textTransform: "uppercase", letterSpacing: ".6px", margin: "12px 0 6px" }}>
-            {pdfB64 ? "PDF attached — or paste text instead" : "or paste text"}
+            {genFiles.length ? "and / or paste text" : "or paste text"}
           </div>
-          <textarea value={genSrc} onChange={(e) => { setGenSrc(e.target.value); if (pdfB64) { setPdfB64(null); setFileName(""); } }} rows={4} placeholder="Paste the source text here…"
+          <textarea value={genSrc} onChange={(e) => setGenSrc(e.target.value)} rows={4} placeholder="Paste the source text here…"
             style={{ width: "100%", border: "1px solid var(--border)", borderRadius: 8, padding: 8, fontFamily: "inherit", fontSize: 13 }} />
           <div style={{ display: "flex", gap: 8, alignItems: "center", marginTop: 8 }}>
             <label style={{ fontSize: 12, fontWeight: 700, color: "var(--ink2)" }}>Cards:
               <select value={genCount} onChange={(e) => setGenCount(Number(e.target.value))} style={{ width: "auto", marginLeft: 6, padding: "4px 8px" }}>
-                {[3, 4, 5, 6, 7, 8].map((n) => <option key={n} value={n}>{n}</option>)}
+                {[3, 5, 8, 10, 12, 15, 20, 25].map((n) => <option key={n} value={n}>{n}</option>)}
               </select>
             </label>
-            <button className="btn" disabled={genLoading || (!pdfB64 && genSrc.trim().length < 40)} onClick={generate}>
-              {genLoading ? "Drafting…" : "Draft cards"}
+            <button className="btn" disabled={genLoading || !hasSource()} onClick={generate}>
+              {genLoading ? `Drafting ${genCount}… (bigger batches take longer)` : "Draft cards"}
             </button>
           </div>
 
