@@ -34,6 +34,13 @@ export default function Styleguide() {
           </div>
         </a>
 
+        <h2>Segmented switcher</h2>
+        <div className="seg" style={{ marginBottom: 4 }}>
+          <a className="on" href="#">Book</a>
+          <a href="#">Board</a>
+          <a href="#">Whitespace</a>
+        </div>
+
         <h2>Stat tiles</h2>
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 4 }}>
           <div className="card stat">

@@ -54,6 +54,8 @@ export default async function AccountPage({ params }: { params: Promise<{ accoun
       <Hub
         accountId={acct.id}
         userId={user.id}
+        entityId={ent?.id ?? null}
+        ticker={ent?.ticker ?? null}
         initialStage={acct.crm_stage}
         initialNotes={acct.rep_notes}
         initialContacts={(contacts ?? []) as Contact[]}

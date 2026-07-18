@@ -1,5 +1,7 @@
 "use client";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
+import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer } from "recharts";
 import { createClient } from "@/lib/supabase/client";
 
 export type Contact = { id: string; account_id: string; name: string; title: string | null; role_tag: string | null; email: string | null; phone: string | null; reports_to: string | null; notes: string | null };
@@ -21,14 +23,29 @@ const KIND_ICON: Record<string, string> = { note: "📝", call: "📞", meeting:
 const fmtWhen = (s: string) => new Date(s).toLocaleDateString("en-US", { month: "short", day: "numeric" }) + " " + new Date(s).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
 const fmtDue = (s: string) => new Date(s).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
 
+// financials (moved here from the book list — the Hub is the account's home)
+function fmtM(v: number) {
+  const a = Math.abs(v);
+  if (a >= 1000) return `${v < 0 ? "-" : ""}$${(a / 1000).toFixed(1)}B`;
+  return `${v < 0 ? "-" : ""}$${Math.round(a)}M`;
+}
+const fmtDate = (s?: string) => { if (!s) return ""; const d = new Date(s); return isNaN(+d) ? "" : d.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }); };
+const FY_ROWS: [string, string][] = [["fy_revenue", "Revenue"], ["fy_operatingIncome", "Operating income"], ["fy_netIncome", "Net income"], ["fy_operatingCashFlow", "Op. cash flow"], ["fy_capex", "Capex"]];
+const BAL_ROWS: [string, string][] = [["totalAssets", "Total assets"], ["totalEquity", "Total equity"], ["totalDebt", "Total debt"], ["cash", "Cash"]];
+type Stock = { loading?: boolean; error?: string; points?: { d: string; c: number }[]; price?: number; currency?: string; asOf?: string };
+type FinState = { loading?: boolean; error?: string; period?: string; source_url?: string; asOf?: string; annualLabel?: string | null; items?: { key: string; value: number }[]; stock?: Stock };
+
 type CForm = { id?: string; name: string; title: string; role_tag: string; email: string; phone: string; reports_to: string };
 const emptyC: CForm = { name: "", title: "", role_tag: "", email: "", phone: "", reports_to: "" };
 
-export default function Hub({ accountId, userId, initialStage, initialNotes, initialContacts, initialActivities, emailOf }: {
-  accountId: string; userId: string; initialStage: string | null; initialNotes: string | null;
+export default function Hub({ accountId, userId, entityId, ticker, initialStage, initialNotes, initialContacts, initialActivities, emailOf }: {
+  accountId: string; userId: string; entityId: string | null; ticker: string | null;
+  initialStage: string | null; initialNotes: string | null;
   initialContacts: Contact[]; initialActivities: Activity[]; emailOf: Record<string, string>;
 }) {
   const supabase = createClient();
+  const router = useRouter();
+  const [fin, setFin] = useState<FinState>({ loading: true });
   const [stage, setStage] = useState(initialStage || "prospect");
   const [notes, setNotes] = useState(initialNotes || "");
   const [notesDirty, setNotesDirty] = useState(false);
@@ -42,6 +59,37 @@ export default function Hub({ accountId, userId, initialStage, initialNotes, ini
   const [aContact, setAContact] = useState("");
 
   const contactName = useMemo(() => Object.fromEntries(contacts.map((c) => [c.id, c.name])), [contacts]);
+
+  // Financials: cached server-side (7-day), so this is cheap on revisit.
+  useEffect(() => {
+    let live = true;
+    (async () => {
+      if (!entityId) { setFin({}); return; }
+      try {
+        const r = await fetch(`/api/entity-facts?entityId=${entityId}`);
+        const j = await r.json();
+        if (!live) return;
+        if (!r.ok) { setFin({ error: j.error || "Couldn't load financials." }); return; }
+        setFin({ items: j.facts, period: j.period, source_url: j.source_url, asOf: j.asOf, annualLabel: j.annualLabel });
+        if (ticker) {
+          setFin((f) => ({ ...f, stock: { loading: true } }));
+          const sr = await fetch(`/api/stock?ticker=${encodeURIComponent(ticker)}`);
+          const sj = await sr.json();
+          if (!live) return;
+          setFin((f) => ({ ...f, stock: sr.ok ? { points: sj.points, price: sj.price, currency: sj.currency, asOf: sj.asOf } : { error: sj.error || "No price." } }));
+        }
+      } catch { if (live) setFin({ error: "Network error." }); }
+    })();
+    return () => { live = false; };
+  }, [entityId, ticker]);
+
+  async function removeAccount() {
+    if (!window.confirm("Remove this account from your book? Contacts and activity for it will be deleted too.")) return;
+    const { error } = await supabase.from("accounts").delete().eq("id", accountId);
+    if (error) { setMsg(error.message); return; }
+    router.replace("/territory");
+    router.refresh();
+  }
 
   async function saveStage(s: string) {
     setStage(s);
@@ -159,6 +207,66 @@ export default function Hub({ accountId, userId, initialStage, initialNotes, ini
         </>
       )}
 
+      {/* ---- Financials ---- */}
+      {entityId && (
+        <>
+          <div className="secttl">Financials</div>
+          <div className="card" style={{ padding: "13px 14px" }}>
+            {fin.loading && <div style={{ fontSize: 13, color: "var(--ink2)" }}>Pulling SEC data…</div>}
+            {fin.error && <div style={{ fontSize: 13, color: "var(--muted)" }}>{fin.error}</div>}
+            {fin.items && (() => {
+              const fmap: Record<string, number> = Object.fromEntries(fin.items.map((i) => [i.key, i.value]));
+              const fyRows = FY_ROWS.filter(([k]) => fmap[k] != null);
+              const balRows = BAL_ROWS.filter(([k]) => fmap[k] != null);
+              const st = fin.stock;
+              const Row = ([k, label]: [string, string]) => (
+                <div key={k} style={{ display: "flex", justifyContent: "space-between", borderBottom: "1px solid #F0EAE0", padding: "3px 0" }}>
+                  <span style={{ fontSize: 12.5, color: "var(--ink2)" }}>{label}</span>
+                  <span style={{ fontSize: 13, fontWeight: 700, fontFamily: "ui-monospace, monospace" }}>{fmtM(fmap[k])}</span>
+                </div>
+              );
+              return (
+                <>
+                  {st?.points && st.points.length > 1 && (
+                    <div style={{ marginBottom: 12 }}>
+                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
+                        <span style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".5px", color: "var(--muted)" }}>Share price · 2y</span>
+                        <span style={{ fontSize: 15, fontWeight: 800 }}>${st.price?.toFixed(2)} <span style={{ fontSize: 11, color: "var(--muted)", fontWeight: 600 }}>{st.currency} · through {st.asOf}</span></span>
+                      </div>
+                      <ResponsiveContainer width="100%" height={120}>
+                        <LineChart data={st.points} margin={{ top: 6, right: 6, left: 0, bottom: 0 }}>
+                          <XAxis dataKey="d" tick={{ fontSize: 9 }} interval={Math.floor(st.points.length / 5)} tickFormatter={(d) => String(d).slice(0, 7)} />
+                          <YAxis tick={{ fontSize: 9 }} width={40} domain={["auto", "auto"]} tickFormatter={(v) => `$${Math.round(v as number)}`} />
+                          <Tooltip formatter={(v) => `$${(v as number).toFixed(2)}`} labelStyle={{ fontSize: 11 }} contentStyle={{ fontSize: 12 }} />
+                          <Line type="monotone" dataKey="c" stroke="var(--red)" strokeWidth={2} dot={false} />
+                        </LineChart>
+                      </ResponsiveContainer>
+                    </div>
+                  )}
+                  {fyRows.length > 0 && (
+                    <>
+                      <div style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".5px", color: "var(--muted)", marginBottom: 4 }}>Full fiscal year {fin.annualLabel} · $M</div>
+                      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "3px 16px", marginBottom: 10 }}>{fyRows.map(Row)}</div>
+                    </>
+                  )}
+                  {balRows.length > 0 && (
+                    <>
+                      <div style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".5px", color: "var(--muted)", marginBottom: 4 }}>Balance sheet · latest ({fin.period?.replace(" · SEC EDGAR", "")}) · $M</div>
+                      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "3px 16px", marginBottom: 8 }}>{balRows.map(Row)}</div>
+                    </>
+                  )}
+                  {fyRows.length === 0 && balRows.length === 0 && <div style={{ fontSize: 13, color: "var(--ink2)" }}>No figures reported.</div>}
+                  <div style={{ fontSize: 11, color: "var(--muted)", marginTop: 4 }}>
+                    Financials as of {fin.period?.replace(" · SEC EDGAR", "")} · pulled {fmtDate(fin.asOf)}
+                    {fin.source_url && <> · <a href={fin.source_url} target="_blank" rel="noreferrer" style={{ color: "var(--blue)", fontWeight: 700 }}>SEC filings ↗</a></>}
+                  </div>
+                </>
+              );
+            })()}
+          </div>
+        </>
+      )}
+
       {/* ---- People / org chart ---- */}
       <div className="secttl">People</div>
       {tree.length === 0 && <p style={{ fontSize: 13, color: "var(--muted)", margin: "0 0 8px" }}>No contacts yet — add the people you're selling to and who they report to.</p>}
@@ -249,6 +357,12 @@ export default function Hub({ accountId, userId, initialStage, initialNotes, ini
         </div>
       ))}
       {acts.length === 0 && <p style={{ fontSize: 13, color: "var(--muted)" }}>Nothing logged yet.</p>}
+
+      <p style={{ marginTop: 26 }}>
+        <button onClick={removeAccount} style={{ background: "none", border: "1px solid var(--border)", color: "var(--red)", borderRadius: 8, padding: "8px 14px", fontSize: 12.5, fontWeight: 700, cursor: "pointer" }}>
+          Remove account from book
+        </button>
+      </p>
 
       <style>{`
         .secttl{font-size:11px;font-weight:700;color:#8A7E6E;text-transform:uppercase;letter-spacing:.6px;margin:22px 0 8px}

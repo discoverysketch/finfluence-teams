@@ -69,8 +69,12 @@ export default async function WhitespacePage() {
 
   return (
     <Shell active="accounts" isAdmin={isAdmin}>
-      <p style={{ fontSize: 13 }}><Link href="/territory">← Accounts</Link></p>
       <h1>White<span style={{ color: "var(--red)" }}>space</span></h1>
+      <div className="seg" style={{ margin: "10px 0 12px" }}>
+        <Link href="/territory">Book</Link>
+        <Link href="/territory/board">Board</Link>
+        <Link href="/territory/whitespace" className="on">Whitespace</Link>
+      </div>
       <p style={{ color: "var(--ink2)", fontSize: 13, marginTop: 0 }}>
         Companies that look like the accounts you already cover — but aren&apos;t in your book. Ranked on real financial similarity (size, leverage, capex, cash generation).
       </p>

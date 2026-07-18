@@ -3,7 +3,6 @@ import { redirect } from "next/navigation";
 import Link from "next/link";
 import Shell from "@/components/Shell";
 import Territory, { type Account } from "./Territory";
-import { Swords, Briefcase, LayoutDashboard, Telescope } from "lucide-react";
 
 export default async function TerritoryPage() {
   const supabase = await createClient();
@@ -31,17 +30,11 @@ export default async function TerritoryPage() {
   return (
     <Shell active="accounts" isAdmin={isAdmin}>
       <h1>My <span style={{ color: "var(--red)" }}>accounts</span></h1>
-      <p style={{ color: "var(--ink2)", fontSize: 13, marginTop: 0 }}>
-        Paste your account names — I&apos;ll match each to the SEC filer directory. Confirmed accounts feed learning, peer duels &amp; territory planning.
-      </p>
-      {(accts?.length ?? 0) > 0 && (
-        <p style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 14 }}>
-          <Link href="/territory/duel" className="btn btn-i" style={{ background: "var(--red)", padding: "9px 14px", fontSize: 13 }}><Swords size={15} strokeWidth={2.2} /> Peer Duel</Link>
-          <Link href="/territory/cfo" className="btn btn-i" style={{ background: "var(--charcoal)", padding: "9px 14px", fontSize: 13 }}><Briefcase size={15} strokeWidth={2.2} /> CFO Simulator</Link>
-          <Link href="/territory/board" className="btn btn-i" style={{ background: "var(--blue)", padding: "9px 14px", fontSize: 13 }}><LayoutDashboard size={15} strokeWidth={2.2} /> Territory Board</Link>
-          <Link href="/territory/whitespace" className="btn btn-i" style={{ background: "var(--purple)", padding: "9px 14px", fontSize: 13 }}><Telescope size={15} strokeWidth={2.2} /> Whitespace</Link>
-        </p>
-      )}
+      <div className="seg" style={{ margin: "10px 0 16px" }}>
+        <Link href="/territory" className="on">Book</Link>
+        <Link href="/territory/board">Board</Link>
+        <Link href="/territory/whitespace">Whitespace</Link>
+      </div>
       <Territory listId={list?.id ?? ""} initial={(accts ?? []) as unknown as Account[]} />
     </Shell>
   );

@@ -95,6 +95,16 @@ a:hover > .card, a:hover .card {
 .btn:disabled { opacity: .55; transform: none; filter: none; cursor: default; }
 .btn:focus-visible { outline: none; box-shadow: var(--ring), 0 3px 10px rgba(45, 32, 18, .18); }
 
+/* Segmented view switcher (Book | Board | Whitespace) */
+.seg { display: flex; background: var(--cream2); border-radius: 12px; padding: 4px; gap: 4px; }
+.seg a, .seg button {
+  flex: 1; text-align: center; padding: 8px 10px; border-radius: 9px; border: none; background: none;
+  font-family: inherit; font-size: 13px; font-weight: 700; color: var(--ink2); text-decoration: none; cursor: pointer;
+  transition: background .18s ease, color .18s ease, box-shadow .18s ease;
+}
+.seg a:hover, .seg button:hover { text-decoration: none; color: var(--ink); }
+.seg a.on, .seg button.on { background: var(--surface); color: var(--ink); box-shadow: var(--shadow-sm); }
+
 /* Stat tiles & icon buttons & section headers */
 .stat { display: flex; align-items: center; gap: 11px; padding: 13px 14px; height: 100%; }
 .statico { display: grid; place-items: center; width: 36px; height: 36px; border-radius: 11px; flex-shrink: 0; }
