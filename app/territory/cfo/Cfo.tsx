@@ -18,6 +18,7 @@ export default function Cfo({ userId, accounts }: { userId: string; accounts: Ac
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
   const [score, setScore] = useState<Score | null>(null);
+  const [coach, setCoach] = useState<{ loading?: boolean; answer?: string; why?: string[]; proof?: string } | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
 
   const repTurns = msgs.filter((m) => m.role === "rep").length;
@@ -48,6 +49,17 @@ export default function Cfo({ userId, accounts }: { userId: string; accounts: Ac
       setMsgs([...next, { role: "cfo", content: j.reply }]); SFX.flip(); scrollDown();
     } catch { setErr("Network error."); }
     finally { setBusy(false); }
+  }
+
+  async function coachMe() {
+    if (coach?.loading) return;
+    setCoach({ loading: true });
+    try {
+      const r = await fetch("/api/cfo-sim", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ entityId, messages: msgs, mode: "coach" }) });
+      const j = await r.json();
+      if (!r.ok) { setErr(j.error || "Coach unavailable."); setCoach(null); return; }
+      setCoach(j.coach);
+    } catch { setErr("Network error."); setCoach(null); }
   }
 
   async function wrapUp() {
@@ -132,10 +144,40 @@ export default function Cfo({ userId, accounts }: { userId: string; accounts: Ac
         ))}
         {busy && <div style={{ alignSelf: "flex-start", fontSize: 13, color: "var(--muted)", fontStyle: "italic" }}>CFO is thinking…</div>}
       </div>
+      {coach && (
+        <div className="card" style={{ marginTop: 10, background: "#FAF6EE", borderColor: "#E6CF94" }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
+            <span style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".6px", color: "#9A6700" }}>🎓 Your coach · the CFO can&apos;t see this</span>
+            <button onClick={() => setCoach(null)} style={{ background: "none", border: "none", color: "var(--red)", fontWeight: 800, cursor: "pointer", fontSize: 15, lineHeight: 1 }}>×</button>
+          </div>
+          {coach.loading ? (
+            <div style={{ fontSize: 13, color: "var(--ink2)" }}>Reading the room and your product playbook…</div>
+          ) : (
+            <>
+              <p style={{ margin: "0 0 8px", fontSize: 14.5, lineHeight: 1.55 }}>{coach.answer}</p>
+              {(coach.why?.length ?? 0) > 0 && (
+                <ul style={{ margin: "0 0 8px", paddingLeft: 18 }}>
+                  {coach.why!.map((w, i) => <li key={i} style={{ fontSize: 12.5, color: "var(--ink2)", marginBottom: 2 }}>{w}</li>)}
+                </ul>
+              )}
+              {coach.proof && <p style={{ margin: "0 0 8px", fontSize: 12.5, color: "var(--ink2)" }}><b>Proof point:</b> {coach.proof}</p>}
+              <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+                <button className="btn" style={{ padding: "8px 14px", fontSize: 13 }} onClick={() => { setInput(coach.answer || ""); setCoach(null); }}>Use this — edit before sending</button>
+                <span style={{ fontSize: 11, color: "var(--muted)" }}>Verify product claims before real meetings.</span>
+              </div>
+            </>
+          )}
+        </div>
+      )}
+
       <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
         <input value={input} onChange={(e) => setInput(e.target.value)} onKeyDown={(e) => e.key === "Enter" && send()} placeholder="Your answer…" disabled={busy} style={{ flex: 1 }} />
         <button className="btn" onClick={send} disabled={busy || !input.trim()}>Send</button>
       </div>
+      <button onClick={coachMe} disabled={!!coach?.loading}
+        style={{ marginTop: 8, width: "100%", background: "#fff", border: "1.5px dashed #E6CF94", color: "#9A6700", borderRadius: 10, padding: "9px 14px", fontSize: 13, fontWeight: 700, cursor: "pointer" }}>
+        🎓 {coach?.loading ? "Coaching…" : "Coach me — how should I answer this?"}
+      </button>
       <button className="btn" style={{ marginTop: 10, background: "#fff", color: "var(--ink2)", border: "1px solid var(--border)", width: "100%" }}
         onClick={wrapUp} disabled={busy || repTurns < 1}>
         {repTurns < 1 ? "Answer at least once to wrap up" : "Wrap up & score me →"}
