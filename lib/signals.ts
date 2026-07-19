@@ -2,22 +2,26 @@ import type { FactMap } from "@/lib/facts";
 
 // Signal-based account tiering from current SEC facts (SPEC §7c, v1 — richer
 // growth/rate-case/M&A signals need time-series + FERC ingestion, later).
-export type SignalKey = "scale" | "capex" | "headroom" | "profit";
+export type SignalKey = "scale" | "customers" | "capex" | "headroom" | "profit";
 export type SignalWeights = Record<SignalKey, number>;
-export const DEFAULT_WEIGHTS: SignalWeights = { scale: 1, capex: 1.2, headroom: 0.8, profit: 0.8 };
+export const DEFAULT_WEIGHTS: SignalWeights = { scale: 1, customers: 1, capex: 1.2, headroom: 0.8, profit: 0.8 };
 export const SIGNAL_LABEL: Record<SignalKey, string> = {
-  scale: "Scale", capex: "Capex program", headroom: "Balance-sheet headroom", profit: "Margins",
+  scale: "Scale", customers: "Customer base", capex: "Capex program", headroom: "Balance-sheet headroom", profit: "Margins",
 };
 export const SIGNAL_WHY: Record<SignalKey, string> = {
-  scale: "large scale", capex: "heavy capex program", headroom: "balance-sheet headroom", profit: "strong margins",
+  scale: "large scale", customers: "large customer base", capex: "heavy capex program", headroom: "balance-sheet headroom", profit: "strong margins",
 };
-const DIMS: SignalKey[] = ["scale", "capex", "headroom", "profit"];
+const DIMS: SignalKey[] = ["scale", "customers", "capex", "headroom", "profit"];
 
 export type RawSignals = Record<SignalKey, number | null>;
+// FactMap may carry eia_* keys (EIA-861 ops) alongside SEC figures — that's how
+// Tier B munis/co-ops get scored at all: scale falls back to EIA retail revenue,
+// and the customer-base dimension is EIA-only by nature.
 export function rawSignals(f: FactMap): RawSignals {
-  const rev = f.revenue, assets = f.totalAssets, debt = f.totalDebt, capex = f.capex, ni = f.netIncome, opInc = f.operatingIncome;
+  const rev = f.revenue ?? f.eia_revenue, assets = f.totalAssets, debt = f.totalDebt, capex = f.capex, ni = f.netIncome, opInc = f.operatingIncome;
   return {
     scale: rev && rev > 0 ? Math.log10(rev) : assets && assets > 0 ? Math.log10(assets) : null,
+    customers: f.eia_customers && f.eia_customers > 0 ? Math.log10(f.eia_customers) : null,
     capex: capex != null && rev ? Math.abs(capex) / rev : null,
     headroom: debt != null && assets ? 1 - debt / assets : null,
     profit: opInc != null && rev ? opInc / rev : ni != null && assets ? ni / assets : null,

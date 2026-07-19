@@ -8,11 +8,14 @@ type Item = { accountId: string; entityId: string; name: string; ticker: string 
 
 const TIER_COLOR: Record<string, string> = { A: "#1B7A47", B: "#0572CE", C: "#9A6700" };
 const fmtM = (v?: number) => (v == null ? "—" : `${v < 0 ? "-" : ""}$${Math.abs(v) >= 1000 ? (Math.abs(v) / 1000).toFixed(1) + "B" : Math.round(Math.abs(v)) + "M"}`);
+const fmtCount = (v?: number) => (v == null ? "—" : v >= 1e6 ? `${(v / 1e6).toFixed(2)}M` : v >= 1e3 ? `${Math.round(v / 1e3)}k` : String(Math.round(v)));
 const TABLE_METRICS: [string, string][] = [
   ["revenue", "Revenue"], ["operatingIncome", "Operating income"], ["netIncome", "Net income"],
   ["totalAssets", "Total assets"], ["totalEquity", "Total equity"], ["totalDebt", "Total debt"],
   ["operatingCashFlow", "Op. cash flow"], ["capex", "Capex"],
+  ["eia_customers", "Customers (EIA)"], ["eia_revenue", "Retail revenue (EIA)"],
 ];
+const fmtCell = (k: string, v?: number) => (k === "eia_customers" ? fmtCount(v) : fmtM(v));
 const CHART_METRICS: [string, string][] = [
   ["revenue", "Revenue"], ["totalAssets", "Total assets"], ["totalDebt", "Total debt"],
   ["operatingCashFlow", "Op. cash flow"], ["netIncome", "Net income"],
@@ -38,8 +41,11 @@ export default function Board() {
     })();
   }, []);
 
-  const scorable = useMemo(() => (items ?? []).filter((i) => Object.keys(i.facts).length >= 3), [items]);
-  const unscored = useMemo(() => (items ?? []).filter((i) => Object.keys(i.facts).length < 3), [items]);
+  // Scorable = enough SEC facts OR EIA ops (Tier B munis/co-ops score on
+  // scale + customer base even without a single SEC figure).
+  const canScore = (i: Item) => Object.keys(i.facts).filter((k) => !k.startsWith("eia_")).length >= 3 || i.facts.eia_customers != null;
+  const scorable = useMemo(() => (items ?? []).filter(canScore), [items]);
+  const unscored = useMemo(() => (items ?? []).filter((i) => !canScore(i)), [items]);
   const scored = useMemo(() => scoreTerritory(scorable.map((i) => ({ ...i, id: i.entityId })), weights), [scorable, weights]);
 
   const selItems = scored.filter((s) => sel.includes(s.entityId));
@@ -97,7 +103,7 @@ export default function Board() {
       ))}
       {unscored.length > 0 && (
         <p style={{ fontSize: 12, color: "var(--muted)", marginTop: 6 }}>
-          {unscored.length} account{unscored.length === 1 ? "" : "s"} without SEC data not scored{unscored.some((u) => u.error) ? " (Tier D — profiles coming soon)" : ""}.
+          {unscored.length} account{unscored.length === 1 ? "" : "s"} without SEC or EIA data not scored{unscored.some((u) => u.error) ? " (research them via Add accounts → Private)" : ""}.
         </p>
       )}
 
@@ -119,7 +125,7 @@ export default function Board() {
                 {TABLE_METRICS.map(([k, label]) => (
                   <tr key={k}>
                     <td style={{ padding: "5px 10px", fontWeight: 600, whiteSpace: "nowrap", borderTop: "1px solid #F0EAE0" }}>{label}</td>
-                    {selItems.map((s) => <td key={s.entityId} style={{ padding: "5px 10px", textAlign: "right", fontFamily: "ui-monospace, monospace", borderTop: "1px solid #F0EAE0" }}>{fmtM(s.facts[k])}</td>)}
+                    {selItems.map((s) => <td key={s.entityId} style={{ padding: "5px 10px", textAlign: "right", fontFamily: "ui-monospace, monospace", borderTop: "1px solid #F0EAE0" }}>{fmtCell(k, s.facts[k])}</td>)}
                   </tr>
                 ))}
               </tbody>
