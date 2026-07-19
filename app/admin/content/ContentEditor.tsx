@@ -25,6 +25,8 @@ export default function ContentEditor() {
   // Multiple files per batch, mixed types: PDFs go to Claude natively; Word/text
   // files are extracted client-side and joined into the source text.
   const [genFiles, setGenFiles] = useState<{ name: string; kind: "pdf" | "text"; b64?: string; text?: string }[]>([]);
+  const [proofTopic, setProofTopic] = useState("");
+  const [proofLoading, setProofLoading] = useState(false);
 
   const core = units.filter((u) => u.is_seeded);
   const custom = units.filter((u) => !u.is_seeded);
@@ -150,6 +152,25 @@ export default function ContentEditor() {
     } catch { setMsg("Couldn't reach the generator."); }
     finally { setGenLoading(false); }
   }
+  async function researchProofs() {
+    if (!sel) return;
+    setProofLoading(true); setMsg(""); setDrafts([]);
+    try {
+      const r = await fetch("/api/research-proofs", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ topic: proofTopic, count: 5 }),
+      });
+      const j = await r.json();
+      if (!r.ok) { setMsg(j.error || "Research failed."); return; }
+      const raw = (j.cards ?? []) as any[];
+      setDrafts(raw.map((c) => ({
+        id: "", front: c.front || "", concept_tag: c.concept_tag || null, order: 0,
+        body_json: { prompt: c.prompt, whatItIs: c.whatItIs, whyItMatters: c.whyItMatters, link: c.link, utility: c.utility, worked: c.worked },
+      })));
+    } catch { setMsg("Couldn't reach the researcher."); }
+    finally { setProofLoading(false); }
+  }
+
   async function approveDraft(idx: number) {
     if (!sel) return;
     const c = drafts[idx];
@@ -247,6 +268,20 @@ export default function ContentEditor() {
             </label>
             <button className="btn" disabled={genLoading || !hasSource()} onClick={generate}>
               {genLoading ? `Drafting ${genCount}… (bigger batches take longer)` : "Draft cards"}
+            </button>
+          </div>
+
+          <div style={{ fontSize: 11, fontWeight: 700, color: "var(--muted)", textTransform: "uppercase", letterSpacing: ".6px", margin: "14px 0 6px" }}>
+            or harvest real proof points from the web
+          </div>
+          <p style={{ fontSize: 12, color: "var(--ink2)", margin: "0 0 8px" }}>
+            Searches for <b>utility / energy / water</b> customer stories (oracle.com case studies, press releases) and drafts them as cards — every one carries its source URL. You still approve each.
+          </p>
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+            <input value={proofTopic} onChange={(e) => setProofTopic(e.target.value)} placeholder="Focus (optional) — e.g. Primavera capital projects, EPM close"
+              style={{ flex: 1, minWidth: 200 }} disabled={proofLoading} />
+            <button className="btn" style={{ background: "var(--teal)" }} disabled={proofLoading || genLoading} onClick={researchProofs}>
+              {proofLoading ? "Searching the web… (~1–2 min)" : "🔎 Research proof points"}
             </button>
           </div>
 

@@ -81,7 +81,7 @@ export async function POST(request: Request) {
       `- Tie the answer to the CFO's OWN numbers (below) — never invent figures about their company.\n` +
       `- 'answer' = 2-4 speakable sentences in the rep's voice: direct, concrete, quantified where honest, ending with a question that advances discovery when natural.\n` +
       `- 'why' = 2-3 short bullets naming the selling principle at work (e.g. anchor to their capex program, answer-then-advance, name the P&L line).\n` +
-      `- 'proof' = one customer proof point from the knowledge base if relevant, else "".\n\n` +
+      `- 'proof' = one customer proof point from the knowledge base — STRONGLY prefer utility/energy/water customers (this buyer is a utility CFO; a SaaS or logistics story lands flat). Only use a cross-industry story if no utility one fits the topic, and then name its industry explicitly. Else "".\n\n` +
       `CFO's company figures ($ millions):\n${factLines}\n\n` +
       `PRODUCT KNOWLEDGE BASE:\n${kb || "(none loaded — rely on well-established Oracle product facts only, conservatively)"}`;
     try {
