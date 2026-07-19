@@ -33,7 +33,59 @@ const fmtDate = (s?: string) => { if (!s) return ""; const d = new Date(s); retu
 const FY_ROWS: [string, string][] = [["fy_revenue", "Revenue"], ["fy_operatingIncome", "Operating income"], ["fy_netIncome", "Net income"], ["fy_operatingCashFlow", "Op. cash flow"], ["fy_capex", "Capex"]];
 const BAL_ROWS: [string, string][] = [["totalAssets", "Total assets"], ["totalEquity", "Total equity"], ["totalDebt", "Total debt"], ["cash", "Cash"]];
 type Stock = { loading?: boolean; error?: string; points?: { d: string; c: number }[]; price?: number; currency?: string; asOf?: string };
-type FinState = { loading?: boolean; error?: string; period?: string; source_url?: string; asOf?: string; annualLabel?: string | null; items?: { key: string; value: number }[]; stock?: Stock };
+type EiaOps = { period: string; source_url: string; facts: Record<string, number> };
+type FinState = { loading?: boolean; error?: string; period?: string; source_url?: string; asOf?: string; annualLabel?: string | null; items?: { key: string; value: number }[]; stock?: Stock; eia?: EiaOps | null };
+const fmtCount = (v: number) => (v >= 1e6 ? `${(v / 1e6).toFixed(2)}M` : v >= 1e3 ? `${Math.round(v / 1e3)}k` : String(Math.round(v)));
+const fmtEnergy = (mwh: number) => (mwh >= 1e6 ? `${(mwh / 1e6).toFixed(1)} TWh` : `${Math.round(mwh / 1e3)} GWh`);
+
+// EIA-861 utility-operations block: the data layer that exists even for
+// munis/co-ops with no SEC filings.
+function EiaBlock({ eia }: { eia: EiaOps }) {
+  const f = eia.facts;
+  const mixTotal = (f.res_revenue || 0) + (f.com_revenue || 0) + (f.ind_revenue || 0);
+  const mix: [string, number, string][] = mixTotal > 0 ? [
+    ["Residential", (f.res_revenue || 0) / mixTotal, "#C8902E"],
+    ["Commercial", (f.com_revenue || 0) / mixTotal, "#0572CE"],
+    ["Industrial", (f.ind_revenue || 0) / mixTotal, "#006B72"],
+  ] : [];
+  const rpc = f.customers && f.revenue ? (f.revenue * 1e6) / f.customers : null;
+  const Cell = ({ n, l }: { n: string; l: string }) => (
+    <div style={{ border: "1px solid #F0EAE0", borderRadius: 8, padding: "8px 10px" }}>
+      <div style={{ fontSize: 16, fontWeight: 800, letterSpacing: "-.01em" }}>{n}</div>
+      <div style={{ fontSize: 11, color: "var(--ink2)", fontWeight: 600 }}>{l}</div>
+    </div>
+  );
+  return (
+    <div style={{ marginTop: 12 }}>
+      <div style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".5px", color: "var(--muted)", marginBottom: 6 }}>
+        ⚡ Utility operations · EIA-861 {eia.period}{(f.utilities_count ?? 0) > 1 ? ` · across ${f.utilities_count} utilities` : ""}
+      </div>
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 6 }}>
+        {f.customers != null && <Cell n={fmtCount(f.customers)} l="customers served" />}
+        {f.sales_mwh != null && <Cell n={fmtEnergy(f.sales_mwh)} l="energy delivered" />}
+        {f.revenue != null && <Cell n={fmtM(f.revenue)} l="retail revenue" />}
+        {rpc != null && <Cell n={`$${Math.round(rpc).toLocaleString()}`} l="revenue / customer" />}
+      </div>
+      {mix.length > 0 && (
+        <div style={{ marginTop: 8 }}>
+          <div style={{ display: "flex", height: 10, borderRadius: 5, overflow: "hidden" }}>
+            {mix.map(([l, p, c]) => <div key={l} style={{ width: `${p * 100}%`, background: c }} />)}
+          </div>
+          <div style={{ display: "flex", gap: 12, marginTop: 4, flexWrap: "wrap" }}>
+            {mix.map(([l, p, c]) => (
+              <span key={l} style={{ fontSize: 11, color: "var(--ink2)", fontWeight: 600, display: "inline-flex", alignItems: "center", gap: 4 }}>
+                <span style={{ width: 8, height: 8, borderRadius: 2, background: c, display: "inline-block" }} />{l} {Math.round(p * 100)}%
+              </span>
+            ))}
+          </div>
+        </div>
+      )}
+      <div style={{ fontSize: 11, color: "var(--muted)", marginTop: 6 }}>
+        Revenue mix by customer class · <a href={eia.source_url} target="_blank" rel="noreferrer" style={{ color: "var(--blue)", fontWeight: 700 }}>EIA-861 ↗</a>
+      </div>
+    </div>
+  );
+}
 
 type CForm = { id?: string; name: string; title: string; role_tag: string; email: string; phone: string; reports_to: string };
 const emptyC: CForm = { name: "", title: "", role_tag: "", email: "", phone: "", reports_to: "" };
@@ -70,7 +122,7 @@ export default function Hub({ accountId, userId, entityId, ticker, initialStage,
         const j = await r.json();
         if (!live) return;
         if (!r.ok) { setFin({ error: j.error || "Couldn't load financials." }); return; }
-        setFin({ items: j.facts, period: j.period, source_url: j.source_url, asOf: j.asOf, annualLabel: j.annualLabel });
+        setFin({ items: j.facts, period: j.period, source_url: j.source_url, asOf: j.asOf, annualLabel: j.annualLabel, eia: j.eia ?? null });
         if (ticker) {
           setFin((f) => ({ ...f, stock: { loading: true } }));
           const sr = await fetch(`/api/stock?ticker=${encodeURIComponent(ticker)}`);
@@ -212,7 +264,7 @@ export default function Hub({ accountId, userId, entityId, ticker, initialStage,
         <>
           <div className="secttl">Financials</div>
           <div className="card" style={{ padding: "13px 14px" }}>
-            {fin.loading && <div style={{ fontSize: 13, color: "var(--ink2)" }}>Pulling SEC data…</div>}
+            {fin.loading && <div style={{ fontSize: 13, color: "var(--ink2)" }}>Pulling data…</div>}
             {fin.error && <div style={{ fontSize: 13, color: "var(--muted)" }}>{fin.error}</div>}
             {fin.items && (() => {
               const fmap: Record<string, number> = Object.fromEntries(fin.items.map((i) => [i.key, i.value]));
@@ -255,11 +307,14 @@ export default function Hub({ accountId, userId, entityId, ticker, initialStage,
                       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "3px 16px", marginBottom: 8 }}>{balRows.map(Row)}</div>
                     </>
                   )}
-                  {fyRows.length === 0 && balRows.length === 0 && <div style={{ fontSize: 13, color: "var(--ink2)" }}>No figures reported.</div>}
-                  <div style={{ fontSize: 11, color: "var(--muted)", marginTop: 4 }}>
-                    Financials as of {fin.period?.replace(" · SEC EDGAR", "")} · pulled {fmtDate(fin.asOf)}
-                    {fin.source_url && <> · <a href={fin.source_url} target="_blank" rel="noreferrer" style={{ color: "var(--blue)", fontWeight: 700 }}>SEC filings ↗</a></>}
-                  </div>
+                  {fyRows.length === 0 && balRows.length === 0 && !fin.eia && <div style={{ fontSize: 13, color: "var(--ink2)" }}>No figures reported.</div>}
+                  {(fyRows.length > 0 || balRows.length > 0) && (
+                    <div style={{ fontSize: 11, color: "var(--muted)", marginTop: 4 }}>
+                      Financials as of {fin.period?.replace(" · SEC EDGAR", "")} · pulled {fmtDate(fin.asOf)}
+                      {fin.source_url && <> · <a href={fin.source_url} target="_blank" rel="noreferrer" style={{ color: "var(--blue)", fontWeight: 700 }}>SEC filings ↗</a></>}
+                    </div>
+                  )}
+                  {fin.eia && <EiaBlock eia={fin.eia} />}
                 </>
               );
             })()}

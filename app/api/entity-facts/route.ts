@@ -17,5 +17,6 @@ export async function GET(request: Request) {
     company: res.company, period: res.period, source_url: res.source_url,
     asOf: res.asOf, annualLabel: res.annualLabel,
     facts: Object.entries(res.facts).map(([key, value]) => ({ key, value })),
+    eia: res.eia,
   });
 }
