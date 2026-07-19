@@ -39,27 +39,28 @@ export async function GET(request: Request) {
 
   const client = new Anthropic();
   try {
-    // 1) One efficient research pass (Sonnet — fast with web search).
+    // 1) One efficient research pass. HARD search cap: a single broad query's
+    //    result list already names many stories with URLs; more searches risk
+    //    blowing the 300s function ceiling (observed: sweeps can run 5+ min).
     const research = await client.messages.create({
       model: "claude-sonnet-5", max_tokens: 3000,
-      tools: [{ type: "web_search_20260209", name: "web_search", max_uses: 5 } as any],
+      tools: [{ type: "web_search_20260209", name: "web_search", max_uses: 2 } as any],
       messages: [{
         role: "user",
         content:
-          "Find the 8-10 most significant US utility & power industry news items from roughly the last 3 days. Cover a MIX of: " +
-          "new capital projects / grid investments announced by utilities; data-center load-growth deals and interconnection agreements with utilities; " +
-          "regulatory & policy developments (FERC orders, EEI positions, notable state PUC decisions, major rate cases); and utility M&A or large financings. " +
-          "Be efficient with searches — broad queries first (e.g. utility industry news capital projects data centers), then follow up only if needed. " +
-          "For each item: a tight headline, a 1-2 sentence factual summary, the companies/organizations involved, approximate publish date, and the EXACT source URL from your results. " +
-          "Only include items you can cite with a URL. Skip paywalled-summary spam; prefer trade press (Utility Dive, E&E, S&P Global), official releases, and major outlets.",
+          "Find 6-8 significant US utility & power industry news items from roughly the last week. Cover a MIX of: " +
+          "new capital projects / grid investments; data-center load-growth deals with utilities; regulatory & policy developments (FERC, EEI, state PUCs, rate cases); utility M&A or large financings. " +
+          "STRICT search budget: run ONE broad query (e.g. 'utility industry news capital projects data centers FERC') and work from its result list; at most one follow-up. Do not run more searches. " +
+          "For each item: tight headline, 1-2 sentence factual summary, companies involved, approximate publish date, EXACT source URL from your results. " +
+          "Only include items citable with a URL from your results.",
       }],
     });
     const notes = research.content.filter((b) => b.type === "text").map((b) => (b as any).text).join("\n").trim();
     if (!notes) return NextResponse.json({ error: "empty research" }, { status: 502 });
 
-    // 2) Structure.
+    // 2) Structure (Sonnet — extraction is easy; speed matters inside the 300s cap).
     const extract = await client.messages.create({
-      model: "claude-opus-4-8", max_tokens: 4000,
+      model: "claude-sonnet-5", max_tokens: 4000,
       output_config: { format: { type: "json_schema", schema: NEWS_SCHEMA } } as any,
       system:
         "Turn the research notes into structured news items. ONLY items with a real source URL in the notes — drop the rest. " +
