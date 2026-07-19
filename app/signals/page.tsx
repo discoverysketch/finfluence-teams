@@ -25,12 +25,36 @@ export default async function SignalsPage() {
   const entityIds = Object.keys(acctOf);
 
   const since = new Date(Date.now() - 60 * 24 * 3600 * 1000).toISOString().slice(0, 10);
-  const { data: events } = entityIds.length
-    ? await supabase.from("filing_events")
-        .select("id, form, filed, items, label, entity:entities(id, canonical_name, ticker)")
-        .in("entity_id", entityIds).gte("filed", since)
-        .order("filed", { ascending: false }).limit(50)
-    : { data: [] };
+  const [{ data: events }, { data: news }, { data: bookEnts }] = await Promise.all([
+    entityIds.length
+      ? supabase.from("filing_events")
+          .select("id, form, filed, items, label, entity:entities(id, canonical_name, ticker)")
+          .in("entity_id", entityIds).gte("filed", since)
+          .order("filed", { ascending: false }).limit(50)
+      : Promise.resolve({ data: [] as any[] }),
+    supabase.from("news_items").select("*").order("created_at", { ascending: false }).limit(20),
+    entityIds.length ? supabase.from("entities").select("canonical_name, ticker").in("id", entityIds) : Promise.resolve({ data: [] as any[] }),
+  ]);
+
+  // Highlight industry stories that mention one of the book's accounts.
+  const bookNames = ((bookEnts ?? []) as any[]).flatMap((e) => {
+    const words = String(e.canonical_name).toLowerCase().replace(/[^a-z0-9 ]/g, " ").split(/\s+/).filter((w) => w.length > 3 && !["corp", "corporation", "company", "energy", "inc", "group", "holdings"].includes(w));
+    return [...(e.ticker ? [String(e.ticker).toLowerCase()] : []), words.slice(0, 2).join(" ")].filter((s) => s.length > 3);
+  });
+  const mentionsBook = (n: any) => {
+    const hay = `${n.headline} ${n.companies || ""}`.toLowerCase();
+    return bookNames.some((b) => hay.includes(b));
+  };
+
+  const CAT: Record<string, { label: string; icon: string; color: string }> = {
+    capital_projects: { label: "Capital projects", icon: "🏗️", color: "#9A6700" },
+    data_centers: { label: "Data centers", icon: "🖥️", color: "#6A3E8E" },
+    regulatory: { label: "Regulatory", icon: "🏛️", color: "#0572CE" },
+    rates: { label: "Rate case", icon: "⚖️", color: "#006B72" },
+    ma: { label: "M&A", icon: "🤝", color: "#B23A2E" },
+    grid: { label: "Grid", icon: "⚡", color: "#1B7A47" },
+    other: { label: "Industry", icon: "📰", color: "#8A7E6E" },
+  };
 
   return (
     <Shell active="home" isAdmin={isAdmin}>
@@ -39,9 +63,10 @@ export default async function SignalsPage() {
         What's happening at your accounts — earnings, executive changes, deals, and financings from SEC filings, checked daily.
       </p>
 
+      <div className="sigttl">📁 Your accounts</div>
       {(events ?? []).length === 0 && (
         <div className="card" style={{ background: "#FAF6EE", borderColor: "#E6CF94", color: "#7A5B12", fontSize: 13.5 }}>
-          Nothing in the last 60 days from your accounts. The watcher checks every day — enable notifications on the <Link href="/">Me page</Link> to get pinged the moment something lands.
+          Nothing in the last 60 days from your accounts. The watcher checks daily — enable notifications on the <Link href="/">Me page</Link> to get pinged when something lands.
         </div>
       )}
 
@@ -70,9 +95,38 @@ export default async function SignalsPage() {
         );
       })}
 
+      <div className="sigttl" style={{ marginTop: 26 }}>🏭 Across the industry</div>
+      {(news ?? []).length === 0 && (
+        <div className="card" style={{ fontSize: 13, color: "var(--ink2)" }}>
+          The industry sweep runs daily — capital projects, data-center deals, regulatory moves. First items appear after the next run.
+        </div>
+      )}
+      {(news ?? []).map((n: any) => {
+        const cat = CAT[n.category] ?? CAT.other;
+        const hot = mentionsBook(n);
+        let domain = "";
+        try { domain = new URL(n.source_url).hostname.replace(/^www\./, ""); } catch { /* keep empty */ }
+        return (
+          <div key={n.id} className="card" style={{ display: "flex", gap: 12, marginBottom: 8, padding: "13px 14px", outline: hot ? "2px solid var(--gold)" : "none" }}>
+            <div style={{ fontSize: 20, lineHeight: 1 }}>{cat.icon}</div>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <a href={n.source_url} target="_blank" rel="noreferrer" style={{ fontWeight: 700, fontSize: 14, color: "inherit" }}>{n.headline}</a>
+              <div style={{ fontSize: 12.5, color: "var(--ink2)", marginTop: 3 }}>{n.summary}</div>
+              <div style={{ display: "flex", gap: 6, alignItems: "center", marginTop: 7, flexWrap: "wrap" }}>
+                <span style={{ background: cat.color, color: "#fff", fontSize: 10, fontWeight: 700, borderRadius: 4, padding: "2px 7px" }}>{cat.label}</span>
+                {hot && <span style={{ background: "var(--gold)", color: "#fff", fontSize: 10, fontWeight: 700, borderRadius: 4, padding: "2px 7px" }}>★ mentions your account</span>}
+                {n.published && <span style={{ fontSize: 11, color: "var(--muted)", fontWeight: 600 }}>{fmtDay(n.published)}</span>}
+                {domain && <span style={{ fontSize: 11, color: "var(--muted)" }}>{domain}</span>}
+              </div>
+            </div>
+          </div>
+        );
+      })}
+
       <p style={{ fontSize: 11, color: "var(--muted)", marginTop: 12 }}>
-        Source: SEC EDGAR filings (10-K, 10-Q, classified 8-K events) · verify against the filing before acting.
+        Sources: SEC EDGAR filings + daily web sweep of trade press & official releases · verify before acting.
       </p>
+      <style>{`.sigttl{font-size:11px;font-weight:700;color:#8A7E6E;text-transform:uppercase;letter-spacing:.6px;margin:18px 0 8px}`}</style>
     </Shell>
   );
 }
