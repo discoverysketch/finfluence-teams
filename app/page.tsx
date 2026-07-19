@@ -9,6 +9,7 @@ import MyTasks, { type Task } from "@/components/MyTasks";
 import { leagueStandings } from "@/lib/league";
 import { conceptScores, CONCEPTS, type Ev } from "@/lib/acumen";
 import { FileBarChart, Trophy, Zap, Target, BookOpenCheck, Map, Building2, LayoutDashboard, PenLine, Users } from "lucide-react";
+import { classifyFiling } from "@/lib/signalTypes";
 
 // My Day: the rep's morning screen — next steps, fresh filings, league standing,
 // and the concept most worth sharpening. Everything links into the deeper tools.
@@ -52,10 +53,10 @@ export default async function Home() {
     .filter((t) => acctName[t.account_id])
     .map((t) => ({ id: t.id, body: t.body, due_at: t.due_at, accountId: t.account_id, accountName: acctName[t.account_id] }));
 
-  // fresh filings among my accounts (last 14 days)
+  // fresh signals among my accounts (last 14 days)
   const entityIds = Object.values(acctEntity);
   const { data: filings } = entityIds.length
-    ? await supabase.from("filing_events").select("id, form, filed, entity:entities(id, canonical_name, ticker)")
+    ? await supabase.from("filing_events").select("id, form, filed, items, label, entity:entities(id, canonical_name, ticker)")
         .in("entity_id", entityIds).gte("filed", twoWeeksAgo).order("filed", { ascending: false }).limit(4)
     : { data: [] };
 
@@ -92,18 +93,26 @@ export default async function Home() {
 
       {(filings ?? []).length > 0 && (
         <>
-          <div className="daysec"><FileBarChart size={13} strokeWidth={2.2} /> Fresh filings</div>
-          {(filings ?? []).map((f: any) => (
-            <Link key={f.id} href={`/challenge/pulse?entity=${f.entity.id}`} style={{ color: "inherit" }}>
-              <div className="card" style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 6, padding: "10px 12px" }}>
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ fontWeight: 700, fontSize: 14 }}>{f.entity.canonical_name}</div>
-                  <div style={{ fontSize: 12, color: "var(--ink2)" }}>{f.form} · {f.filed} · take the pulse</div>
+          <div className="daysec" style={{ justifyContent: "space-between" }}>
+            <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}><FileBarChart size={13} strokeWidth={2.2} /> Signals</span>
+            <Link href="/signals" style={{ fontWeight: 700, letterSpacing: 0, textTransform: "none" }}>All signals →</Link>
+          </div>
+          {(filings ?? []).map((f: any) => {
+            const sig = classifyFiling(f.form, f.items);
+            const isEarnings = !sig || sig.kind === "earnings";
+            return (
+              <Link key={f.id} href={isEarnings ? `/challenge/pulse?entity=${f.entity.id}` : "/signals"} style={{ color: "inherit" }}>
+                <div className="card" style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 6, padding: "10px 12px" }}>
+                  <div style={{ fontSize: 18 }}>{sig?.icon ?? "📄"}</div>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontWeight: 700, fontSize: 14 }}>{f.entity.canonical_name}</div>
+                    <div style={{ fontSize: 12, color: "var(--ink2)" }}>{f.label || sig?.label || f.form} · {f.filed}{isEarnings ? " · take the pulse" : ""}</div>
+                  </div>
+                  <div style={{ fontSize: 18 }}>›</div>
                 </div>
-                <div style={{ fontSize: 18 }}>›</div>
-              </div>
-            </Link>
-          ))}
+              </Link>
+            );
+          })}
         </>
       )}
 

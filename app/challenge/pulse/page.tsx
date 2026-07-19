@@ -51,7 +51,7 @@ export default async function PulsePage({ searchParams }: { searchParams: Promis
   const { data: filings } = entityIds.length
     ? await supabase.from("filing_events")
         .select("id, form, filed, entity:entities(id, canonical_name, ticker)")
-        .in("entity_id", entityIds).order("filed", { ascending: false }).limit(12)
+        .in("entity_id", entityIds).in("form", ["10-K", "10-Q"]).order("filed", { ascending: false }).limit(12)
     : { data: [] };
 
   return (

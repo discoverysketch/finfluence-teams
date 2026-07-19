@@ -1,5 +1,6 @@
 import { createAdminClient } from "@/lib/supabase/admin";
 import { pushToUsers } from "@/lib/push";
+import { classifyFiling } from "@/lib/signalTypes";
 import { NextResponse } from "next/server";
 
 // Earnings Pulse watcher (Vercel cron, every 6h). For every entity held as an
@@ -42,6 +43,11 @@ export async function GET(request: Request) {
   const usersOfTenant: Record<string, string[]> = {};
   for (const u of (users ?? []) as any[]) (usersOfTenant[u.tenant_id] ??= []).push(u.id);
 
+  // ?backfill=N (days) widens the window to seed the feed with recent history —
+  // backfilled events are logged but never pushed (no notification spam).
+  const backfillDays = Math.min(Number(new URL(request.url).searchParams.get("backfill")) || 0, 90);
+  const windowMs = backfillDays > 0 ? backfillDays * 24 * 3600 * 1000 : WINDOW_MS;
+
   const now = Date.now();
   let filings = 0, pushed = 0, checked = 0;
   for (const eid of ids) {
@@ -53,24 +59,30 @@ export async function GET(request: Request) {
       const j: any = await r.json();
       const rec = j?.filings?.recent;
       if (!rec?.form) continue;
-      for (let i = 0; i < rec.form.length && i < 30; i++) {
+      for (let i = 0; i < rec.form.length && i < 120; i++) {
         const form = rec.form[i];
-        if (form !== "10-K" && form !== "10-Q") continue;
         const filed = rec.filingDate[i];
-        if (now - +new Date(filed) > WINDOW_MS) continue;
+        if (now - +new Date(filed) > windowMs) continue;
+        const sig = classifyFiling(form, rec.items?.[i]);
+        if (!sig) continue; // not a sales-relevant signal
         const accession = rec.accessionNumber[i];
-        const { error } = await admin.from("filing_events").insert({ entity_id: eid, form, filed, accession });
-        if (error) continue; // duplicate accession -> already notified
+        const { error } = await admin.from("filing_events").insert({
+          entity_id: eid, form, filed, accession, label: sig.label, items: rec.items?.[i] || null,
+        });
+        if (error) continue; // duplicate accession -> already logged
         filings++;
+        // Push only for genuinely fresh events (never during backfill).
+        if (now - +new Date(filed) > WINDOW_MS) continue;
+        const isEarnings = sig.kind === "earnings";
         const userIds = [...new Set([...(holders[eid] ?? [])].map((l) => tenantOfList[l]).flatMap((t) => usersOfTenant[t] ?? []))];
         pushed += await pushToUsers(userIds, {
-          title: `${ent.canonical_name} just filed a ${form} 📊`,
-          body: "Fresh numbers are in — take the 5-question Earnings Pulse.",
-          url: `/challenge/pulse?entity=${eid}`,
+          title: `${ent.canonical_name}: ${sig.label} ${sig.icon}`,
+          body: isEarnings ? "Fresh numbers are in — take the 5-question Earnings Pulse." : "New buying signal on your account — see the feed.",
+          url: isEarnings ? `/challenge/pulse?entity=${eid}` : "/signals",
           tag: `filing-${accession}`,
         });
       }
     } catch { /* skip this entity, keep going */ }
   }
-  return NextResponse.json({ checked, filings, pushed });
+  return NextResponse.json({ checked, filings, pushed, backfillDays });
 }
