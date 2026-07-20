@@ -13,7 +13,7 @@ const db = createClient(url, key, { auth: { persistSession: false } });
 
 console.log("Fetching SEC company_tickers.json…");
 const res = await fetch("https://www.sec.gov/files/company_tickers.json", {
-  headers: { "User-Agent": "FinFluency dan.wain1@gmail.com" }, // SEC requires a contact UA
+  headers: { "User-Agent": "AccountFluency dan.wain1@gmail.com" }, // SEC requires a contact UA
 });
 if (!res.ok) { console.error("SEC fetch failed:", res.status); process.exit(1); }
 const json = await res.json();

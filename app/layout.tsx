@@ -3,8 +3,8 @@ import "./globals.css";
 import PwaSetup from "@/components/PwaSetup";
 
 export const metadata: Metadata = {
-  title: "FinFluency Teams",
-  description: "Finance fluency + territory intelligence for sales teams.",
+  title: "AccountFluency",
+  description: "Account research, financial fluency, and role play for energy and water sellers.",
   manifest: "/manifest.webmanifest",
   icons: { apple: "/icons/apple-touch-icon.png" },
 };

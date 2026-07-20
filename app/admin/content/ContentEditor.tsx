@@ -221,7 +221,7 @@ export default function ContentEditor() {
       {/* ---------- Core curriculum: locked reference ---------- */}
       <div className="edsec">Core curriculum · 🔒 built-in</div>
       <p style={{ fontSize: 12, color: "var(--ink2)", margin: "0 0 8px" }}>
-        The shipped FinFluency curriculum. It powers Acumen scores and the manager dashboard, so it isn&apos;t editable here.
+        The shipped AccountFluency curriculum. It powers Acumen scores and the manager dashboard, so it isn&apos;t editable here.
       </p>
       {core.map((u) => (
         <div key={u.id} className="card" style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 6, padding: "10px 12px", background: "#F7F4EE" }}>

@@ -27,9 +27,9 @@ export default function LoginPage() {
     <main className="container" style={{ textAlign: "center" }}>
       <Finn className="bob" style={{ width: 110, height: 130, marginTop: 24 }} />
       <h1>
-        Fin<span style={{ color: "var(--red)" }}>Fluency</span> Teams
+        Account<span style={{ color: "var(--red)" }}>Fluency</span>
       </h1>
-      <p style={{ color: "var(--ink2)", fontSize: 14, marginTop: -4 }}>Finance fluency for sales teams.</p>
+      <p style={{ color: "var(--ink2)", fontSize: 14, marginTop: -4 }}>Research &amp; role play for energy and water sellers.</p>
       <div className="card" style={{ marginTop: 16 }}>
         {sent ? (
           <p>Check your email for a magic link to sign in.</p>

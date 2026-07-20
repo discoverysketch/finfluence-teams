@@ -10,7 +10,7 @@ export async function POST() {
   if (!process.env.VAPID_PRIVATE_KEY) return NextResponse.json({ error: "Push keys not configured on the server (VAPID env vars)." }, { status: 500 });
 
   const sent = await pushToUsers([user.id], {
-    title: "FinFluency 🔔",
+    title: "AccountFluency 🔔",
     body: "Notifications are working — you'll get a ping when your accounts file.",
     url: "/challenge/pulse",
     tag: "test",

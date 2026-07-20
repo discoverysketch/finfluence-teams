@@ -2,7 +2,7 @@
 // "most-recent-period across all concepts" picker. Shared by the /api/financials
 // route (Challenge) and the entity-facts cache (Territory).
 /* eslint-disable @typescript-eslint/no-explicit-any */
-const UA = { "User-Agent": "FinFluency dan.wain1@gmail.com", "Accept-Encoding": "gzip, deflate" };
+const UA = { "User-Agent": "AccountFluency dan.wain1@gmail.com", "Accept-Encoding": "gzip, deflate" };
 let TICKERS: any = null;
 
 export type FiscalYear = { label: string; revenue?: number; operatingIncome?: number; netIncome?: number; operatingCashFlow?: number; capex?: number };

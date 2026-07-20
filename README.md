@@ -1,4 +1,4 @@
-# FinFluency Teams
+# AccountFluency (formerly FinFluency Teams)
 
 Multi-tenant sales-enablement product — the team/SaaS evolution of the single-file FinFluency PWA
 (live at finfluence-xi.vercel.app, which stays running as the reference app during this build).

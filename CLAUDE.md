@@ -1,5 +1,9 @@
 # CLAUDE.md — FinFluency Teams stack conventions
 
+> **Brand note (2026-07):** the product is now **AccountFluency** (domain accountfluency.com,
+> matching the custom SMTP sender). All user-visible strings use AccountFluency; internal
+> names (repo, package.json, DB, file paths) intentionally keep the finfluency naming.
+
 This repo is evolving from a single-file PWA (`index.html`, live at finfluence-xi.vercel.app)
 into **FinFluency Teams**, a multi-tenant sales-enablement product. The full product spec is
 [SPEC.md](SPEC.md). Build **phase-by-phase per SPEC §9** and gate each phase on its exit test

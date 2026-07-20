@@ -1,4 +1,4 @@
-// FinFluency Teams service worker — push notifications (Earnings Pulse).
+// AccountFluency service worker — push notifications (Earnings Pulse).
 // DB is the source of truth; no offline caching in v1.
 self.addEventListener("install", () => self.skipWaiting());
 self.addEventListener("activate", (e) => e.waitUntil(self.clients.claim()));
@@ -6,7 +6,7 @@ self.addEventListener("activate", (e) => e.waitUntil(self.clients.claim()));
 self.addEventListener("push", (event) => {
   let data = {};
   try { data = event.data ? event.data.json() : {}; } catch { /* text fallback */ }
-  const title = data.title || "FinFluency";
+  const title = data.title || "AccountFluency";
   const body = data.body || (event.data ? event.data.text() : "");
   event.waitUntil(
     self.registration.showNotification(title, {
@@ -14,7 +14,7 @@ self.addEventListener("push", (event) => {
       icon: "/icons/icon-192.png",
       badge: "/icons/icon-192.png",
       data: { url: data.url || "/challenge/pulse" },
-      tag: data.tag || "finfluency",
+      tag: data.tag || "accountfluency",
     })
   );
 });

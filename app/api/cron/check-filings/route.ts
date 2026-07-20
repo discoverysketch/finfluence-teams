@@ -8,7 +8,7 @@ import { NextResponse } from "next/server";
 // (accession unique = notify once) and push to the reps holding that account.
 export const maxDuration = 300;
 /* eslint-disable @typescript-eslint/no-explicit-any */
-const UA = { "User-Agent": "FinFluency dan.wain1@gmail.com" };
+const UA = { "User-Agent": "AccountFluency dan.wain1@gmail.com" };
 const WINDOW_MS = 48 * 60 * 60 * 1000;
 
 export async function GET(request: Request) {

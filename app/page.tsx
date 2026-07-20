@@ -29,7 +29,7 @@ export default async function Home() {
       <Shell active="home" isAdmin={false}>
         <div style={{ textAlign: "center", marginTop: 8 }}>
           <Finn className="bob" style={{ width: 96, height: 114 }} />
-          <h1 style={{ marginTop: 0 }}>Fin<span style={{ color: "var(--red)" }}>Fluency</span></h1>
+          <h1 style={{ marginTop: 0 }}>Account<span style={{ color: "var(--red)" }}>Fluency</span></h1>
         </div>
         <div className="card"><p style={{ margin: 0 }}>Signed in as <b>{user.email}</b></p>
           <p style={{ color: "var(--red)", margin: "6px 0 0" }}>No tenant profile yet — an admin needs to add you to a tenant.</p></div>

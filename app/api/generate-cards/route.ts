@@ -84,7 +84,7 @@ export async function POST(request: Request) {
 
   const client = new Anthropic();
   const system =
-    "You are a financial-literacy curriculum author for FinFluency, a sales-enablement app that teaches reps to read utility-company financials. " +
+    "You are a financial-literacy curriculum author for AccountFluency, a sales-enablement app that teaches reps to read utility-company financials. " +
     "You turn source material into concise flashcards. Every card is faithful to the source — never invent figures. " +
     "Cards are for salespeople selling to CFOs/treasurers at electric & gas utilities, so lean into a utility lens where natural. " +
     "Concept tags: prof = Profitability, liq = Liquidity & Leverage, ret = Returns, cash = Cash & Capital, found = Foundations. " +

@@ -1,7 +1,7 @@
 {
-  "name": "FinFluency Teams",
-  "short_name": "FinFluency",
-  "description": "Finance fluency + territory intelligence for sales teams.",
+  "name": "AccountFluency",
+  "short_name": "AcctFluency",
+  "description": "Account research, financial fluency, and role play for energy and water sellers.",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#FAF6EE",
