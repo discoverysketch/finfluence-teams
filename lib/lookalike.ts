@@ -3,15 +3,18 @@
 // embeddings (SPEC §7b). Similarity is 0..1 (1 = identical on shared dims).
 export type FactMap = Record<string, number>;
 
-type Feats = { size: number | null; leverage: number | null; capexInt: number | null; cashMargin: number | null; roa: number | null };
-const DIMS = ["size", "leverage", "capexInt", "cashMargin", "roa"] as const;
-const WEIGHTS: Record<(typeof DIMS)[number], number> = { size: 1.4, leverage: 1.2, capexInt: 1, cashMargin: 1, roa: 0.8 };
+type Feats = { size: number | null; customers: number | null; leverage: number | null; capexInt: number | null; cashMargin: number | null; roa: number | null };
+const DIMS = ["size", "customers", "leverage", "capexInt", "cashMargin", "roa"] as const;
+const WEIGHTS: Record<(typeof DIMS)[number], number> = { size: 1.4, customers: 1.2, leverage: 1.2, capexInt: 1, cashMargin: 1, roa: 0.8 };
 
+// eia_* keys (EIA-861 ops) let munis/co-ops participate: size falls back to EIA
+// retail revenue, and customer count is a first-class similarity dimension.
 function feats(f: FactMap): Feats {
-  const rev = f.revenue, assets = f.totalAssets, debt = f.totalDebt, cfo = f.operatingCashFlow, capex = f.capex, ni = f.netIncome;
+  const rev = f.revenue ?? f.eia_revenue, assets = f.totalAssets, debt = f.totalDebt, cfo = f.operatingCashFlow, capex = f.capex, ni = f.netIncome;
   const sizeBase = rev && rev > 0 ? rev : assets && assets > 0 ? assets : null;
   return {
     size: sizeBase ? Math.log10(sizeBase) : null,
+    customers: f.eia_customers && f.eia_customers > 0 ? Math.log10(f.eia_customers) : null,
     leverage: debt != null && assets ? debt / assets : null,
     capexInt: capex != null && rev ? Math.abs(capex) / rev : null,
     cashMargin: cfo != null && rev ? cfo / rev : null,

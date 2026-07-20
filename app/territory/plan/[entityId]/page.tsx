@@ -104,7 +104,45 @@ export default async function PlanPage({ params }: { params: Promise<{ entityId:
       {/* Snapshot */}
       <h2 style={{ fontSize: 15 }}>Snapshot</h2>
       {prices && prices.points.length > 1 && <Sparkline s={prices} />}
-      {target.ok ? (
+      {target.ok && target.eia && (() => {
+        const e = target.eia.facts;
+        const mixTotal = (e.res_revenue || 0) + (e.com_revenue || 0) + (e.ind_revenue || 0);
+        const mix: [string, number, string][] = mixTotal > 0 ? [
+          ["Residential", (e.res_revenue || 0) / mixTotal, "#C8902E"],
+          ["Commercial", (e.com_revenue || 0) / mixTotal, "#0572CE"],
+          ["Industrial", (e.ind_revenue || 0) / mixTotal, "#006B72"],
+        ] : [];
+        const cell = (n: string, l: string) => (
+          <div key={l} style={{ border: "1px solid #F0EAE0", borderRadius: 8, padding: "7px 10px", textAlign: "center" }}>
+            <div style={{ fontSize: 15, fontWeight: 800 }}>{n}</div>
+            <div style={{ fontSize: 10.5, color: "var(--ink2)", fontWeight: 600 }}>{l}</div>
+          </div>
+        );
+        return (
+          <div style={{ marginBottom: 12 }}>
+            <div style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".5px", color: "var(--muted)", marginBottom: 5 }}>
+              ⚡ Utility operations · EIA-861 {target.eia.period}{(e.utilities_count ?? 0) > 1 ? ` · across ${e.utilities_count} utilities` : ""}
+            </div>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 6 }}>
+              {e.customers != null && cell(e.customers >= 1e6 ? `${(e.customers / 1e6).toFixed(2)}M` : `${Math.round(e.customers / 1e3)}k`, "customers")}
+              {e.sales_mwh != null && cell(e.sales_mwh >= 1e6 ? `${(e.sales_mwh / 1e6).toFixed(1)} TWh` : `${Math.round(e.sales_mwh / 1e3)} GWh`, "energy delivered")}
+              {e.revenue != null && cell(fmtM(e.revenue), "retail revenue")}
+              {e.customers && e.revenue ? cell(`$${Math.round((e.revenue * 1e6) / e.customers).toLocaleString()}`, "rev / customer") : null}
+            </div>
+            {mix.length > 0 && (
+              <div style={{ marginTop: 6 }}>
+                <div style={{ display: "flex", height: 8, borderRadius: 4, overflow: "hidden" }}>
+                  {mix.map(([l, p, c]) => <div key={l} style={{ width: `${p * 100}%`, background: c }} />)}
+                </div>
+                <div style={{ fontSize: 10.5, color: "var(--ink2)", marginTop: 3 }}>
+                  Revenue mix: {mix.map(([l, p]) => `${l} ${Math.round(p * 100)}%`).join(" · ")}
+                </div>
+              </div>
+            )}
+          </div>
+        );
+      })()}
+      {target.ok && Object.keys(facts).length > 0 ? (
         <>
           <div style={{ fontSize: 12, color: "var(--muted)", fontWeight: 600, marginBottom: 6 }}>{period} · $ millions</div>
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "3px 16px", marginBottom: 12 }}>
@@ -132,7 +170,7 @@ export default async function PlanPage({ params }: { params: Promise<{ entityId:
           {pj.summary && <p style={{ fontSize: 13.5, lineHeight: 1.5 }}>{pj.summary}</p>}
           {pj.sources?.length > 0 && <div style={{ fontSize: 12 }}><b>Sources:</b> {pj.sources.map((s: any, i: number) => <a key={i} href={s.url} target="_blank" rel="noreferrer" style={{ color: "var(--blue)", marginRight: 8 }}>{(s.title || "source").slice(0, 22)} ↗</a>)}</div>}
         </div>
-      ) : <p style={{ color: "var(--ink2)" }}>No financial data available for this account.</p>}
+      ) : (target.ok && target.eia) ? null : <p style={{ color: "var(--ink2)" }}>No financial data available for this account.</p>}
 
       {/* Peer */}
       {peer && (

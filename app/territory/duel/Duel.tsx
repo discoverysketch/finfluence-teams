@@ -12,6 +12,8 @@ type Q = { q: string; concept: string; options: { label: string; ok: boolean }[]
 
 const fmtM = (v: number) => { const a = Math.abs(v); return `${v < 0 ? "-" : ""}$${a >= 1000 ? (a / 1000).toFixed(1) + "B" : Math.round(a) + "M"}`; };
 const pct = (v: number) => `${Math.round(v * 100)}%`;
+const fmtCust = (v: number) => (v >= 1e6 ? `${(v / 1e6).toFixed(2)}M` : `${Math.round(v / 1e3)}k`) + " customers";
+const fmtTwh = (v: number) => (v >= 1e6 ? `${(v / 1e6).toFixed(1)} TWh` : `${Math.round(v / 1e3)} GWh`);
 
 function buildDuel(tName: string, tF: FactMap, pName: string, pF: FactMap): Q[] {
   const qs: Q[] = [];
@@ -24,11 +26,16 @@ function buildDuel(tName: string, tF: FactMap, pName: string, pF: FactMap): Q[] 
   const cash = (f: FactMap) => (f.operatingCashFlow != null && f.revenue ? f.operatingCashFlow / f.revenue : null);
   const capexInt = (f: FactMap) => (f.capex != null && f.revenue ? Math.abs(f.capex) / f.revenue : null);
   const roa = (f: FactMap) => (f.netIncome != null && f.totalAssets ? f.netIncome / f.totalAssets : null);
+  const rpc = (f: FactMap) => (f.eia_revenue && f.eia_customers ? (f.eia_revenue * 1e6) / f.eia_customers : null);
 
-  cmp("Which company has higher revenue?", "found", tF.revenue ?? null, pF.revenue ?? null, (a, b) => `${tName}: ${fmtM(a)} vs ${pName}: ${fmtM(b)} in revenue.`);
+  cmp("Which company has higher revenue?", "found", tF.revenue ?? tF.eia_revenue ?? null, pF.revenue ?? pF.eia_revenue ?? null, (a, b) => `${tName}: ${fmtM(a)} vs ${pName}: ${fmtM(b)} in revenue.`);
   cmp("Which carries more leverage (debt relative to assets)?", "liq", lev(tF), lev(pF), (a, b) => `${tName}: ${pct(a)} vs ${pName}: ${pct(b)} debt-to-assets.`);
+  // Utility-metric round (EIA-861) — works even for munis/co-ops with no SEC data.
+  cmp("Which serves more customers?", "found", tF.eia_customers ?? null, pF.eia_customers ?? null, (a, b) => `${tName}: ${fmtCust(a)} vs ${pName}: ${fmtCust(b)} (EIA-861).`);
   cmp("Which converts more of its revenue into operating cash?", "cash", cash(tF), cash(pF), (a, b) => `${tName}: ${pct(a)} vs ${pName}: ${pct(b)} operating cash margin.`);
+  cmp("Which delivers more energy?", "found", tF.eia_sales_mwh ?? null, pF.eia_sales_mwh ?? null, (a, b) => `${tName}: ${fmtTwh(a)} vs ${pName}: ${fmtTwh(b)} delivered (EIA-861).`);
   cmp("Which is investing more heavily (capex relative to revenue)?", "cash", capexInt(tF), capexInt(pF), (a, b) => `${tName}: ${pct(a)} vs ${pName}: ${pct(b)} of revenue reinvested as capex.`);
+  cmp("Which earns more retail revenue per customer?", "prof", rpc(tF), rpc(pF), (a, b) => `${tName}: $${Math.round(a).toLocaleString()} vs ${pName}: $${Math.round(b).toLocaleString()} per customer (EIA-861).`);
   cmp("Which earns more on its assets (return on assets)?", "prof", roa(tF), roa(pF), (a, b) => `${tName}: ${pct(a)} vs ${pName}: ${pct(b)} return on assets.`);
   return qs.slice(0, 5);
 }
