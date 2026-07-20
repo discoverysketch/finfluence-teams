@@ -43,7 +43,7 @@ export async function GET(request: Request) {
     //    result list already names many stories with URLs; more searches risk
     //    blowing the 300s function ceiling (observed: sweeps can run 5+ min).
     const research = await client.messages.create({
-      model: "claude-sonnet-5", max_tokens: 3000,
+      model: "claude-sonnet-5", max_tokens: 9000,
       tools: [{ type: "web_search_20260209", name: "web_search", max_uses: 2 } as any],
       messages: [{
         role: "user",

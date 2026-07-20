@@ -38,7 +38,7 @@ export async function POST(request: Request) {
         send({ stage: "searching" });
         // Sonnet 5 web search is ~6x faster than Opus here; cap searches for latency.
         const research = await client.messages.create({
-          model: "claude-sonnet-5", max_tokens: 2000,
+          model: "claude-sonnet-5", max_tokens: 7000,
           tools: [{ type: "web_search_20260209", name: "web_search", max_uses: 2 } as any],
           messages: [{
             role: "user",

@@ -44,7 +44,7 @@ export async function POST(request: Request) {
   try {
     // 1) Live web research (Sonnet — ~6x faster than Opus for web search).
     const research = await client.messages.create({
-      model: "claude-sonnet-5", max_tokens: 3000,
+      model: "claude-sonnet-5", max_tokens: 9000,
       tools: [{ type: "web_search_20260209", name: "web_search", max_uses: 5 } as any],
       messages: [{
         role: "user",
