@@ -261,8 +261,8 @@ export default function Hub({ accountId, userId, entityId, ticker, initialStage,
     setActs((as) => as.filter((x) => x.id !== id));
   }
 
-  // org tree: roots first, children indented; cycle-safe
-  const tree = useMemo(() => {
+  // org chart: children map + roots (cycle-safe — unreachable nodes surface as roots)
+  const orgTree = useMemo(() => {
     const kids: Record<string, Contact[]> = {};
     const ids = new Set(contacts.map((c) => c.id));
     const roots: Contact[] = [];
@@ -270,18 +270,29 @@ export default function Hub({ accountId, userId, entityId, ticker, initialStage,
       if (c.reports_to && ids.has(c.reports_to)) (kids[c.reports_to] ??= []).push(c);
       else roots.push(c);
     }
-    const out: { c: Contact; depth: number }[] = [];
-    const walk = (c: Contact, depth: number, seen: Set<string>) => {
-      if (seen.has(c.id)) return;
-      seen.add(c.id);
-      out.push({ c, depth });
-      for (const k of kids[c.id] ?? []) walk(k, depth + 1, seen);
-    };
     const seen = new Set<string>();
-    roots.forEach((r) => walk(r, 0, seen));
-    contacts.forEach((c) => walk(c, 0, seen)); // orphans in cycles
-    return out;
+    const mark = (c: Contact) => { if (seen.has(c.id)) return; seen.add(c.id); (kids[c.id] ?? []).forEach(mark); };
+    roots.forEach(mark);
+    for (const c of contacts) if (!seen.has(c.id)) { roots.push(c); mark(c); }
+    return { kids, roots };
   }, [contacts]);
+
+  function OrgNode({ c }: { c: Contact }) {
+    const role = c.role_tag ? ROLES[c.role_tag] : null;
+    const children = orgTree.kids[c.id] ?? [];
+    return (
+      <li>
+        <div className="ocnode" style={{ borderTop: `3px solid ${role ? role.color : "var(--border)"}` }}
+          onClick={() => setCForm({ id: c.id, name: c.name, title: c.title || "", role_tag: c.role_tag || "", email: c.email || "", phone: c.phone || "", reports_to: c.reports_to || "" })}>
+          <button className="ocdel" aria-label={`Remove ${c.name}`} onClick={(e) => { e.stopPropagation(); deleteContact(c.id); }}>×</button>
+          <div style={{ fontWeight: 700, fontSize: 12.5, lineHeight: 1.2 }}>{c.name}</div>
+          <div style={{ fontSize: 10.5, color: "var(--ink2)", marginTop: 2, lineHeight: 1.25 }}>{c.title || "—"}</div>
+          {role && <div style={{ fontSize: 9, fontWeight: 700, color: role.color, marginTop: 3, textTransform: "uppercase", letterSpacing: ".4px" }}>{role.label}</div>}
+        </div>
+        {children.length > 0 && <ul>{children.map((k) => <OrgNode key={k.id} c={k} />)}</ul>}
+      </li>
+    );
+  }
 
   const openTasks = acts.filter((a) => a.kind === "task" && !a.done);
 
@@ -382,28 +393,17 @@ export default function Hub({ accountId, userId, entityId, ticker, initialStage,
 
       {/* ---- People / org chart ---- */}
       <div className="secttl">People</div>
-      {tree.length === 0 && <p style={{ fontSize: 13, color: "var(--muted)", margin: "0 0 8px" }}>No contacts yet — add the people you're selling to and who they report to.</p>}
-      {tree.map(({ c, depth }) => {
-        const role = c.role_tag ? ROLES[c.role_tag] : null;
-        return (
-          <div key={c.id} style={{ marginLeft: depth * 26, marginBottom: 6, position: "relative" }}>
-            {depth > 0 && <div style={{ position: "absolute", left: -16, top: 0, bottom: 0, width: 2, background: "var(--border)", borderRadius: 2 }} />}
-            <div className="card" style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 12px" }}>
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ fontWeight: 700, fontSize: 14 }}>
-                  {c.name}
-                  {role && <span style={{ background: role.color, color: "#fff", fontSize: 10, fontWeight: 700, borderRadius: 4, padding: "2px 7px", marginLeft: 8, verticalAlign: "middle" }}>{role.label}</span>}
-                </div>
-                <div style={{ fontSize: 12, color: "var(--ink2)" }}>
-                  {c.title || "—"}{c.email ? <> · <a href={`mailto:${c.email}`} style={{ color: "var(--blue)" }}>{c.email}</a></> : null}{c.phone ? ` · ${c.phone}` : ""}
-                </div>
-              </div>
-              <button className="mini" onClick={() => setCForm({ id: c.id, name: c.name, title: c.title || "", role_tag: c.role_tag || "", email: c.email || "", phone: c.phone || "", reports_to: c.reports_to || "" })}>Edit</button>
-              <button className="mini del" onClick={() => deleteContact(c.id)}>✕</button>
-            </div>
+      {contacts.length === 0 && <p style={{ fontSize: 13, color: "var(--muted)", margin: "0 0 8px" }}>No contacts yet — add the people you&apos;re selling to and who they report to.</p>}
+      {contacts.length > 0 && (
+        <>
+          <div className="oc-wrap">
+            <ul className="oc">
+              {orgTree.roots.map((r) => <OrgNode key={r.id} c={r} />)}
+            </ul>
           </div>
-        );
-      })}
+          <p style={{ fontSize: 11, color: "var(--muted)", margin: "6px 0 0" }}>Tap a person to edit · set &quot;Reports to&quot; to build the chart</p>
+        </>
+      )}
       {!cForm && (
         <div style={{ display: "flex", gap: 8, marginTop: 4, flexWrap: "wrap" }}>
           <button className="btn" onClick={() => setCForm(emptyC)}>+ Add person</button>
@@ -519,6 +519,26 @@ export default function Hub({ accountId, userId, entityId, ticker, initialStage,
 
       <style>{`
         .secttl{font-size:11px;font-weight:700;color:#8A7E6E;text-transform:uppercase;letter-spacing:.6px;margin:22px 0 8px}
+        /* org chart — classic CSS tree with connector lines */
+        .oc-wrap{overflow-x:auto;padding:4px 2px 8px}
+        .oc,.oc ul{list-style:none;margin:0;padding:0}
+        .oc{display:flex;justify-content:flex-start;min-width:min-content}
+        .oc ul{display:flex;padding-top:22px;position:relative}
+        .oc ul::before{content:'';position:absolute;top:0;left:50%;width:2px;height:22px;background:#D8CFC0}
+        .oc li{display:flex;flex-direction:column;align-items:center;position:relative;padding:22px 6px 0}
+        .oc li::before,.oc li::after{content:'';position:absolute;top:0;right:50%;border-top:2px solid #D8CFC0;width:50%;height:22px}
+        .oc li::after{right:auto;left:50%;border-left:2px solid #D8CFC0}
+        .oc li:only-child::before,.oc li:only-child::after{border-top:0}
+        .oc li:only-child::after{left:50%;border-left:2px solid #D8CFC0}
+        .oc li:first-child::before,.oc li:last-child::after{border:0 none}
+        .oc li:last-child::before{border-right:2px solid #D8CFC0;border-radius:0 8px 0 0}
+        .oc li:first-child::after{border-radius:8px 0 0 0}
+        .oc>li{padding-top:0}
+        .oc>li::before,.oc>li::after{display:none}
+        .ocnode{position:relative;background:#fff;border:1px solid rgba(224,216,203,.85);border-radius:10px;padding:9px 12px 8px;min-width:118px;max-width:160px;text-align:center;cursor:pointer;box-shadow:var(--shadow-sm);transition:transform .18s ease,box-shadow .18s ease}
+        .ocnode:hover{transform:translateY(-1px);box-shadow:var(--shadow-md)}
+        .ocdel{position:absolute;top:2px;right:5px;background:none;border:none;color:#C9BDA9;font-weight:800;font-size:13px;line-height:1;cursor:pointer;padding:2px}
+        .ocdel:hover{color:var(--red)}
         .mini{border:1px solid var(--border);background:#fff;border-radius:6px;padding:5px 9px;font-size:12px;font-weight:700;cursor:pointer}
         .mini.del{color:var(--red)}
       `}</style>
