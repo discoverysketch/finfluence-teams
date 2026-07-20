@@ -1,5 +1,6 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { NextResponse } from "next/server";
 
 // AI card drafting. Admin-only. Returns DRAFTS — never writes to the DB.
@@ -49,18 +50,34 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "ANTHROPIC_API_KEY is not set on the server. Add it in .env.local (and Vercel) and redeploy." }, { status: 500 });
   }
 
-  const { source, unitTitle, count, pdfs, pdfBase64 } = await request.json().catch(() => ({}));
+  const { source, unitTitle, count, pdfs, pdfBase64, pdfPaths } = await request.json().catch(() => ({}));
   const src = String(source || "").trim();
-  // Multiple PDFs per batch (each becomes a native document block); cap for
-  // request-size sanity. pdfBase64 kept for backward compat.
+  // Multiple PDFs per batch (each becomes a native document block). Preferred
+  // transport: Storage paths (Vercel caps request bodies at ~4.5MB, so inline
+  // base64 dies at the edge for real files). Inline pdfs[] kept for small files.
   const pdfArr: string[] = (Array.isArray(pdfs) ? pdfs : [])
     .filter((s: unknown) => typeof s === "string" && (s as string).length > 100).slice(0, 4);
   if (typeof pdfBase64 === "string" && pdfBase64.length > 100 && !pdfArr.length) pdfArr.push(pdfBase64);
+
+  const paths: string[] = (Array.isArray(pdfPaths) ? pdfPaths : [])
+    .filter((p: unknown) => typeof p === "string" && (p as string).startsWith(`${user.id}/`)) // own files only
+    .slice(0, 4);
+  const adminStorage = paths.length ? createAdminClient() : null;
+  if (adminStorage) {
+    for (const p of paths) {
+      const { data: blob, error } = await adminStorage.storage.from("uploads").download(p);
+      if (error || !blob) return NextResponse.json({ error: `Couldn't read an uploaded file (${p.split("/").pop()}) — try re-attaching it.` }, { status: 400 });
+      pdfArr.push(Buffer.from(await blob.arrayBuffer()).toString("base64"));
+      if (pdfArr.length >= 4) break;
+    }
+  }
+  const cleanup = async () => { if (adminStorage && paths.length) await adminStorage.storage.from("uploads").remove(paths).then(() => {}, () => {}); };
   if (!pdfArr.length && src.length < 40) return NextResponse.json({ error: "Upload a file or paste at least a paragraph of source material." }, { status: 400 });
   // Anthropic caps requests at 32MB — reject early with a clear message instead
   // of a cryptic API error.
   const totalPdfBytes = pdfArr.reduce((s, p) => s + p.length, 0);
   if (totalPdfBytes > 22 * 1024 * 1024) {
+    await cleanup();
     return NextResponse.json({ error: `Attached PDFs are too large together (~${Math.round(totalPdfBytes / 1.33 / 1e6)}MB of PDF). Drop a file or use smaller ones — about 15MB of PDFs per batch is the ceiling.` }, { status: 413 });
   }
   const n = Math.min(Math.max(Number(count) || 5, 1), 25);
@@ -120,6 +137,7 @@ export async function POST(request: Request) {
   if (!okCards.length) {
     const first = failures[0]?.reason;
     const msg = first instanceof Anthropic.APIError ? `${first.status}: ${first.message}` : (first as Error)?.message || "unknown";
+    await cleanup();
     return NextResponse.json({ error: `Generation failed — ${msg}` }, { status: 502 });
   }
 
@@ -131,6 +149,7 @@ export async function POST(request: Request) {
     seen.add(k); return true;
   }).slice(0, n);
 
+  await cleanup();
   return NextResponse.json({
     cards,
     note: failures.length ? `${failures.length} of ${jobs.length} files failed to draft — the rest came through.` : undefined,

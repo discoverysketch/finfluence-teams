@@ -22,9 +22,10 @@ export default function ContentEditor() {
   const [genCount, setGenCount] = useState(5);
   const [genLoading, setGenLoading] = useState(false);
   const [drafts, setDrafts] = useState<Card[]>([]);
-  // Multiple files per batch, mixed types: PDFs go to Claude natively; Word/text
-  // files are extracted client-side and joined into the source text.
-  const [genFiles, setGenFiles] = useState<{ name: string; kind: "pdf" | "text"; b64?: string; text?: string }[]>([]);
+  // Multiple files per batch, mixed types: PDFs upload to Storage and go to
+  // Claude natively by path (inline base64 dies at Vercel's ~4.5MB body cap);
+  // Word/text files are extracted client-side and joined into the source text.
+  const [genFiles, setGenFiles] = useState<{ name: string; kind: "pdf" | "text"; file?: File; text?: string }[]>([]);
   const [proofTopic, setProofTopic] = useState("");
   const [proofLoading, setProofLoading] = useState(false);
 
@@ -85,7 +86,6 @@ export default function ContentEditor() {
   const setBody = (k: keyof Body, v: string) =>
     setEditing((e) => (e ? { ...e, body_json: { ...(e.body_json ?? {}), [k]: v } } : e));
 
-  const readAsB64 = (f: File) => new Promise<string>((res, rej) => { const r = new FileReader(); r.onload = () => res(String(r.result).split(",")[1] || ""); r.onerror = rej; r.readAsDataURL(f); });
   const readAsText = (f: File) => new Promise<string>((res, rej) => { const r = new FileReader(); r.onload = () => res(String(r.result || "")); r.onerror = rej; r.readAsText(f); });
 
   async function onFiles(list: FileList | null) {
@@ -94,16 +94,16 @@ export default function ContentEditor() {
     const errs: string[] = [];
     for (const f of Array.from(list)) {
       const name = f.name.toLowerCase();
-      if (f.size > 8 * 1024 * 1024) { errs.push(`${f.name}: over 8 MB, skipped`); continue; }
       if (genFiles.some((g) => g.name === f.name)) continue; // already attached
       const isPdf = f.type === "application/pdf" || name.endsWith(".pdf");
       const isDocx = name.endsWith(".docx");
+      if (!isPdf && f.size > 8 * 1024 * 1024) { errs.push(`${f.name}: over 8 MB, skipped`); continue; }
+      if (isPdf && f.size > 20 * 1024 * 1024) { errs.push(`${f.name}: over 20 MB, skipped`); continue; }
       if (name.endsWith(".doc") && !isDocx) { errs.push(`${f.name}: old .doc format — save as .docx or PDF`); continue; }
       try {
         if (isPdf) {
           if (genFiles.filter((g) => g.kind === "pdf").length >= 4) { errs.push(`${f.name}: max 4 PDFs per batch`); continue; }
-          const b64 = await readAsB64(f);
-          if (b64) setGenFiles((gs) => [...gs, { name: f.name, kind: "pdf", b64 }]);
+          setGenFiles((gs) => [...gs, { name: f.name, kind: "pdf", file: f }]);
         } else if (isDocx) {
           const mod = await import("mammoth/mammoth.browser");
           const mammoth = (mod as { default?: unknown }).default ?? mod;
@@ -131,17 +131,24 @@ export default function ContentEditor() {
 
   async function generate() {
     if (!sel) return;
-    // Pre-flight: Anthropic caps requests at 32MB — catch it before uploading.
-    const pdfB64s = genFiles.filter((g) => g.kind === "pdf").map((g) => g.b64 || "");
-    const totalPdf = pdfB64s.reduce((s, p) => s + p.length, 0);
-    if (totalPdf > 22 * 1024 * 1024) {
-      setMsg(`Attached PDFs are too large together (~${Math.round(totalPdf / 1.33 / 1e6)}MB) — remove a file; about 15MB of PDFs per batch is the ceiling.`);
-      return;
-    }
     setGenLoading(true); setMsg(""); setDrafts([]);
     try {
+      // PDFs go to Storage first (Vercel's ~4.5MB body cap kills inline base64);
+      // only the paths travel in the request.
+      const pdfFiles = genFiles.filter((g) => g.kind === "pdf" && g.file);
+      const pdfPaths: string[] = [];
+      if (pdfFiles.length) {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user) { setMsg("Session expired — reload and sign in again."); return; }
+        for (const g of pdfFiles) {
+          const path = `${user.id}/${crypto.randomUUID()}-${g.name.replace(/[^\w.-]/g, "_").slice(-80)}`;
+          const { error } = await supabase.storage.from("uploads").upload(path, g.file!, { contentType: "application/pdf" });
+          if (error) { setMsg(`Couldn't upload ${g.name}: ${error.message}${/security|policy|not found/i.test(error.message) ? " — the storage migration (0015) may not be applied yet." : ""}`); return; }
+          pdfPaths.push(path);
+        }
+      }
       const body = {
-        pdfs: pdfB64s,
+        pdfPaths,
         source: combinedSource(),
         unitTitle: sel.title, count: genCount,
       };
