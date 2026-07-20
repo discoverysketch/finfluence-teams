@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import Link from "next/link";
 import { ensureEntityFacts, type FactMap } from "@/lib/facts";
 import { rankPeers } from "@/lib/lookalike";
+import { buildTree } from "@/lib/orgchart";
 import { conceptScores, type Ev } from "@/lib/acumen";
 import { fetchPrices, type PriceSeries } from "@/lib/stock";
 import Plays from "./Plays";
@@ -73,7 +74,7 @@ export default async function PlanPage({ params }: { params: Promise<{ entityId:
   // key people from the CRM (account for this entity in the caller's tenant)
   const { data: acct } = await supabase.from("accounts").select("id").eq("entity_id", entityId).limit(1).maybeSingle();
   const { data: people } = acct
-    ? await supabase.from("contacts").select("name, title, role_tag").eq("account_id", acct.id).order("created_at").limit(8)
+    ? await supabase.from("contacts").select("id, name, title, role_tag, reports_to").eq("account_id", acct.id).order("created_at").limit(12)
     : { data: [] };
   const ROLE_LABEL: Record<string, [string, string]> = {
     economic_buyer: ["Economic buyer", "#9A6700"], champion: ["Champion", "#1B7A47"], exec_sponsor: ["Exec sponsor", "#6A3E8E"],
@@ -219,25 +220,49 @@ export default async function PlanPage({ params }: { params: Promise<{ entityId:
         </>
       )}
 
-      {/* Key people (from the org chart) */}
-      {(people ?? []).length > 0 && (
-        <>
-          <h2 style={{ fontSize: 15 }}>Key people</h2>
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "4px 14px", marginBottom: 12 }}>
-            {(people ?? []).map((p: any) => {
-              const r = p.role_tag ? ROLE_LABEL[p.role_tag] : null;
-              return (
-                <div key={p.name} style={{ borderBottom: "1px solid #F0EAE0", padding: "4px 0" }}>
-                  <div style={{ fontSize: 13, fontWeight: 700 }}>
-                    {p.name}{r && <span style={{ background: r[1], color: "#fff", fontSize: 9.5, fontWeight: 700, borderRadius: 4, padding: "1px 6px", marginLeft: 6, verticalAlign: "middle" }}>{r[0]}</span>}
-                  </div>
-                  <div style={{ fontSize: 11.5, color: "var(--ink2)" }}>{p.title || "—"}</div>
-                </div>
-              );
-            })}
-          </div>
-        </>
-      )}
+      {/* Key people — the org chart itself (server-rendered, print-safe) */}
+      {(people ?? []).length > 0 && (() => {
+        const { kids, roots } = buildTree((people ?? []) as any[]);
+        const Node = ({ p }: { p: any }) => {
+          const r = p.role_tag ? ROLE_LABEL[p.role_tag] : null;
+          const children = kids[p.id] ?? [];
+          return (
+            <li>
+              <div className="ocp-node" style={{ borderTop: `3px solid ${r ? r[1] : "var(--border)"}` }}>
+                <div style={{ fontWeight: 700, fontSize: 11.5, lineHeight: 1.2 }}>{p.name}</div>
+                <div style={{ fontSize: 9.5, color: "var(--ink2)", marginTop: 1, lineHeight: 1.25 }}>{p.title || "—"}</div>
+                {r && <div style={{ fontSize: 8.5, fontWeight: 700, color: r[1], marginTop: 2, textTransform: "uppercase", letterSpacing: ".4px" }}>{r[0]}</div>}
+              </div>
+              {children.length > 0 && <ul>{children.map((k: any) => <Node key={k.id} p={k} />)}</ul>}
+            </li>
+          );
+        };
+        return (
+          <>
+            <h2 style={{ fontSize: 15 }}>Key people</h2>
+            <div style={{ overflowX: "auto", marginBottom: 12 }}>
+              <ul className="ocp">{roots.map((r: any) => <Node key={r.id} p={r} />)}</ul>
+            </div>
+            <style>{`
+              .ocp,.ocp ul{list-style:none;margin:0;padding:0}
+              .ocp{display:flex;flex-wrap:wrap;gap:0 6px;min-width:min-content}
+              .ocp ul{display:flex;padding-top:18px;position:relative}
+              .ocp ul::before{content:'';position:absolute;top:0;left:50%;width:2px;height:18px;background:#D8CFC0}
+              .ocp li{display:flex;flex-direction:column;align-items:center;position:relative;padding:18px 5px 0}
+              .ocp li::before,.ocp li::after{content:'';position:absolute;top:0;right:50%;border-top:2px solid #D8CFC0;width:50%;height:18px}
+              .ocp li::after{right:auto;left:50%;border-left:2px solid #D8CFC0}
+              .ocp li:only-child::before,.ocp li:only-child::after{border-top:0}
+              .ocp li:only-child::after{left:50%;border-left:2px solid #D8CFC0}
+              .ocp li:first-child::before,.ocp li:last-child::after{border:0 none}
+              .ocp li:last-child::before{border-right:2px solid #D8CFC0;border-radius:0 8px 0 0}
+              .ocp li:first-child::after{border-radius:8px 0 0 0}
+              .ocp>li{padding-top:6px}
+              .ocp>li::before,.ocp>li::after{display:none}
+              .ocp-node{background:#fff;border:1px solid rgba(224,216,203,.85);border-radius:9px;padding:7px 10px 6px;min-width:104px;max-width:150px;text-align:center}
+            `}</style>
+          </>
+        );
+      })()}
 
       {/* Focus areas */}
       {weak.length > 0 && (

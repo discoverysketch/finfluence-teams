@@ -1,8 +1,9 @@
 "use client";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer } from "recharts";
 import { createClient } from "@/lib/supabase/client";
+import { inferReporting } from "@/lib/orgchart";
 
 export type Contact = { id: string; account_id: string; name: string; title: string | null; role_tag: string | null; email: string | null; phone: string | null; reports_to: string | null; notes: string | null };
 export type Activity = { id: string; account_id: string; contact_id: string | null; user_id: string | null; kind: string; body: string; due_at: string | null; done: boolean; created_at: string };
@@ -232,7 +233,15 @@ export default function Hub({ accountId, userId, entityId, ticker, initialStage,
     }));
     const { data, error } = await supabase.from("contacts").insert(rows).select("*");
     if (error) { setMsg(error.message); return; }
-    setContacts((cs) => [...cs, ...((data ?? []) as Contact[])]);
+    let added = (data ?? []) as Contact[];
+    // Auto-wire the hierarchy from titles (chiefs -> CEO, VPs -> domain chief);
+    // only the newly added people get wired — manual links are never touched.
+    const links = inferReporting([...contacts, ...added], added);
+    for (const l of links) {
+      await supabase.from("contacts").update({ reports_to: l.reports_to }).eq("id", l.id);
+      added = added.map((c) => (c.id === l.id ? { ...c, reports_to: l.reports_to } : c));
+    }
+    setContacts((cs) => [...cs, ...added]);
     setExecs(null);
   }
 
@@ -293,6 +302,20 @@ export default function Hub({ accountId, userId, entityId, ticker, initialStage,
       </li>
     );
   }
+
+  // org-chart horizontal scroll: show arrows only when there's actually more chart off-screen
+  const ocRef = useRef<HTMLDivElement | null>(null);
+  const [ocArrows, setOcArrows] = useState({ left: false, right: false });
+  const updateOcArrows = () => {
+    const el = ocRef.current; if (!el) return;
+    setOcArrows({ left: el.scrollLeft > 4, right: el.scrollLeft + el.clientWidth < el.scrollWidth - 4 });
+  };
+  useEffect(() => {
+    updateOcArrows();
+    window.addEventListener("resize", updateOcArrows);
+    return () => window.removeEventListener("resize", updateOcArrows);
+  }, [contacts]);
+  const ocScroll = (dir: 1 | -1) => ocRef.current?.scrollBy({ left: dir * Math.max(240, (ocRef.current?.clientWidth ?? 300) * 0.7), behavior: "smooth" });
 
   const openTasks = acts.filter((a) => a.kind === "task" && !a.done);
 
@@ -396,12 +419,26 @@ export default function Hub({ accountId, userId, entityId, ticker, initialStage,
       {contacts.length === 0 && <p style={{ fontSize: 13, color: "var(--muted)", margin: "0 0 8px" }}>No contacts yet — add the people you&apos;re selling to and who they report to.</p>}
       {contacts.length > 0 && (
         <>
-          <div className="oc-wrap">
-            <ul className="oc">
-              {orgTree.roots.map((r) => <OrgNode key={r.id} c={r} />)}
-            </ul>
+          <div style={{ position: "relative" }}>
+            <div className="oc-wrap" ref={ocRef} onScroll={updateOcArrows}>
+              <ul className="oc">
+                {orgTree.roots.map((r) => <OrgNode key={r.id} c={r} />)}
+              </ul>
+            </div>
+            {ocArrows.left && (
+              <>
+                <div className="ocfade" style={{ left: 0, background: "linear-gradient(90deg, var(--bg, #FBF7EF), transparent)" }} />
+                <button className="ocarr" style={{ left: 4 }} aria-label="Scroll chart left" onClick={() => ocScroll(-1)}>‹</button>
+              </>
+            )}
+            {ocArrows.right && (
+              <>
+                <div className="ocfade" style={{ right: 0, background: "linear-gradient(270deg, var(--bg, #FBF7EF), transparent)" }} />
+                <button className="ocarr" style={{ right: 4 }} aria-label="Scroll chart right" onClick={() => ocScroll(1)}>›</button>
+              </>
+            )}
           </div>
-          <p style={{ fontSize: 11, color: "var(--muted)", margin: "6px 0 0" }}>Tap a person to edit · set &quot;Reports to&quot; to build the chart</p>
+          <p style={{ fontSize: 11, color: "var(--muted)", margin: "6px 0 0" }}>Tap a person to edit · set &quot;Reports to&quot; to build the chart{ocArrows.right ? " · scroll for more →" : ""}</p>
         </>
       )}
       {!cForm && (
@@ -520,7 +557,10 @@ export default function Hub({ accountId, userId, entityId, ticker, initialStage,
       <style>{`
         .secttl{font-size:11px;font-weight:700;color:#8A7E6E;text-transform:uppercase;letter-spacing:.6px;margin:22px 0 8px}
         /* org chart — classic CSS tree with connector lines */
-        .oc-wrap{overflow-x:auto;padding:4px 2px 8px}
+        .oc-wrap{overflow-x:auto;padding:4px 2px 8px;scrollbar-width:thin}
+        .ocfade{position:absolute;top:0;bottom:8px;width:36px;pointer-events:none;z-index:1}
+        .ocarr{position:absolute;top:50%;transform:translateY(-50%);z-index:2;width:30px;height:30px;border-radius:50%;border:1px solid var(--border);background:#fff;color:var(--ink2);font-size:19px;font-weight:800;line-height:1;cursor:pointer;box-shadow:0 2px 8px rgba(40,30,10,.18);display:flex;align-items:center;justify-content:center;padding:0 0 2px}
+        .ocarr:active{background:#F6F1E7}
         .oc,.oc ul{list-style:none;margin:0;padding:0}
         .oc{display:flex;justify-content:flex-start;min-width:min-content}
         .oc ul{display:flex;padding-top:22px;position:relative}
