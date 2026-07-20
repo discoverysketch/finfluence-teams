@@ -134,7 +134,8 @@ export default function Hub({ accountId, userId, entityId, ticker, initialStage,
   const [acts, setActs] = useState<Activity[]>(initialActivities);
   const [msg, setMsg] = useState("");
   const [cForm, setCForm] = useState<CForm | null>(null);
-  const [execs, setExecs] = useState<{ loading?: boolean; note?: string; list?: { name: string; title: string; suggested_role: string; source_url: string; checked: boolean }[] } | null>(null);
+  const [execs, setExecs] = useState<{ loading?: boolean; note?: string; staged?: boolean; list?: { name: string; title: string; suggested_role: string; source_url: string; checked: boolean }[] } | null>(null);
+  const [autoResearching, setAutoResearching] = useState(false);
   const [aKind, setAKind] = useState("note");
   const [aBody, setABody] = useState("");
   const [aDue, setADue] = useState("");
@@ -209,6 +210,38 @@ export default function Hub({ accountId, userId, entityId, ticker, initialStage,
     setContacts((cs) => cs.filter((c) => c.id !== id).map((c) => (c.reports_to === id ? { ...c, reports_to: null } : c)));
   }
 
+  // ---- staged people research (kicked off when the account was added) ----
+  // Surface staged results as the same pre-filled review list the manual finder
+  // uses; poll briefly while the background research is still running.
+  const contactsRef = useRef(contacts);
+  contactsRef.current = contacts;
+  useEffect(() => {
+    let live = true; let tries = 0; let timer: ReturnType<typeof setTimeout> | undefined;
+    const check = async () => {
+      const { data } = await supabase.from("accounts").select("suggested_execs, execs_status").eq("id", accountId).maybeSingle();
+      if (!live || !data) return;
+      if (data.execs_status === "pending") {
+        setAutoResearching(true);
+        if (++tries < 40) timer = setTimeout(check, 8000); else setAutoResearching(false);
+        return;
+      }
+      setAutoResearching(false);
+      if (data.execs_status === "ready" && Array.isArray(data.suggested_execs) && data.suggested_execs.length) {
+        const existing = new Set(contactsRef.current.map((c) => c.name.toLowerCase().trim()));
+        const fresh = (data.suggested_execs as { name: string; title: string; suggested_role: string; source_url: string }[])
+          .filter((e) => e?.name && !existing.has(e.name.toLowerCase().trim()));
+        if (fresh.length) setExecs((x) => x ?? { list: fresh.map((e) => ({ ...e, checked: true })), note: "found when this account was added", staged: true });
+        else clearStaged(); // everyone already in the chart — nothing to review
+      }
+    };
+    check();
+    return () => { live = false; if (timer) clearTimeout(timer); };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [accountId]);
+  async function clearStaged() {
+    await supabase.from("accounts").update({ suggested_execs: null, execs_status: null }).eq("id", accountId);
+  }
+
   // ---- executive finder (web research -> review -> save) ----
   async function findExecs() {
     if (execs?.loading) return;
@@ -242,6 +275,7 @@ export default function Hub({ accountId, userId, entityId, ticker, initialStage,
       added = added.map((c) => (c.id === l.id ? { ...c, reports_to: l.reports_to } : c));
     }
     setContacts((cs) => [...cs, ...added]);
+    if (execs?.staged) clearStaged();
     setExecs(null);
   }
 
@@ -416,7 +450,12 @@ export default function Hub({ accountId, userId, entityId, ticker, initialStage,
 
       {/* ---- People / org chart ---- */}
       <div className="secttl">People</div>
-      {contacts.length === 0 && <p style={{ fontSize: 13, color: "var(--muted)", margin: "0 0 8px" }}>No contacts yet — add the people you&apos;re selling to and who they report to.</p>}
+      {autoResearching && !execs?.list && (
+        <p style={{ fontSize: 12.5, color: "#9A6700", fontWeight: 600, margin: "0 0 8px" }}>
+          🔍 Researching this account&apos;s leadership in the background — people will appear here for review shortly.
+        </p>
+      )}
+      {contacts.length === 0 && !autoResearching && <p style={{ fontSize: 13, color: "var(--muted)", margin: "0 0 8px" }}>No contacts yet — add the people you&apos;re selling to and who they report to.</p>}
       {contacts.length > 0 && (
         <>
           <div style={{ position: "relative" }}>
@@ -444,7 +483,7 @@ export default function Hub({ accountId, userId, entityId, ticker, initialStage,
       {!cForm && (
         <div style={{ display: "flex", gap: 8, marginTop: 4, flexWrap: "wrap" }}>
           <button className="btn" onClick={() => setCForm(emptyC)}>+ Add person</button>
-          <button onClick={findExecs} disabled={!!execs?.loading}
+          <button onClick={findExecs} disabled={!!execs?.loading || autoResearching}
             style={{ background: "#fff", border: "1.5px dashed #E6CF94", color: "#9A6700", borderRadius: 10, padding: "10px 16px", fontSize: 14, fontWeight: 700, cursor: "pointer" }}>
             🔍 {execs?.loading ? "Searching the web… (~1 min)" : "Find executives"}
           </button>
@@ -457,7 +496,7 @@ export default function Hub({ accountId, userId, entityId, ticker, initialStage,
             <span style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".6px", color: "#9A6700" }}>
               Found {execs.list.length} — review before adding{execs.note ? ` · ${execs.note}` : ""}
             </span>
-            <button onClick={() => setExecs(null)} style={{ background: "none", border: "none", color: "var(--red)", fontWeight: 800, cursor: "pointer", fontSize: 15, lineHeight: 1 }}>×</button>
+            <button onClick={() => { if (execs?.staged) clearStaged(); setExecs(null); }} style={{ background: "none", border: "none", color: "var(--red)", fontWeight: 800, cursor: "pointer", fontSize: 15, lineHeight: 1 }}>×</button>
           </div>
           {execs.list.map((e, i) => {
             const role = e.suggested_role ? ROLES[e.suggested_role] : null;

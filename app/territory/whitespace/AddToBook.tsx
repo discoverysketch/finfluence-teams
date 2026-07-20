@@ -8,9 +8,16 @@ export default function AddToBook({ listId, entityId }: { listId: string; entity
 
   async function add() {
     setState("busy");
-    const { error } = await supabase.from("accounts").insert({ list_id: listId, entity_id: entityId });
+    const { data, error } = await supabase.from("accounts").insert({ list_id: listId, entity_id: entityId }).select("id").single();
     // unique index (list_id, entity_id) => duplicate insert errors are fine to treat as added
     setState(error && !error.message.includes("duplicate") ? "err" : "added");
+    // Kick background people research; results stage on the account for Hub review.
+    if (data?.id) {
+      fetch("/api/research-people", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ accountId: data.id }), keepalive: true,
+      }).catch(() => {});
+    }
   }
 
   if (state === "added") return <span style={{ fontSize: 12, fontWeight: 700, color: "#1B7A47" }}>✓ In book</span>;

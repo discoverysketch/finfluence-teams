@@ -21,6 +21,25 @@ function TierBadge({ t }: { t: string | null }) {
 type Profile = { canonical_name: string; entity_type: string; hq_state: string; ownership: string; est_size: string; segment: string; summary: string; sources: { title: string; url: string }[]; confidence: string };
 const TYPE_LABEL: Record<string, string> = { iou: "Investor-owned utility", ipp: "Independent power producer", coop: "Cooperative", muni: "Municipal", retailer: "Retailer", other: "Other" };
 
+// Fire-and-forget background people research for freshly added accounts.
+// 3 at a time so a bulk add doesn't slam the API; keepalive lets in-flight
+// requests finish even if the user navigates away. Results are staged on the
+// account and reviewed in the Hub — nothing is added without approval.
+const RESEARCH_CAP = 25; // big CSV drops: research the first 25, Hub button covers the rest
+function kickPeopleResearch(accountIds: string[]) {
+  const queue = accountIds.slice(0, RESEARCH_CAP);
+  let i = 0;
+  const next = (): void => {
+    if (i >= queue.length) return;
+    const accountId = queue[i++];
+    fetch("/api/research-people", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ accountId }), keepalive: true,
+    }).catch(() => {}).finally(next);
+  };
+  for (let k = 0; k < 3; k++) next();
+}
+
 export default function Territory({ listId, initial }: { listId: string; initial: Account[] }) {
   const supabase = createClient();
   const router = useRouter();
@@ -135,9 +154,10 @@ export default function Territory({ listId, initial }: { listId: string; initial
     const ids = uniqueToAdd(rows);
     if (!ids.length) { setMsg("Nothing new to add — pick at least one match."); return; }
     setBusy(true);
-    const { error } = await supabase.from("accounts").insert(ids.map((entity_id) => ({ list_id: listId, entity_id })));
+    const { data: created, error } = await supabase.from("accounts").insert(ids.map((entity_id) => ({ list_id: listId, entity_id }))).select("id");
     setBusy(false);
     if (error) { setMsg(error.message); return; }
+    if (created?.length) kickPeopleResearch(created.map((r) => r.id));
     setRows(null); setNames(""); setParseNote(""); setShowAdd(false); router.refresh();
   }
 
@@ -177,6 +197,7 @@ export default function Territory({ listId, initial }: { listId: string; initial
       const r = await fetch("/api/save-profile", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ profile: draft, listId }) });
       const j = await r.json();
       if (!r.ok) { setMsg(j.error || "Save failed."); return; }
+      if (j.accountId) kickPeopleResearch([j.accountId]);
       setDraft(null); setPName(""); setPHint(""); setShowAdd(false); router.refresh();
     } catch { setMsg("Network error."); }
     finally { setSavingP(false); }
