@@ -484,8 +484,9 @@ export default function Hub({ accountId, userId, entityId, ticker, initialStage,
         <div style={{ display: "flex", gap: 8, marginTop: 4, flexWrap: "wrap" }}>
           <button className="btn" onClick={() => setCForm(emptyC)}>+ Add person</button>
           <button onClick={findExecs} disabled={!!execs?.loading || autoResearching}
-            style={{ background: "#fff", border: "1.5px dashed #E6CF94", color: "#9A6700", borderRadius: 10, padding: "10px 16px", fontSize: 14, fontWeight: 700, cursor: "pointer" }}>
-            🔍 {execs?.loading ? "Searching the web… (~1 min)" : "Find executives"}
+            style={{ background: "#fff", border: "1.5px dashed #E6CF94", color: "#9A6700", borderRadius: 10, padding: "10px 16px", fontSize: 14, fontWeight: 700,
+              cursor: execs?.loading || autoResearching ? "default" : "pointer", opacity: execs?.loading || autoResearching ? 0.45 : 1 }}>
+            🔍 {autoResearching ? "Researching in the background…" : execs?.loading ? "Searching the web… (~1 min)" : "Find executives"}
           </button>
         </div>
       )}
