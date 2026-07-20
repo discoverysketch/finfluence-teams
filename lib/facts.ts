@@ -19,19 +19,20 @@ export type FactMap = Record<string, number>;
 // many SEC utilities alike.
 export type EiaOps = { period: string; source_url: string; asOf: string; facts: FactMap };
 export type FactsResult =
-  | { ok: true; company: string; period: string; source_url: string; facts: FactMap; asOf: string; annualLabel: string | null; eia: EiaOps | null }
+  | { ok: true; company: string; period: string; source_url: string; facts: FactMap; asOf: string; annualLabel: string | null; eia: EiaOps | null; ferc: EiaOps | null }
   | { ok: false; status: number; error: string };
 const FY_FLOW = ["revenue", "operatingIncome", "netIncome", "operatingCashFlow", "capex"];
 
-async function getEia(supabase: SupabaseClient, entityId: string): Promise<EiaOps | null> {
+async function getSource(supabase: SupabaseClient, entityId: string, source: "eia" | "ferc"): Promise<EiaOps | null> {
   const { data } = await supabase.from("entity_facts")
-    .select("fact_key, value, period, source_url, fetched_at").eq("entity_id", entityId).eq("source", "eia");
+    .select("fact_key, value, period, source_url, fetched_at").eq("entity_id", entityId).eq("source", source);
   if (!data?.length) return null;
   return {
     period: data[0].period, source_url: data[0].source_url, asOf: data[0].fetched_at,
     facts: Object.fromEntries(data.map((f: any) => [f.fact_key, Number(f.value)])),
   };
 }
+const getEia = (s: SupabaseClient, id: string) => getSource(s, id, "eia");
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 export async function ensureEntityFacts(supabase: SupabaseClient, entityId: string): Promise<FactsResult> {
@@ -39,10 +40,10 @@ export async function ensureEntityFacts(supabase: SupabaseClient, entityId: stri
     .select("id, canonical_name, ticker, cik, data_tier").eq("id", entityId).maybeSingle();
   if (!ent) return { ok: false, status: 404, error: "Entity not found" };
 
-  const eia = await getEia(supabase, entityId);
+  const [eia, ferc] = await Promise.all([getEia(supabase, entityId), getSource(supabase, entityId, "ferc")]);
   const eiaOnly = (): FactsResult => ({
-    ok: true, company: ent.canonical_name, period: `EIA-861 ${eia!.period}`, source_url: eia!.source_url,
-    facts: {}, asOf: eia!.asOf, annualLabel: null, eia,
+    ok: true, company: ent.canonical_name, period: eia ? `EIA-861 ${eia.period}` : `FERC Form 1 ${ferc!.period}`, source_url: (eia ?? ferc)!.source_url,
+    facts: {}, asOf: (eia ?? ferc)!.asOf, annualLabel: null, eia, ferc,
   });
 
   const { data: existing } = await supabase.from("entity_facts")
@@ -55,18 +56,18 @@ export async function ensureEntityFacts(supabase: SupabaseClient, entityId: stri
     return {
       ok: true, company: ent.canonical_name, period: existing[0].period, source_url: existing[0].source_url,
       facts: Object.fromEntries(existing.map((f: any) => [f.fact_key, Number(f.value)])),
-      asOf: existing[0].fetched_at, annualLabel: fyRow?.period ?? null, eia,
+      asOf: existing[0].fetched_at, annualLabel: fyRow?.period ?? null, eia, ferc,
     };
   }
 
   if (!ent.cik && !ent.ticker) {
-    if (eia) return eiaOnly();
+    if (eia || ferc) return eiaOnly();
     return { ok: false, status: 422, error: "No SEC or EIA data for this account yet (Tier D profile only)." };
   }
   let fin: Financials | null = null;
   try { fin = ent.cik ? await fetchFinancials({ cik: ent.cik, title: ent.canonical_name }) : await fetchFinancials(ent.ticker as string); } catch { /* below */ }
   if (!fin) {
-    if (eia) return eiaOnly();
+    if (eia || ferc) return eiaOnly();
     return { ok: false, status: 502, error: "Couldn't pull SEC data for this account." };
   }
 
@@ -81,5 +82,5 @@ export async function ensureEntityFacts(supabase: SupabaseClient, entityId: stri
   await admin.from("entity_facts").delete().eq("entity_id", entityId).eq("source", "sec");
   if (rows.length) await admin.from("entity_facts").insert(rows);
 
-  return { ok: true, company: fin.company, period: fin.period, source_url, facts: Object.fromEntries(rows.map((r) => [r.fact_key, r.value])), asOf: new Date().toISOString(), annualLabel: fin.fy?.label ?? null, eia };
+  return { ok: true, company: fin.company, period: fin.period, source_url, facts: Object.fromEntries(rows.map((r) => [r.fact_key, r.value])), asOf: new Date().toISOString(), annualLabel: fin.fy?.label ?? null, eia, ferc };
 }

@@ -18,5 +18,6 @@ export async function GET(request: Request) {
     asOf: res.asOf, annualLabel: res.annualLabel,
     facts: Object.entries(res.facts).map(([key, value]) => ({ key, value })),
     eia: res.eia,
+    ferc: res.ferc,
   });
 }

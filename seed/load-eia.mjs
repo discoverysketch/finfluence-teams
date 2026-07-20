@@ -83,7 +83,17 @@ for (const [numId, u] of utils) {
 }
 
 // ---------- 2) match directory entities ----------
-const { data: ents } = await db.from("entities").select("id, canonical_name, hq_state, data_tier, eia_utility_id");
+async function allEntities(sel) {
+  const out = [];
+  for (let from = 0; ; from += 1000) {
+    const { data, error } = await db.from("entities").select(sel).range(from, from + 999);
+    if (error) { console.error("entities fetch:", error.message); process.exit(1); }
+    out.push(...(data ?? []));
+    if (!data || data.length < 1000) break;
+  }
+  return out;
+}
+const ents = await allEntities("id, canonical_name, hq_state, data_tier, eia_utility_id");
 const { data: aliases } = await db.from("entity_aliases").select("entity_id, alias");
 const aliasesOf = new Map();
 for (const a of aliases ?? []) (aliasesOf.get(a.entity_id) ?? aliasesOf.set(a.entity_id, []).get(a.entity_id)).push(a.alias);

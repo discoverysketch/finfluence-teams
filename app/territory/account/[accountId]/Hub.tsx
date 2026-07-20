@@ -34,7 +34,35 @@ const FY_ROWS: [string, string][] = [["fy_revenue", "Revenue"], ["fy_operatingIn
 const BAL_ROWS: [string, string][] = [["totalAssets", "Total assets"], ["totalEquity", "Total equity"], ["totalDebt", "Total debt"], ["cash", "Cash"]];
 type Stock = { loading?: boolean; error?: string; points?: { d: string; c: number }[]; price?: number; currency?: string; asOf?: string };
 type EiaOps = { period: string; source_url: string; facts: Record<string, number> };
-type FinState = { loading?: boolean; error?: string; period?: string; source_url?: string; asOf?: string; annualLabel?: string | null; items?: { key: string; value: number }[]; stock?: Stock; eia?: EiaOps | null };
+type FinState = { loading?: boolean; error?: string; period?: string; source_url?: string; asOf?: string; annualLabel?: string | null; items?: { key: string; value: number }[]; stock?: Stock; eia?: EiaOps | null; ferc?: EiaOps | null };
+
+// FERC Form 1: regulated-utility financial detail no 10-K carries — net utility
+// plant (the rate-base proxy a utility CFO earns a return on), CWIP, O&M.
+function FercBlock({ ferc }: { ferc: EiaOps }) {
+  const f = ferc.facts;
+  const Cell = ({ n, l }: { n: string; l: string }) => (
+    <div style={{ border: "1px solid #F0EAE0", borderRadius: 8, padding: "8px 10px" }}>
+      <div style={{ fontSize: 16, fontWeight: 800, letterSpacing: "-.01em" }}>{n}</div>
+      <div style={{ fontSize: 11, color: "var(--ink2)", fontWeight: 600 }}>{l}</div>
+    </div>
+  );
+  return (
+    <div style={{ marginTop: 12 }}>
+      <div style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".5px", color: "var(--muted)", marginBottom: 6 }}>
+        🏛️ Regulated financials · FERC Form 1 {ferc.period}{(f.respondents_count ?? 0) > 1 ? ` · across ${f.respondents_count} respondents` : ""}
+      </div>
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 6 }}>
+        {f.net_utility_plant != null && <Cell n={fmtM(f.net_utility_plant)} l="net utility plant (rate-base proxy)" />}
+        {f.cwip != null && <Cell n={fmtM(f.cwip)} l="construction work in progress" />}
+        {f.om_expense != null && <Cell n={fmtM(f.om_expense)} l="electric O&M expense" />}
+        {f.electric_revenue != null && <Cell n={fmtM(f.electric_revenue)} l="electric operating revenue" />}
+      </div>
+      <div style={{ fontSize: 11, color: "var(--muted)", marginTop: 6 }}>
+        What the CFO earns a regulated return on · <a href={ferc.source_url.split(" ")[0]} target="_blank" rel="noreferrer" style={{ color: "var(--blue)", fontWeight: 700 }}>PUDL / FERC ↗</a>
+      </div>
+    </div>
+  );
+}
 const fmtCount = (v: number) => (v >= 1e6 ? `${(v / 1e6).toFixed(2)}M` : v >= 1e3 ? `${Math.round(v / 1e3)}k` : String(Math.round(v)));
 const fmtEnergy = (mwh: number) => (mwh >= 1e6 ? `${(mwh / 1e6).toFixed(1)} TWh` : `${Math.round(mwh / 1e3)} GWh`);
 
@@ -122,7 +150,7 @@ export default function Hub({ accountId, userId, entityId, ticker, initialStage,
         const j = await r.json();
         if (!live) return;
         if (!r.ok) { setFin({ error: j.error || "Couldn't load financials." }); return; }
-        setFin({ items: j.facts, period: j.period, source_url: j.source_url, asOf: j.asOf, annualLabel: j.annualLabel, eia: j.eia ?? null });
+        setFin({ items: j.facts, period: j.period, source_url: j.source_url, asOf: j.asOf, annualLabel: j.annualLabel, eia: j.eia ?? null, ferc: j.ferc ?? null });
         if (ticker) {
           setFin((f) => ({ ...f, stock: { loading: true } }));
           const sr = await fetch(`/api/stock?ticker=${encodeURIComponent(ticker)}`);
@@ -315,6 +343,7 @@ export default function Hub({ accountId, userId, entityId, ticker, initialStage,
                     </div>
                   )}
                   {fin.eia && <EiaBlock eia={fin.eia} />}
+                  {fin.ferc && <FercBlock ferc={fin.ferc} />}
                 </>
               );
             })()}

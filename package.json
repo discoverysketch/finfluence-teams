@@ -15,7 +15,8 @@
     "warm-directory": "node --env-file=.env.local --experimental-strip-types seed/warm-directory.ts",
     "seed-aliases": "node --env-file=.env.local --experimental-strip-types seed/seed-aliases.ts",
     "test:isolation": "node --env-file=.env.local seed/test-isolation.mjs",
-    "load-eia": "node --env-file=.env.local seed/load-eia.mjs"
+    "load-eia": "node --env-file=.env.local seed/load-eia.mjs",
+    "load-ferc": "node --env-file=.env.local seed/load-ferc.mjs"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.110.0",
@@ -35,6 +36,7 @@
     "@types/react-dom": "^19.0.0",
     "@types/web-push": "^3.6.4",
     "adm-zip": "^0.6.0",
+    "hyparquet": "^1.26.2",
     "sharp": "^0.35.3",
     "typescript": "^5.7.3",
     "xlsx": "^0.18.5"
