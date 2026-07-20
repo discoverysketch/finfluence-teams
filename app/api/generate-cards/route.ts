@@ -57,6 +57,12 @@ export async function POST(request: Request) {
     .filter((s: unknown) => typeof s === "string" && (s as string).length > 100).slice(0, 4);
   if (typeof pdfBase64 === "string" && pdfBase64.length > 100 && !pdfArr.length) pdfArr.push(pdfBase64);
   if (!pdfArr.length && src.length < 40) return NextResponse.json({ error: "Upload a file or paste at least a paragraph of source material." }, { status: 400 });
+  // Anthropic caps requests at 32MB — reject early with a clear message instead
+  // of a cryptic API error.
+  const totalPdfBytes = pdfArr.reduce((s, p) => s + p.length, 0);
+  if (totalPdfBytes > 22 * 1024 * 1024) {
+    return NextResponse.json({ error: `Attached PDFs are too large together (~${Math.round(totalPdfBytes / 1.33 / 1e6)}MB of PDF). Drop a file or use smaller ones — about 15MB of PDFs per batch is the ceiling.` }, { status: 413 });
+  }
   const n = Math.min(Math.max(Number(count) || 5, 1), 25);
 
   const client = new Anthropic();
@@ -87,7 +93,9 @@ export async function POST(request: Request) {
     : prompt;
 
   try {
-    const res = await client.messages.create({
+    // Streamed (SDK-recommended for long generations); big batches with thinking
+    // can otherwise trip long-request limits.
+    const stream = client.messages.stream({
       model: "claude-opus-4-8",
       max_tokens: 24000,
       thinking: { type: "adaptive" },
@@ -95,6 +103,10 @@ export async function POST(request: Request) {
       system,
       messages: [{ role: "user", content }],
     });
+    const res = await stream.finalMessage();
+    if (res.stop_reason === "max_tokens") {
+      return NextResponse.json({ error: "The draft ran out of room before finishing — ask for fewer cards for this much source material." }, { status: 502 });
+    }
     const text = res.content.filter((b) => b.type === "text").map((b) => (b as { text: string }).text).join("");
     let cards: unknown = [];
     try { cards = JSON.parse(text).cards; } catch { return NextResponse.json({ error: "The model returned an unparseable draft — try again." }, { status: 502 }); }

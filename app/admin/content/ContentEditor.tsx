@@ -131,10 +131,17 @@ export default function ContentEditor() {
 
   async function generate() {
     if (!sel) return;
+    // Pre-flight: Anthropic caps requests at 32MB — catch it before uploading.
+    const pdfB64s = genFiles.filter((g) => g.kind === "pdf").map((g) => g.b64 || "");
+    const totalPdf = pdfB64s.reduce((s, p) => s + p.length, 0);
+    if (totalPdf > 22 * 1024 * 1024) {
+      setMsg(`Attached PDFs are too large together (~${Math.round(totalPdf / 1.33 / 1e6)}MB) — remove a file; about 15MB of PDFs per batch is the ceiling.`);
+      return;
+    }
     setGenLoading(true); setMsg(""); setDrafts([]);
     try {
       const body = {
-        pdfs: genFiles.filter((g) => g.kind === "pdf").map((g) => g.b64),
+        pdfs: pdfB64s,
         source: combinedSource(),
         unitTitle: sel.title, count: genCount,
       };
@@ -142,14 +149,19 @@ export default function ContentEditor() {
         method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify(body),
       });
-      const j = await r.json();
+      let j: any = null;
+      try { j = await r.json(); } catch { /* non-JSON (e.g. gateway timeout page) */ }
+      if (!j) {
+        setMsg(`The generator returned ${r.status || "no response"} without a result — big batches (large PDFs or 20+ cards) can exceed the 5-minute server limit. Try fewer cards or smaller files.`);
+        return;
+      }
       if (!r.ok) { setMsg(j.error || "Generation failed."); return; }
       const raw = (j.cards ?? []) as any[];
       setDrafts(raw.map((c) => ({
         id: "", front: c.front || "", concept_tag: c.concept_tag || null, order: 0,
         body_json: { prompt: c.prompt, whatItIs: c.whatItIs, whyItMatters: c.whyItMatters, link: c.link, utility: c.utility, worked: c.worked },
       })));
-    } catch { setMsg("Couldn't reach the generator."); }
+    } catch { setMsg("Couldn't reach the generator — the connection dropped (very large batches can exceed the 5-minute server limit) or you're offline. Try again with fewer cards or smaller files."); }
     finally { setGenLoading(false); }
   }
   async function researchProofs() {
