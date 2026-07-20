@@ -70,6 +70,16 @@ export default async function PlanPage({ params }: { params: Promise<{ entityId:
     }
   }
 
+  // key people from the CRM (account for this entity in the caller's tenant)
+  const { data: acct } = await supabase.from("accounts").select("id").eq("entity_id", entityId).limit(1).maybeSingle();
+  const { data: people } = acct
+    ? await supabase.from("contacts").select("name, title, role_tag").eq("account_id", acct.id).order("created_at").limit(8)
+    : { data: [] };
+  const ROLE_LABEL: Record<string, [string, string]> = {
+    economic_buyer: ["Economic buyer", "#9A6700"], champion: ["Champion", "#1B7A47"], exec_sponsor: ["Exec sponsor", "#6A3E8E"],
+    influencer: ["Influencer", "#0572CE"], end_user: ["User", "#8A7E6E"], blocker: ["Blocker", "#B23A2E"],
+  };
+
   // rep's weakest concepts
   const { data: ev } = await supabase.from("score_events").select("concept_tag, correct").eq("user_id", user.id);
   const weak = conceptScores((ev ?? []) as Ev[]).filter((c) => c.score != null).sort((a, b) => (a.score! - b.score!)).slice(0, 2);
@@ -206,6 +216,26 @@ export default async function PlanPage({ params }: { params: Promise<{ entityId:
               ))}
             </tbody>
           </table>
+        </>
+      )}
+
+      {/* Key people (from the org chart) */}
+      {(people ?? []).length > 0 && (
+        <>
+          <h2 style={{ fontSize: 15 }}>Key people</h2>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "4px 14px", marginBottom: 12 }}>
+            {(people ?? []).map((p: any) => {
+              const r = p.role_tag ? ROLE_LABEL[p.role_tag] : null;
+              return (
+                <div key={p.name} style={{ borderBottom: "1px solid #F0EAE0", padding: "4px 0" }}>
+                  <div style={{ fontSize: 13, fontWeight: 700 }}>
+                    {p.name}{r && <span style={{ background: r[1], color: "#fff", fontSize: 9.5, fontWeight: 700, borderRadius: 4, padding: "1px 6px", marginLeft: 6, verticalAlign: "middle" }}>{r[0]}</span>}
+                  </div>
+                  <div style={{ fontSize: 11.5, color: "var(--ink2)" }}>{p.title || "—"}</div>
+                </div>
+              );
+            })}
+          </div>
         </>
       )}
 

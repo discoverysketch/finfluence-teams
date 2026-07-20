@@ -133,6 +133,7 @@ export default function Hub({ accountId, userId, entityId, ticker, initialStage,
   const [acts, setActs] = useState<Activity[]>(initialActivities);
   const [msg, setMsg] = useState("");
   const [cForm, setCForm] = useState<CForm | null>(null);
+  const [execs, setExecs] = useState<{ loading?: boolean; note?: string; list?: { name: string; title: string; suggested_role: string; source_url: string; checked: boolean }[] } | null>(null);
   const [aKind, setAKind] = useState("note");
   const [aBody, setABody] = useState("");
   const [aDue, setADue] = useState("");
@@ -205,6 +206,34 @@ export default function Hub({ accountId, userId, entityId, ticker, initialStage,
     const { error } = await supabase.from("contacts").delete().eq("id", id);
     if (error) return setMsg(error.message);
     setContacts((cs) => cs.filter((c) => c.id !== id).map((c) => (c.reports_to === id ? { ...c, reports_to: null } : c)));
+  }
+
+  // ---- executive finder (web research -> review -> save) ----
+  async function findExecs() {
+    if (execs?.loading) return;
+    setExecs({ loading: true });
+    try {
+      const r = await fetch("/api/find-executives", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ accountId }) });
+      const j = await r.json().catch(() => null);
+      if (!r.ok || !j) { setMsg(j?.error || "Executive search failed — try again or add manually."); setExecs(null); return; }
+      const existing = new Set(contacts.map((c) => c.name.toLowerCase().trim()));
+      const fresh = (j.executives as any[]).filter((e) => !existing.has(String(e.name).toLowerCase().trim()));
+      const skipped = j.executives.length - fresh.length;
+      if (!fresh.length) { setMsg("Everyone found is already in your org chart."); setExecs(null); return; }
+      setExecs({ list: fresh.map((e) => ({ ...e, checked: true })), note: skipped ? `${skipped} already in your chart — skipped` : undefined });
+    } catch { setMsg("Network error."); setExecs(null); }
+  }
+  async function addExecs() {
+    const picked = execs?.list?.filter((e) => e.checked) ?? [];
+    if (!picked.length) return;
+    const rows = picked.map((e) => ({
+      account_id: accountId, name: e.name, title: e.title || null,
+      role_tag: e.suggested_role || null, notes: `Source: ${e.source_url}`,
+    }));
+    const { data, error } = await supabase.from("contacts").insert(rows).select("*");
+    if (error) { setMsg(error.message); return; }
+    setContacts((cs) => [...cs, ...((data ?? []) as Contact[])]);
+    setExecs(null);
   }
 
   // ---- activities ----
@@ -375,7 +404,47 @@ export default function Hub({ accountId, userId, entityId, ticker, initialStage,
           </div>
         );
       })}
-      {!cForm && <button className="btn" style={{ marginTop: 4 }} onClick={() => setCForm(emptyC)}>+ Add person</button>}
+      {!cForm && (
+        <div style={{ display: "flex", gap: 8, marginTop: 4, flexWrap: "wrap" }}>
+          <button className="btn" onClick={() => setCForm(emptyC)}>+ Add person</button>
+          <button onClick={findExecs} disabled={!!execs?.loading}
+            style={{ background: "#fff", border: "1.5px dashed #E6CF94", color: "#9A6700", borderRadius: 10, padding: "10px 16px", fontSize: 14, fontWeight: 700, cursor: "pointer" }}>
+            🔍 {execs?.loading ? "Searching the web… (~1 min)" : "Find executives"}
+          </button>
+        </div>
+      )}
+
+      {execs?.list && (
+        <div className="card" style={{ marginTop: 10, background: "#FAF6EE", borderColor: "#E6CF94" }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+            <span style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".6px", color: "#9A6700" }}>
+              Found {execs.list.length} — review before adding{execs.note ? ` · ${execs.note}` : ""}
+            </span>
+            <button onClick={() => setExecs(null)} style={{ background: "none", border: "none", color: "var(--red)", fontWeight: 800, cursor: "pointer", fontSize: 15, lineHeight: 1 }}>×</button>
+          </div>
+          {execs.list.map((e, i) => {
+            const role = e.suggested_role ? ROLES[e.suggested_role] : null;
+            return (
+              <label key={i} style={{ display: "flex", alignItems: "center", gap: 10, padding: "7px 0", borderBottom: "1px solid #F0E8D8", cursor: "pointer" }}>
+                <input type="checkbox" checked={e.checked} onChange={() => setExecs((x) => x && ({ ...x, list: x.list!.map((y, j) => (j === i ? { ...y, checked: !y.checked } : y)) }))} style={{ width: 17, height: 17 }} />
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontWeight: 700, fontSize: 13.5 }}>
+                    {e.name}
+                    {role && <span style={{ background: role.color, color: "#fff", fontSize: 9.5, fontWeight: 700, borderRadius: 4, padding: "1px 6px", marginLeft: 7, verticalAlign: "middle" }}>{role.label}</span>}
+                  </div>
+                  <div style={{ fontSize: 12, color: "var(--ink2)" }}>{e.title} · <a href={e.source_url} target="_blank" rel="noreferrer" onClick={(ev) => ev.stopPropagation()} style={{ color: "var(--blue)" }}>source ↗</a></div>
+                </div>
+              </label>
+            );
+          })}
+          <div style={{ display: "flex", gap: 8, alignItems: "center", marginTop: 10 }}>
+            <button className="btn" onClick={addExecs} disabled={!execs.list.some((e) => e.checked)}>
+              Add {execs.list.filter((e) => e.checked).length} to people
+            </button>
+            <span style={{ fontSize: 11, color: "var(--muted)" }}>Titles from public sources — verify before outreach.</span>
+          </div>
+        </div>
+      )}
 
       {cForm && (
         <div className="card" style={{ marginTop: 10 }}>
