@@ -10,7 +10,7 @@ const WEIGHTS: Record<(typeof DIMS)[number], number> = { size: 1.4, customers: 1
 // eia_* keys (EIA-861 ops) let munis/co-ops participate: size falls back to EIA
 // retail revenue, and customer count is a first-class similarity dimension.
 function feats(f: FactMap): Feats {
-  const rev = f.revenue ?? f.eia_revenue, assets = f.totalAssets, debt = f.totalDebt, cfo = f.operatingCashFlow, capex = f.capex, ni = f.netIncome;
+  const rev = f.revenue ?? f.eia_revenue ?? f.ferc_revenue, assets = f.totalAssets, debt = f.totalDebt, cfo = f.operatingCashFlow, capex = f.capex, ni = f.netIncome;
   const sizeBase = rev && rev > 0 ? rev : assets && assets > 0 ? assets : null;
   return {
     size: sizeBase ? Math.log10(sizeBase) : null,

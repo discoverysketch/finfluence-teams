@@ -14,6 +14,7 @@ const TABLE_METRICS: [string, string][] = [
   ["totalAssets", "Total assets"], ["totalEquity", "Total equity"], ["totalDebt", "Total debt"],
   ["operatingCashFlow", "Op. cash flow"], ["capex", "Capex"],
   ["eia_customers", "Customers (EIA)"], ["eia_revenue", "Retail revenue (EIA)"],
+  ["ferc_net_plant", "Net utility plant (FERC)"], ["ferc_cwip", "CWIP (FERC)"], ["ferc_om", "Electric O&M (FERC)"],
 ];
 const fmtCell = (k: string, v?: number) => (k === "eia_customers" ? fmtCount(v) : fmtM(v));
 const CHART_METRICS: [string, string][] = [
@@ -43,7 +44,7 @@ export default function Board() {
 
   // Scorable = enough SEC facts OR EIA ops (Tier B munis/co-ops score on
   // scale + customer base even without a single SEC figure).
-  const canScore = (i: Item) => Object.keys(i.facts).filter((k) => !k.startsWith("eia_")).length >= 3 || i.facts.eia_customers != null;
+  const canScore = (i: Item) => Object.keys(i.facts).filter((k) => !k.startsWith("eia_") && !k.startsWith("ferc_")).length >= 3 || i.facts.eia_customers != null || i.facts.ferc_net_plant != null;
   const scorable = useMemo(() => (items ?? []).filter(canScore), [items]);
   const unscored = useMemo(() => (items ?? []).filter((i) => !canScore(i)), [items]);
   const scored = useMemo(() => scoreTerritory(scorable.map((i) => ({ ...i, id: i.entityId })), weights), [scorable, weights]);

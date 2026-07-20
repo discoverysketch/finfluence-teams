@@ -35,7 +35,11 @@ function buildDuel(tName: string, tF: FactMap, pName: string, pF: FactMap): Q[] 
   cmp("Which converts more of its revenue into operating cash?", "cash", cash(tF), cash(pF), (a, b) => `${tName}: ${pct(a)} vs ${pName}: ${pct(b)} operating cash margin.`);
   cmp("Which delivers more energy?", "found", tF.eia_sales_mwh ?? null, pF.eia_sales_mwh ?? null, (a, b) => `${tName}: ${fmtTwh(a)} vs ${pName}: ${fmtTwh(b)} delivered (EIA-861).`);
   cmp("Which is investing more heavily (capex relative to revenue)?", "cash", capexInt(tF), capexInt(pF), (a, b) => `${tName}: ${pct(a)} vs ${pName}: ${pct(b)} of revenue reinvested as capex.`);
+  // Regulated-utility round (FERC Form 1) — the rate-base conversation.
+  cmp("Which operates a larger rate base (net utility plant)?", "ret", tF.ferc_net_plant ?? null, pF.ferc_net_plant ?? null, (a, b) => `${tName}: ${fmtM(a)} vs ${pName}: ${fmtM(b)} net utility plant (FERC Form 1) — what a regulated return is earned on.`);
+  cmp("Which has more construction work in progress?", "cash", tF.ferc_cwip ?? null, pF.ferc_cwip ?? null, (a, b) => `${tName}: ${fmtM(a)} vs ${pName}: ${fmtM(b)} CWIP (FERC Form 1) — tomorrow's rate base, mid-build.`);
   cmp("Which earns more retail revenue per customer?", "prof", rpc(tF), rpc(pF), (a, b) => `${tName}: $${Math.round(a).toLocaleString()} vs ${pName}: $${Math.round(b).toLocaleString()} per customer (EIA-861).`);
+  cmp("Which spends more on O&M (costs that earn no regulated return)?", "prof", tF.ferc_om ?? null, pF.ferc_om ?? null, (a, b) => `${tName}: ${fmtM(a)} vs ${pName}: ${fmtM(b)} electric O&M (FERC Form 1).`);
   cmp("Which earns more on its assets (return on assets)?", "prof", roa(tF), roa(pF), (a, b) => `${tName}: ${pct(a)} vs ${pName}: ${pct(b)} return on assets.`);
   return qs.slice(0, 5);
 }

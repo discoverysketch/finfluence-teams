@@ -20,11 +20,16 @@ export async function GET() {
   const rows = ((accts ?? []) as any[]).filter((a) => a.entity);
   const items = await Promise.all(rows.map(async (a) => {
     const res = await ensureEntityFacts(supabase, a.entity.id);
-    // Fold EIA ops into the fact map under eia_* keys so the Board can score
-    // Tier B accounts (no SEC data) and enrich Tier A ones.
+    // Fold EIA ops + FERC regulated financials into the fact map (eia_*/ferc_*
+    // keys) so the Board can score Tier B accounts and enrich Tier A ones.
     const facts: Record<string, number> = res.ok ? { ...res.facts } : {};
     if (res.ok && res.eia) {
       for (const [k, v] of Object.entries({ eia_customers: res.eia.facts.customers, eia_revenue: res.eia.facts.revenue, eia_sales_mwh: res.eia.facts.sales_mwh })) {
+        if (v != null && isFinite(v)) facts[k] = v;
+      }
+    }
+    if (res.ok && res.ferc) {
+      for (const [k, v] of Object.entries({ ferc_net_plant: res.ferc.facts.net_utility_plant, ferc_cwip: res.ferc.facts.cwip, ferc_om: res.ferc.facts.om_expense, ferc_revenue: res.ferc.facts.electric_revenue })) {
         if (v != null && isFinite(v)) facts[k] = v;
       }
     }

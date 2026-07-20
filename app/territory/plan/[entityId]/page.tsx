@@ -142,6 +142,28 @@ export default async function PlanPage({ params }: { params: Promise<{ entityId:
           </div>
         );
       })()}
+      {target.ok && target.ferc && (() => {
+        const f = target.ferc.facts;
+        const cell = (n: string, l: string) => (
+          <div key={l} style={{ border: "1px solid #F0EAE0", borderRadius: 8, padding: "7px 10px", textAlign: "center" }}>
+            <div style={{ fontSize: 15, fontWeight: 800 }}>{fmtM(Number(n))}</div>
+            <div style={{ fontSize: 10.5, color: "var(--ink2)", fontWeight: 600 }}>{l}</div>
+          </div>
+        );
+        return (
+          <div style={{ marginBottom: 12 }}>
+            <div style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".5px", color: "var(--muted)", marginBottom: 5 }}>
+              🏛️ Regulated financials · FERC Form 1 {target.ferc.period}{(f.respondents_count ?? 0) > 1 ? ` · across ${f.respondents_count} respondents` : ""}
+            </div>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 6 }}>
+              {f.net_utility_plant != null && cell(String(f.net_utility_plant), "net utility plant")}
+              {f.cwip != null && cell(String(f.cwip), "CWIP")}
+              {f.om_expense != null && cell(String(f.om_expense), "electric O&M")}
+              {f.electric_revenue != null && cell(String(f.electric_revenue), "electric revenue")}
+            </div>
+          </div>
+        );
+      })()}
       {target.ok && Object.keys(facts).length > 0 ? (
         <>
           <div style={{ fontSize: 12, color: "var(--muted)", fontWeight: 600, marginBottom: 6 }}>{period} · $ millions</div>

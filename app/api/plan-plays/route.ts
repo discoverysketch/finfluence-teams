@@ -29,6 +29,7 @@ export async function POST(request: Request) {
   const facts = await ensureEntityFacts(supabase, entityId);
   const factLines = facts.ok && Object.keys(facts.facts).length ? Object.entries(facts.facts).map(([k, v]) => `${k}=${v}`).join(", ") : "(no SEC financials)";
   const eiaLine = facts.ok && facts.eia ? `Utility operations (EIA-861 ${facts.eia.period}): ` + Object.entries(facts.eia.facts).map(([k, v]) => `${k}=${v}`).join(", ") : "";
+  const fercLine = facts.ok && facts.ferc ? `Regulated financials (FERC Form 1 ${facts.ferc.period}, USD millions): ` + Object.entries(facts.ferc.facts).map(([k, v]) => `${k}=${v}`).join(", ") : "";
   const profileNote = !facts.ok && (ent as any).profile_json ? `Profile: ${JSON.stringify((ent as any).profile_json).slice(0, 800)}` : "";
   const fmt = (f: any) => Object.entries(f || {}).map(([k, v]) => `${k}=${v}`).join(", ");
 
@@ -36,7 +37,7 @@ export async function POST(request: Request) {
     `Draft 3–4 concrete account plays for a B2B enterprise-software rep planning to sell to ${ent.canonical_name}, a US utility. ` +
     `Each play: a short title and 1–2 sentences of detail. Ground them in this account's real position; tie value to what a utility CFO cares about (capex efficiency, credit, returns, customer growth). ` +
     (weakConcepts?.length ? `The rep is still building fluency in ${weakConcepts.join(", ")}, so keep finance framing accessible and specific. ` : "") +
-    `Do not invent figures.\n\nAccount ($ millions): ${factLines}\n${eiaLine}\n${profileNote}\n` +
+    `Do not invent figures.\n\nAccount ($ millions): ${factLines}\n${eiaLine}\n${fercLine}\n${profileNote}\n` +
     (peerName ? `Closest peer ${peerName}: ${fmt(peerFacts)}` : "");
 
   try {
