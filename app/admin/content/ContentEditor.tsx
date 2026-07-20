@@ -156,6 +156,7 @@ export default function ContentEditor() {
         return;
       }
       if (!r.ok) { setMsg(j.error || "Generation failed."); return; }
+      if (j.note) setMsg(j.note);
       const raw = (j.cards ?? []) as any[];
       setDrafts(raw.map((c) => ({
         id: "", front: c.front || "", concept_tag: c.concept_tag || null, order: 0,
