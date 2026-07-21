@@ -7,7 +7,7 @@ let TICKERS: any = null;
 
 export type FiscalYear = { label: string; revenue?: number; operatingIncome?: number; netIncome?: number; operatingCashFlow?: number; capex?: number };
 export type Financials = {
-  company: string; cik: string; period: string;
+  company: string; cik: string; period: string; periodEnd?: string;
   revenue?: number; cogs?: number; operatingIncome?: number; netIncome?: number; interestExpense?: number;
   totalAssets?: number; totalLiabilities?: number; totalEquity?: number;
   cash?: number; currentAssets?: number; currentLiabilities?: number;
@@ -31,34 +31,58 @@ async function getCik(ticker: string) {
   return null;
 }
 
-// Fetch by ticker, or directly by a known 10-digit CIK + name (directory entities).
-export async function fetchFinancials(ticker: string): Promise<Financials | null>;
-export async function fetchFinancials(opts: { cik: string; title: string }): Promise<Financials | null>;
-export async function fetchFinancials(arg: string | { cik: string; title: string }): Promise<Financials | null> {
+async function loadFacts(arg: string | { cik: string; title: string }): Promise<{ facts: any; found: { cik: string; title: string } } | null> {
   let found: { cik: string; title: string } | null;
   if (typeof arg === "string") found = await getCik(arg.trim().toUpperCase());
   else found = arg?.cik ? { cik: String(arg.cik).padStart(10, "0"), title: arg.title } : null;
   if (!found) return null;
-
   const r = await fetch(`https://data.sec.gov/api/xbrl/companyfacts/CIK${found.cik}.json`, { headers: UA });
   if (!r.ok) return null;
-  const facts: any = await r.json();
+  return { facts: await r.json(), found };
+}
 
+// Fetch by ticker, or directly by a known 10-digit CIK + name (directory entities).
+export async function fetchFinancials(ticker: string): Promise<Financials | null>;
+export async function fetchFinancials(opts: { cik: string; title: string }): Promise<Financials | null>;
+export async function fetchFinancials(arg: string | { cik: string; title: string }): Promise<Financials | null> {
+  const loaded = await loadFacts(arg);
+  return loaded ? compute(loaded.facts, loaded.found) : null;
+}
+
+// Latest snapshot + the comparable snapshot ~a year earlier (for "what changed"
+// quarter-over-quarter diffs). One EDGAR fetch, two computations.
+export async function fetchWithPrior(arg: string | { cik: string; title: string }): Promise<{ current: Financials; prior: Financials | null } | null> {
+  const loaded = await loadFacts(arg);
+  if (!loaded) return null;
+  const current = compute(loaded.facts, loaded.found);
+  let prior: Financials | null = null;
+  if (current.periodEnd) {
+    const cutoff = new Date(+new Date(current.periodEnd) - 300 * 86400000).toISOString().slice(0, 10);
+    prior = compute(loaded.facts, loaded.found, cutoff);
+    if (prior.periodEnd === current.periodEnd) prior = null; // no earlier data
+  }
+  return { current, prior };
+}
+
+// beforeEnd: only consider rows ending on/before this date — yields the
+// snapshot as it stood back then (drives the prior side of the diff).
+function compute(facts: any, found: { cik: string; title: string }, beforeEnd?: string): Financials {
   const usd = (c: string) => facts.facts?.["us-gaap"]?.[c]?.units?.USD || null;
   const days = (s: string, e: string) => Math.round((+new Date(e) - +new Date(s)) / 86400000);
   const sortRows = (a: any, b: any) =>
     a.end < b.end ? 1 : a.end > b.end ? -1 : a.filed < b.filed ? 1 : a.filed > b.filed ? -1 : a._ci - b._ci;
 
+  const inWindow = (x: any) => !beforeEnd || x.end <= beforeEnd;
   const pickInstant = (concepts: string[]) => {
     const rows: any[] = [];
-    concepts.forEach((c, ci) => { const arr = usd(c); if (arr) for (const x of arr) if (x.form === "10-Q" || x.form === "10-K") rows.push({ ...x, _ci: ci }); });
+    concepts.forEach((c, ci) => { const arr = usd(c); if (arr) for (const x of arr) if ((x.form === "10-Q" || x.form === "10-K") && inWindow(x)) rows.push({ ...x, _ci: ci }); });
     if (!rows.length) return null;
     rows.sort(sortRows);
     return { val: rows[0].val, end: rows[0].end };
   };
   const pickDuration = (concepts: string[]) => {
     const all: any[] = [];
-    concepts.forEach((c, ci) => { const arr = usd(c); if (arr) for (const x of arr) if (x.start && x.end && (x.form === "10-Q" || x.form === "10-K")) all.push({ ...x, _ci: ci }); });
+    concepts.forEach((c, ci) => { const arr = usd(c); if (arr) for (const x of arr) if (x.start && x.end && (x.form === "10-Q" || x.form === "10-K") && inWindow(x)) all.push({ ...x, _ci: ci }); });
     if (!all.length) return null;
     const std = all.filter((x) => { const d = days(x.start, x.end); return (d >= 80 && d <= 100) || (d >= 350 && d <= 380); });
     const pool = std.length ? std : all;
@@ -69,7 +93,7 @@ export async function fetchFinancials(arg: string | { cik: string; title: string
   // Most recent FULL fiscal year (10-K, ~365-day duration) for flow items.
   const pickAnnual = (concepts: string[]) => {
     const all: any[] = [];
-    concepts.forEach((c, ci) => { const arr = usd(c); if (arr) for (const x of arr) if (x.start && x.end && x.form === "10-K") { const d = days(x.start, x.end); if (d >= 350 && d <= 380) all.push({ ...x, _ci: ci }); } });
+    concepts.forEach((c, ci) => { const arr = usd(c); if (arr) for (const x of arr) if (x.start && x.end && x.form === "10-K" && inWindow(x)) { const d = days(x.start, x.end); if (d >= 350 && d <= 380) all.push({ ...x, _ci: ci }); } });
     if (!all.length) return null;
     all.sort(sortRows);
     return { val: all[0].val, fy: all[0].fy };
@@ -122,7 +146,7 @@ export async function fetchFinancials(arg: string | { cik: string; title: string
   if (fy) Object.keys(fy).forEach((k) => (fy as any)[k] === undefined && k !== "label" && delete (fy as any)[k]);
 
   const data: any = {
-    company: found.title, cik: found.cik, period, fy,
+    company: found.title, cik: found.cik, period, periodEnd: anchor?.end, fy,
     revenue: M(rev?.val), cogs: M(cogs?.val), operatingIncome: M(opInc?.val), netIncome: M(ni?.val), interestExpense: M(intexp?.val),
     totalAssets: M(assets?.val), totalLiabilities: M(liab?.val), totalEquity: M(equity?.val),
     cash: M(cash?.val), currentAssets: M(ca?.val), currentLiabilities: M(cl?.val),

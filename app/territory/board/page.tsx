@@ -17,6 +17,7 @@ export default async function BoardPage() {
       <div className="seg" style={{ margin: "10px 0 12px" }}>
         <Link href="/territory">Book</Link>
         <Link href="/territory/board" className="on">Board</Link>
+        <Link href="/territory/map">Map</Link>
         <Link href="/territory/whitespace">Whitespace</Link>
       </div>
       <p style={{ color: "var(--ink2)", fontSize: 13, marginTop: 0 }}>

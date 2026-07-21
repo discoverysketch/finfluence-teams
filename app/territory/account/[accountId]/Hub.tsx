@@ -8,6 +8,7 @@ import { classifyFiling, SUGGESTED_MOVE } from "@/lib/signalTypes";
 import PrepBrief from "./PrepBrief";
 import DraftOutreach from "@/components/DraftOutreach";
 import CaptureNotes from "./CaptureNotes";
+import WhatChanged from "@/components/WhatChanged";
 
 export type Contact = { id: string; account_id: string; name: string; title: string | null; role_tag: string | null; email: string | null; phone: string | null; reports_to: string | null; notes: string | null };
 export type Activity = { id: string; account_id: string; contact_id: string | null; user_id: string | null; kind: string; body: string; due_at: string | null; done: boolean; created_at: string };
@@ -528,8 +529,9 @@ export default function Hub({ accountId, userId, entityId, ticker, initialStage,
                       <span style={{ fontSize: 11.5, color: "var(--muted)", fontWeight: 600, flexShrink: 0 }}>{fmtDue(ev.filed)}</span>
                     </div>
                     <div style={{ fontSize: 12, color: "var(--ink2)", marginTop: 2 }}>{SUGGESTED_MOVE[s.kind]}</div>
-                    <div style={{ marginTop: 4 }}>
+                    <div style={{ display: "flex", gap: 12, marginTop: 4, flexWrap: "wrap", alignItems: "center" }}>
                       <DraftOutreach accountId={accountId} trigger={{ kind: "filing", title: ev.label || s.label, detail: SUGGESTED_MOVE[s.kind], date: ev.filed }} />
+                      {s.kind === "earnings" && entityId && <WhatChanged entityId={entityId} />}
                     </div>
                   </div>
                 </div>

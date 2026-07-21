@@ -33,6 +33,7 @@ export default async function TerritoryPage() {
       <div className="seg" style={{ margin: "10px 0 16px" }}>
         <Link href="/territory" className="on">Book</Link>
         <Link href="/territory/board">Board</Link>
+        <Link href="/territory/map">Map</Link>
         <Link href="/territory/whitespace">Whitespace</Link>
       </div>
       <Territory listId={list?.id ?? ""} initial={(accts ?? []) as unknown as Account[]} />

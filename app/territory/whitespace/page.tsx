@@ -73,6 +73,7 @@ export default async function WhitespacePage() {
       <div className="seg" style={{ margin: "10px 0 12px" }}>
         <Link href="/territory">Book</Link>
         <Link href="/territory/board">Board</Link>
+        <Link href="/territory/map">Map</Link>
         <Link href="/territory/whitespace" className="on">Whitespace</Link>
       </div>
       <p style={{ color: "var(--ink2)", fontSize: 13, marginTop: 0 }}>

@@ -4,6 +4,7 @@ import Link from "next/link";
 import Shell from "@/components/Shell";
 import { classifyFiling, SUGGESTED_MOVE } from "@/lib/signalTypes";
 import DraftOutreach from "@/components/DraftOutreach";
+import WhatChanged from "@/components/WhatChanged";
 
 // Buying-signal feed (SPEC 7c): classified SEC events for the accounts in the
 // book — earnings, exec changes, M&A, financings — each with a suggested move.
@@ -70,6 +71,7 @@ export default async function SignalsPage() {
     rates: { label: "Rate case", icon: "⚖️", color: "#006B72" },
     ma: { label: "M&A", icon: "🤝", color: "#B23A2E" },
     grid: { label: "Grid", icon: "⚡", color: "#1B7A47" },
+    competitor: { label: "Competitor", icon: "🥊", color: "#6A3E8E" },
     other: { label: "Industry", icon: "📰", color: "#8A7E6E" },
   };
 
@@ -128,6 +130,7 @@ export default async function SignalsPage() {
                 {isEarnings && (
                   <Link href={`/challenge/pulse?entity=${ev.entity.id}`} style={{ fontSize: 12.5, fontWeight: 700, color: "var(--red)" }}>Take the pulse →</Link>
                 )}
+                {isEarnings && <WhatChanged entityId={ev.entity.id} />}
                 {hubId && <Link href={`/territory/account/${hubId}`} style={{ fontSize: 12.5, fontWeight: 700, color: "var(--blue)" }}>Open account →</Link>}
                 {hubId && <DraftOutreach accountId={hubId} trigger={{ kind: "filing", title: ev.label || sig.label, detail: SUGGESTED_MOVE[sig.kind], date: ev.filed }} />}
               </div>

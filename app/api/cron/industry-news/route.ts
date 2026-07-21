@@ -18,7 +18,7 @@ const NEWS_SCHEMA = {
         properties: {
           headline: { type: "string" },
           summary: { type: "string" },
-          category: { type: "string", enum: ["capital_projects", "data_centers", "regulatory", "rates", "ma", "grid", "other"] },
+          category: { type: "string", enum: ["capital_projects", "data_centers", "regulatory", "rates", "ma", "grid", "competitor", "other"] },
           source_url: { type: "string" },
           published: { type: "string" },
           companies: { type: "string" },
@@ -44,13 +44,13 @@ export async function GET(request: Request) {
     //    blowing the 300s function ceiling (observed: sweeps can run 5+ min).
     const research = await client.messages.create({
       model: "claude-sonnet-5", max_tokens: 9000,
-      tools: [{ type: "web_search_20260209", name: "web_search", max_uses: 2 } as any],
+      tools: [{ type: "web_search_20260209", name: "web_search", max_uses: 3 } as any],
       messages: [{
         role: "user",
         content:
           `Today is ${new Date().toISOString().slice(0, 10)}. Find 6-8 significant US utility & power industry news items published within the LAST 14 DAYS — skip anything older or undated unless it is clearly this week's news. Cover a MIX of: ` +
           "new capital projects / grid investments; data-center load-growth deals with utilities; regulatory & policy developments (FERC, EEI, state PUCs); utility M&A or large financings; and RATE CASES. " +
-          "STRICT search budget: run ONE broad query (e.g. 'utility industry news capital projects data centers FERC') for general items, then ONE follow-up query dedicated to rate cases (e.g. 'utility rate case filing PUC this month') — rate-case filings are the highest-value buying signal, always spend the second search on them. Do not run more searches. " +
+          "STRICT search budget of THREE queries: (1) ONE broad query (e.g. 'utility industry news capital projects data centers FERC') for general items; (2) ONE query dedicated to rate cases (e.g. 'utility rate case filing PUC this month') — the highest-value buying signal; (3) ONE query for enterprise-software competitor activity at utilities (e.g. 'utility SAP OR Workday ERP implementation selects') — competitor wins/selections at utilities are incumbent intelligence. Do not run more searches. " +
           "For each item: tight headline, 1-2 sentence factual summary, companies involved, approximate publish date, EXACT source URL from your results. " +
           "Only include items citable with a URL from your results.",
       }],
@@ -64,7 +64,7 @@ export async function GET(request: Request) {
       output_config: { format: { type: "json_schema", schema: NEWS_SCHEMA } } as any,
       system:
         "Turn the research notes into structured news items. ONLY items with a real source URL in the notes — drop the rest. " +
-        "category: capital_projects | data_centers | regulatory (FERC/EEI/policy) | rates (rate cases) | ma | grid (reliability/operations) | other. " +
+        "category: capital_projects | data_centers | regulatory (FERC/EEI/policy) | rates (rate cases) | ma | grid (reliability/operations) | competitor (enterprise-software vendor news at utilities: SAP, Workday, Microsoft, Infor, IFS selections/implementations) | other. " +
         "companies = comma-separated company/organization names mentioned (use common names, e.g. 'Duke Energy, Amazon'). published = YYYY-MM-DD if known else ''.",
       messages: [{ role: "user", content: `Research notes:\n\n${notes.slice(0, 20000)}` }],
     });

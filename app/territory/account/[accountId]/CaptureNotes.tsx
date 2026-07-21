@@ -1,5 +1,5 @@
 "use client";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 
 // Post-call capture: paste rough notes -> AI structures into a clean log entry
@@ -19,6 +19,34 @@ export default function CaptureNotes({ accountId, userId, onSaved, onStage }: {
   const [draft, setDraft] = useState<Draft | null>(null);
   const [applyStage, setApplyStage] = useState(true);
   const [err, setErr] = useState("");
+
+  // Voice dictation (browser SpeechRecognition — Chrome/Edge/Safari). Final
+  // phrases append to the raw notes; unsupported browsers just don't see the mic.
+  const [listening, setListening] = useState(false);
+  const recRef = useRef<any>(null); // eslint-disable-line @typescript-eslint/no-explicit-any
+  const [speechOk, setSpeechOk] = useState(false);
+  useEffect(() => {
+    const SR = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition; // eslint-disable-line @typescript-eslint/no-explicit-any
+    setSpeechOk(!!SR);
+    return () => { try { recRef.current?.stop(); } catch { /* noop */ } };
+  }, []);
+  function toggleMic() {
+    const SR = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition; // eslint-disable-line @typescript-eslint/no-explicit-any
+    if (!SR) return;
+    if (listening) { try { recRef.current?.stop(); } catch { /* noop */ } setListening(false); return; }
+    const rec = new SR();
+    rec.continuous = true; rec.interimResults = false; rec.lang = "en-US";
+    rec.onresult = (ev: any) => { // eslint-disable-line @typescript-eslint/no-explicit-any
+      let add = "";
+      for (let i = ev.resultIndex; i < ev.results.length; i++) if (ev.results[i].isFinal) add += ev.results[i][0].transcript + " ";
+      if (add) setRaw((r) => (r ? r.replace(/\s*$/, " ") : "") + add.trim() + " ");
+    };
+    rec.onend = () => setListening(false);
+    rec.onerror = () => setListening(false);
+    recRef.current = rec;
+    rec.start();
+    setListening(true);
+  }
 
   async function structure() {
     if (raw.trim().length < 10) return;
@@ -71,9 +99,18 @@ export default function CaptureNotes({ accountId, userId, onSaved, onStage }: {
           <textarea value={raw} onChange={(e) => setRaw(e.target.value)} rows={5}
             placeholder={"Dump your rough notes — shorthand is fine.\ne.g. met w dan h, close takes 12d mostly manual plant acctg, wants primavera-erp overview + capex refs by fri, bring closson next time"}
             style={{ width: "100%", border: "1px solid #E2D8EE", borderRadius: 8, padding: 10, fontSize: 13.5, fontFamily: "inherit", background: "#fff" }} />
-          <button className="btn" style={{ marginTop: 8 }} disabled={busy || raw.trim().length < 10} onClick={structure}>
-            {busy ? "Structuring…" : "Structure my notes"}
-          </button>
+          <div style={{ display: "flex", gap: 8, marginTop: 8, alignItems: "center" }}>
+            <button className="btn" disabled={busy || raw.trim().length < 10} onClick={structure}>
+              {busy ? "Structuring…" : "Structure my notes"}
+            </button>
+            {speechOk && (
+              <button type="button" onClick={toggleMic}
+                style={{ border: listening ? "2px solid var(--red)" : "1px solid #DCCDEB", background: listening ? "#FDEEEC" : "#fff", color: listening ? "var(--red)" : "#6A3E8E", borderRadius: 10, padding: "9px 14px", fontSize: 13.5, fontWeight: 700, cursor: "pointer" }}>
+                {listening ? "⏹ Stop dictating" : "🎙️ Dictate"}
+              </button>
+            )}
+            {listening && <span style={{ fontSize: 12, color: "var(--red)", fontWeight: 700 }}>listening…</span>}
+          </div>
           {err && <p style={{ color: "var(--red)", fontSize: 13, margin: "8px 0 0" }}>{err}</p>}
         </>
       ) : (
