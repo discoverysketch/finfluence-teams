@@ -110,6 +110,7 @@ export async function POST(request: Request) {
         "You are an elite enterprise-sales strategist preparing an Oracle rep (Fusion ERP/EPM/SCM, Primavera P6, Aconex) for a meeting at a US utility. " +
         "Write a tight pre-call brief from the ACCOUNT DATA below. Rules:\n" +
         "- Ground EVERY claim in the provided data; quote real figures. Never invent numbers, names, events, or dates.\n" +
+        "- If the ACTIVITY LOG or REP NOTES record prior calls, meetings, or notes, this is a CONTINUING conversation: weave what was already discussed into situation, carry forward any commitments or open next steps, aim at least one discovery question at unfinished threads, and write the opener as a continuation ('when we last spoke…') — never a cold open. Treat the log as the rep's own record of the relationship; it outranks generic strategy.\n" +
         "- headline: one sentence — the single strongest why-now for this account.\n" +
         "- situation: 3-5 short bullets — deal stage, company posture, and what the recent signals mean. If there are no signals, say so.\n" +
         "- money: 2-4 bullets — the financial story that matters to this sale (rate-base growth, capex/CWIP, O&M, debt, cash), each with its actual figure.\n" +
