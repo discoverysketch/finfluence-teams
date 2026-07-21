@@ -56,7 +56,10 @@ export async function POST(request: Request) {
   if (delta.length < 3) return NextResponse.json({ error: "Not enough overlapping figures to compare periods." }, { status: 422 });
 
   const curLabel = current.period.replace(" · SEC EDGAR", "");
-  const prevLabel = prior.period.replace(" · SEC EDGAR", "");
+  // EDGAR quirk: year-ago comparatives ride inside the NEW filing and carry its
+  // fiscal labels — when labels collide, name the prior period by its end date.
+  let prevLabel = prior.period.replace(" · SEC EDGAR", "");
+  if (prevLabel === curLabel) prevLabel = `year-ago (to ${prior.periodEnd ?? "prior period"})`;
   const table = delta.map((d) => `${d.label}: ${fmtM(d.prev)} -> ${fmtM(d.cur)}${d.chg != null ? ` (${d.chg >= 0 ? "+" : ""}${d.chg}%)` : ""}`).join("\n");
 
   const client = new Anthropic();
