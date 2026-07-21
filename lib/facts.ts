@@ -27,8 +27,10 @@ async function getSource(supabase: SupabaseClient, entityId: string, source: "ei
   const { data } = await supabase.from("entity_facts")
     .select("fact_key, value, period, source_url, fetched_at").eq("entity_id", entityId).eq("source", source);
   if (!data?.length) return null;
+  // FERC rows now include multi-year history — label the block with the latest period.
+  const period = data.reduce((m: string, f: any) => (String(f.period) > m ? String(f.period) : m), String(data[0].period));
   return {
-    period: data[0].period, source_url: data[0].source_url, asOf: data[0].fetched_at,
+    period, source_url: data[0].source_url, asOf: data[0].fetched_at,
     facts: Object.fromEntries(data.map((f: any) => [f.fact_key, Number(f.value)])),
   };
 }

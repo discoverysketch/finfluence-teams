@@ -172,6 +172,31 @@ export default async function PlanPage({ params }: { params: Promise<{ entityId:
               {f.om_expense != null && cell(String(f.om_expense), "electric O&M")}
               {f.electric_revenue != null && cell(String(f.electric_revenue), "electric revenue")}
             </div>
+            {(() => {
+              // 5-year rate-base trend (print-safe inline SVG, like the price sparkline).
+              const hist = Object.keys(f).filter((k) => /^net_utility_plant_\d{4}$/.test(k))
+                .map((k) => ({ y: k.slice(-4), v: f[k] })).sort((a, b) => a.y.localeCompare(b.y));
+              if (hist.length < 3) return null;
+              const cagr = (Math.pow(hist[hist.length - 1].v / hist[0].v, 1 / (hist.length - 1)) - 1) * 100;
+              const W = 640, H = 64, P = 6;
+              const vals = hist.map((h) => h.v);
+              const min = Math.min(...vals), max = Math.max(...vals);
+              const x = (i: number) => P + (i / (hist.length - 1)) * (W - 2 * P);
+              const y = (v: number) => (max === min ? H / 2 : P + (1 - (v - min) / (max - min)) * (H - 2 * P));
+              const d = hist.map((h, i) => `${i ? "L" : "M"}${x(i).toFixed(1)},${y(h.v).toFixed(1)}`).join(" ");
+              return (
+                <div style={{ marginTop: 8 }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
+                    <span style={{ fontSize: 10.5, fontWeight: 700, color: "var(--ink2)" }}>Rate-base trend {hist[0].y}–{hist[hist.length - 1].y} · {fmtM(hist[0].v)} → {fmtM(hist[hist.length - 1].v)}</span>
+                    <span style={{ fontSize: 12, fontWeight: 800, color: cagr >= 0 ? "#1B7A47" : "var(--red)" }}>{cagr >= 0 ? "+" : ""}{cagr.toFixed(1)}%/yr</span>
+                  </div>
+                  <svg viewBox={`0 0 ${W} ${H}`} style={{ width: "100%", height: "auto", display: "block" }} role="img" aria-label="5-year rate-base trend">
+                    <path d={d} fill="none" stroke="#006B72" strokeWidth={2.5} />
+                    {hist.map((h, i) => <circle key={h.y} cx={x(i)} cy={y(h.v)} r={3} fill="#006B72" />)}
+                  </svg>
+                </div>
+              );
+            })()}
           </div>
         );
       })()}

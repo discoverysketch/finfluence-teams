@@ -33,17 +33,23 @@ console.log(`latest report year: ${YEAR}`);
 const fercName = new Map();
 for (const a of assn) if (a.utility_name_ferc1) fercName.set(Number(a.utility_id_ferc1), String(a.utility_name_ferc1));
 
-// per-respondent figures ($ -> $M)
+// per-respondent figures ($ -> $M), per report year — latest year feeds the
+// headline facts; the 5-year window feeds trend history.
+const YEARS = []; for (let y = YEAR - 4; y <= YEAR; y++) YEARS.push(y);
 const M = (v) => Number(v) / 1e6;
-const fig = new Map(); // id -> { net_plant, cwip, om, revenue }
-const get = (id) => { const f = fig.get(id) ?? {}; fig.set(id, f); return f; };
+const figs = new Map(); // year -> Map(id -> { net_plant, cwip, om, revenue })
+const getY = (y, id) => {
+  let m = figs.get(y); if (!m) { m = new Map(); figs.set(y, m); }
+  const f = m.get(id) ?? {}; m.set(id, f); return f;
+};
 
 for (const r of plant) {
-  if (Number(r.report_year) !== YEAR || r.utility_type !== "total") continue;
+  const y = Number(r.report_year);
+  if (!YEARS.includes(y) || r.utility_type !== "total") continue;
   const id = Number(r.utility_id_ferc1), v = Number(r.ending_balance);
   if (!isFinite(v)) continue;
-  if (r.utility_plant_asset_type === "utility_plant_net") get(id).net_plant = M(v);
-  if (r.utility_plant_asset_type === "construction_work_in_progress") get(id).cwip = M(v);
+  if (r.utility_plant_asset_type === "utility_plant_net") getY(y, id).net_plant = M(v);
+  if (r.utility_plant_asset_type === "construction_work_in_progress") getY(y, id).cwip = M(v);
 }
 // discover the O&M total key (naming drifted across PUDL versions)
 const omCandidates = ["operations_and_maintenance_expenses_electric", "operation_and_maintenance_expenses_electric", "total_operation_and_maintenance_expense"];
@@ -51,15 +57,18 @@ const exTypes = new Set(expenses.filter((r) => Number(r.report_year) === YEAR).m
 const omKey = omCandidates.find((k) => exTypes.has(k));
 console.log("O&M key:", omKey ?? `NOT FOUND — candidates near: ${[...exTypes].filter((t) => /maintenance_expenses|_expenses_electric$/.test(t)).slice(0, 6).join(" | ")}`);
 if (omKey) for (const r of expenses) {
-  if (Number(r.report_year) !== YEAR || String(r.expense_type) !== omKey) continue;
+  const y = Number(r.report_year);
+  if (!YEARS.includes(y) || String(r.expense_type) !== omKey) continue;
   const v = Number(r.dollar_value);
-  if (isFinite(v)) get(Number(r.utility_id_ferc1)).om = M(v);
+  if (isFinite(v)) getY(y, Number(r.utility_id_ferc1)).om = M(v);
 }
 for (const r of revenues) {
-  if (Number(r.report_year) !== YEAR || String(r.revenue_type) !== "sales_of_electricity") continue;
+  const y = Number(r.report_year);
+  if (!YEARS.includes(y) || String(r.revenue_type) !== "sales_of_electricity") continue;
   const v = Number(r.dollar_value);
-  if (isFinite(v)) get(Number(r.utility_id_ferc1)).revenue = M(v);
+  if (isFinite(v)) getY(y, Number(r.utility_id_ferc1)).revenue = M(v);
 }
+const fig = figs.get(YEAR) ?? new Map(); // latest year drives matching + headline facts
 const withData = [...fig.entries()].filter(([, f]) => f.net_plant != null || f.om != null);
 console.log(`respondents with ${YEAR} data: ${withData.length}`);
 
@@ -136,6 +145,26 @@ for (const ent of ents ?? []) {
   push("om_expense", sum.om, has.om);
   push("electric_revenue", sum.revenue, has.revenue);
   push("respondents_count", sum.n, sum.n > 1);
+
+  // 5-year history for trends, as year-suffixed keys. Honesty guard: skip a
+  // year unless every respondent that reports net plant TODAY reported it then
+  // too — partial old years would render as fake dips in the trendline.
+  const curCnt = ids.filter((id) => (fig.get(id) ?? {}).net_plant != null).length;
+  for (const y of YEARS) {
+    const m = figs.get(y); if (!m) continue;
+    const cnt = ids.filter((id) => (m.get(id) ?? {}).net_plant != null).length;
+    if (cnt < curCnt || cnt === 0) continue;
+    const s = { net_plant: 0, cwip: 0, revenue: 0 };
+    const h = { net_plant: false, cwip: false, revenue: false };
+    for (const id of ids) {
+      const f = m.get(id) ?? {};
+      for (const k of Object.keys(s)) if (f[k] != null) { s[k] += f[k]; h[k] = true; }
+    }
+    const pushY = (base, v, ok) => { if (ok && isFinite(v) && v !== 0) factRows.push({ entity_id: ent.id, source: "ferc", fact_key: `${base}_${y}`, period: String(y), value: Math.round(v * 10) / 10, unit: "USD_millions", source_url: SRC_URL }); };
+    pushY("net_utility_plant", s.net_plant, h.net_plant);
+    pushY("cwip", s.cwip, h.cwip);
+    pushY("electric_revenue", s.revenue, h.revenue);
+  }
 }
 console.log(`matched ${matched} directory entities · ${factRows.length} facts`);
 
@@ -156,7 +185,11 @@ for (const q of ["Duke Energy", "AMERICAN ELECTRIC", "UNITIL", "EXELON", "NEXTER
   const hit = pairs.find(([e]) => e.canonical_name.toUpperCase().includes(q.toUpperCase()));
   if (hit) {
     const [ent, rids, s] = hit;
-    console.log(`  ✓ ${ent.canonical_name.slice(0, 32).padEnd(32)} ${String(rids.length).padStart(2)} resp · net plant $${(s.net_plant / 1000).toFixed(1)}B · O&M $${(s.om / 1000).toFixed(1)}B · elec rev $${(s.revenue / 1000).toFixed(1)}B`);
+    const trend = YEARS.map((y) => {
+      const row = factRows.find((r) => r.entity_id === ent.id && r.fact_key === `net_utility_plant_${y}`);
+      return row ? `${y}:$${(row.value / 1000).toFixed(1)}B` : `${y}:—`;
+    }).join(" ");
+    console.log(`  ✓ ${ent.canonical_name.slice(0, 32).padEnd(32)} ${String(rids.length).padStart(2)} resp · net plant $${(s.net_plant / 1000).toFixed(1)}B · O&M $${(s.om / 1000).toFixed(1)}B · elec rev $${(s.revenue / 1000).toFixed(1)}B\n      trend ${trend}`);
   } else console.log(`  ✗ ${q} — not matched`);
 }
 console.log(`\nDone. ${matched} entities carry FERC Form 1 ${YEAR} data.`);

@@ -42,6 +42,11 @@ type FinState = { loading?: boolean; error?: string; period?: string; source_url
 // plant (the rate-base proxy a utility CFO earns a return on), CWIP, O&M.
 function FercBlock({ ferc }: { ferc: EiaOps }) {
   const f = ferc.facts;
+  // 5-year rate-base trend from year-suffixed history keys (load-ferc.mjs).
+  const hist = Object.keys(f).filter((k) => /^net_utility_plant_\d{4}$/.test(k))
+    .map((k) => ({ y: k.slice(-4), rateBase: f[k] }))
+    .sort((a, b) => a.y.localeCompare(b.y));
+  const cagr = hist.length >= 3 ? (Math.pow(hist[hist.length - 1].rateBase / hist[0].rateBase, 1 / (hist.length - 1)) - 1) * 100 : null;
   const Cell = ({ n, l }: { n: string; l: string }) => (
     <div style={{ border: "1px solid #F0EAE0", borderRadius: 8, padding: "8px 10px" }}>
       <div style={{ fontSize: 16, fontWeight: 800, letterSpacing: "-.01em" }}>{n}</div>
@@ -59,8 +64,24 @@ function FercBlock({ ferc }: { ferc: EiaOps }) {
         {f.om_expense != null && <Cell n={fmtM(f.om_expense)} l="electric O&M expense" />}
         {f.electric_revenue != null && <Cell n={fmtM(f.electric_revenue)} l="electric operating revenue" />}
       </div>
+      {hist.length >= 3 && (
+        <div style={{ marginTop: 10 }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
+            <span style={{ fontSize: 11, fontWeight: 700, color: "var(--ink2)" }}>Rate-base trend · {hist[0].y}–{hist[hist.length - 1].y}</span>
+            {cagr != null && <span style={{ fontSize: 12.5, fontWeight: 800, color: cagr >= 0 ? "#1B7A47" : "var(--red)" }}>{cagr >= 0 ? "+" : ""}{cagr.toFixed(1)}%/yr</span>}
+          </div>
+          <ResponsiveContainer width="100%" height={90}>
+            <LineChart data={hist} margin={{ top: 6, right: 6, left: 0, bottom: 0 }}>
+              <XAxis dataKey="y" tick={{ fontSize: 9 }} />
+              <YAxis tick={{ fontSize: 9 }} width={46} domain={["auto", "auto"]} tickFormatter={(v) => fmtM(v as number)} />
+              <Tooltip formatter={(v) => [fmtM(v as number), "Net utility plant"]} labelStyle={{ fontSize: 11 }} contentStyle={{ fontSize: 12 }} />
+              <Line type="monotone" dataKey="rateBase" stroke="#006B72" strokeWidth={2} dot={{ r: 2.5 }} />
+            </LineChart>
+          </ResponsiveContainer>
+        </div>
+      )}
       <div style={{ fontSize: 11, color: "var(--muted)", marginTop: 6 }}>
-        What the CFO earns a regulated return on · <a href={ferc.source_url.split(" ")[0]} target="_blank" rel="noreferrer" style={{ color: "var(--blue)", fontWeight: 700 }}>PUDL / FERC ↗</a>
+        What the CFO earns a regulated return on{cagr != null ? ` — growing ${cagr >= 0 ? "+" : ""}${cagr.toFixed(1)}%/yr` : ""} · <a href={ferc.source_url.split(" ")[0]} target="_blank" rel="noreferrer" style={{ color: "var(--blue)", fontWeight: 700 }}>PUDL / FERC ↗</a>
       </div>
     </div>
   );
