@@ -1,5 +1,6 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { createClient } from "@/lib/supabase/server";
+import { withRetry, friendlyAiError } from "@/lib/aiRetry";
 import { NextResponse } from "next/server";
 
 // Post-call capture: rough pasted notes -> a clean activity entry + extracted
@@ -46,7 +47,8 @@ export async function POST(request: Request) {
 
   const client = new Anthropic();
   try {
-    const stream = client.messages.stream({
+    const final = await withRetry(async () => {
+      const stream = client.messages.stream({
       model: "claude-opus-4-8", max_tokens: 2500,
       thinking: { type: "adaptive" } as any,
       output_config: { format: { type: "json_schema", schema: SCHEMA } } as any,
@@ -57,13 +59,13 @@ export async function POST(request: Request) {
         "- tasks: each concrete follow-up or commitment as its own task (imperative, specific, include who/what). due_days = working guess at days from now (7 if unstated). No invented tasks.\n" +
         "- stage_suggestion: ONLY if the notes clearly indicate the deal moved (e.g. demo scheduled -> evaluation, verbal yes -> negotiation); otherwise empty string. stage_reason: one short sentence, or empty.\n" +
         (contacts?.length ? `Known people at the account: ${contacts.map((c: any) => c.name).join(", ")}. Match name spellings to these when clearly the same person.\n` : ""),
-      messages: [{ role: "user", content: `RAW NOTES:\n${String(raw).slice(0, 6000)}` }],
+        messages: [{ role: "user", content: `RAW NOTES:\n${String(raw).slice(0, 6000)}` }],
+      });
+      return stream.finalMessage();
     });
-    const final = await stream.finalMessage();
     const text = final.content.filter((b) => b.type === "text").map((b) => (b as any).text).join("");
     return NextResponse.json({ draft: JSON.parse(text) });
   } catch (e) {
-    const msg = e instanceof Anthropic.APIError ? `${e.status}: ${e.message}` : (e as Error).message;
-    return NextResponse.json({ error: `Couldn't structure the notes — ${msg}` }, { status: 502 });
+    return NextResponse.json({ error: `Couldn't structure the notes — ${friendlyAiError(e)}` }, { status: 502 });
   }
 }

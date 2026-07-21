@@ -2,6 +2,7 @@ import Anthropic from "@anthropic-ai/sdk";
 import { createClient } from "@/lib/supabase/server";
 import { ensureEntityFacts, fercRateBaseCagr } from "@/lib/facts";
 import { loadKnowledge } from "@/lib/knowledge";
+import { withRetry, friendlyAiError } from "@/lib/aiRetry";
 import { NextResponse } from "next/server";
 
 // Signal-to-outreach: turn a signal (8-K, rate case, news mention) into a short,
@@ -65,7 +66,8 @@ export async function POST(request: Request) {
 
   const client = new Anthropic();
   try {
-    const stream = client.messages.stream({
+    const final = await withRetry(async () => {
+      const stream = client.messages.stream({
       model: "claude-opus-4-8", max_tokens: 2500,
       thinking: { type: "adaptive" } as any,
       output_config: { format: { type: "json_schema", schema: SCHEMA } } as any,
@@ -78,9 +80,10 @@ export async function POST(request: Request) {
         "- Address the recipient by first name if provided, else no salutation name. Sign off exactly with: [Your name].\n" +
         "- subject: under 9 words, specific, no clickbait.\n\n" +
         `PRODUCT KNOWLEDGE BASE (for optional reference):\n${kb.slice(0, 8000) || "(none)"}`,
-      messages: [{ role: "user", content: L.join("\n\n") }],
+        messages: [{ role: "user", content: L.join("\n\n") }],
+      });
+      return stream.finalMessage();
     });
-    const final = await stream.finalMessage();
     const text = final.content.filter((b) => b.type === "text").map((b) => (b as any).text).join("");
     const draft = JSON.parse(text);
     return NextResponse.json({
@@ -88,7 +91,6 @@ export async function POST(request: Request) {
       recipient: recipient ? { name: recipient.name, title: recipient.title, email: recipient.email || null } : null,
     });
   } catch (e) {
-    const msg = e instanceof Anthropic.APIError ? `${e.status}: ${e.message}` : (e as Error).message;
-    return NextResponse.json({ error: `Draft failed — ${msg}` }, { status: 502 });
+    return NextResponse.json({ error: `Draft failed — ${friendlyAiError(e)}` }, { status: 502 });
   }
 }

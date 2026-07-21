@@ -3,6 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import { ensureEntityFacts, fercRateBaseCagr } from "@/lib/facts";
 import { loadKnowledge } from "@/lib/knowledge";
 import { classifyFiling } from "@/lib/signalTypes";
+import { withRetry, friendlyAiError } from "@/lib/aiRetry";
 import { NextResponse } from "next/server";
 
 // Pre-call brief: one page synthesized from everything the app already knows
@@ -102,7 +103,8 @@ export async function POST(request: Request) {
 
   const client = new Anthropic();
   try {
-    const stream = client.messages.stream({
+    const final = await withRetry(async () => {
+      const stream = client.messages.stream({
       model: "claude-opus-4-8", max_tokens: 3500,
       thinking: { type: "adaptive" } as any,
       output_config: { format: { type: "json_schema", schema: SCHEMA } } as any,
@@ -120,14 +122,14 @@ export async function POST(request: Request) {
         "- proof: ONE customer story from the PRODUCT KNOWLEDGE BASE that best fits this account's situation, with its source if given; empty string if none fits. Never invent a story.\n" +
         "Plain, confident sentences. No fluff, no hedging boilerplate.\n\n" +
         `PRODUCT KNOWLEDGE BASE:\n${kb.slice(0, 14000) || "(none loaded)"}`,
-      messages: [{ role: "user", content: `ACCOUNT DATA:\n\n${L.join("\n\n")}` }],
+        messages: [{ role: "user", content: `ACCOUNT DATA:\n\n${L.join("\n\n")}` }],
+      });
+      return stream.finalMessage();
     });
-    const final = await stream.finalMessage();
     if (final.stop_reason === "max_tokens") return NextResponse.json({ error: "Brief ran long — try again." }, { status: 502 });
     const text = final.content.filter((b) => b.type === "text").map((b) => (b as any).text).join("");
     return NextResponse.json({ brief: JSON.parse(text), generatedAt: new Date().toISOString() });
   } catch (e) {
-    const msg = e instanceof Anthropic.APIError ? `${e.status}: ${e.message}` : (e as Error).message;
-    return NextResponse.json({ error: `Brief generation failed — ${msg}` }, { status: 502 });
+    return NextResponse.json({ error: `Brief generation failed — ${friendlyAiError(e)}` }, { status: 502 });
   }
 }
