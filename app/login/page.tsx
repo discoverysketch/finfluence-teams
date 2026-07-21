@@ -32,7 +32,7 @@ export default function LoginPage() {
     } else setSent(true);
   }
 
-  // The same email carries a 6-digit code — handy when the email is on a
+  // The same email carries a one-time code — handy when the email is on a
   // different device than this browser (phone inbox, laptop sign-in).
   async function verifyCode(e: React.FormEvent) {
     e.preventDefault();
@@ -63,15 +63,15 @@ export default function LoginPage() {
       <div className="card" style={{ marginTop: 16 }}>
         {sent ? (
           <form onSubmit={verifyCode}>
-            <p style={{ marginTop: 0 }}>Check your email — click the sign-in link, <b>or</b> enter the 6-digit code from it here:</p>
+            <p style={{ marginTop: 0 }}>Check your email — click the sign-in link, <b>or</b> enter the code from it here:</p>
             <input
               inputMode="numeric"
               autoComplete="one-time-code"
-              maxLength={6}
+              maxLength={10}
               value={code}
               onChange={(e) => setCode(e.target.value.replace(/\D/g, ""))}
-              placeholder="123456"
-              style={{ marginBottom: 12, textAlign: "center", fontSize: 22, letterSpacing: "8px", fontWeight: 700 }}
+              placeholder="12345678"
+              style={{ marginBottom: 12, textAlign: "center", fontSize: 22, letterSpacing: "5px", fontWeight: 700 }}
             />
             <button className="btn" disabled={verifying || code.trim().length < 6} style={{ width: "100%" }}>
               {verifying ? "Checking…" : "Sign in with code"}
