@@ -527,19 +527,23 @@ export default function Hub({ accountId, userId, entityId, ticker, initialStage,
                 </div>
               );
             })}
-            {sig.news.map((n, i) => (
-              <div key={n.id} style={{ display: "flex", gap: 10, padding: "9px 0", borderBottom: i === sig.news.length - 1 ? "none" : "1px solid #F0EAE0", alignItems: "flex-start" }}>
-                <span style={{ fontSize: 18, lineHeight: 1.2 }}>📰</span>
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ display: "flex", justifyContent: "space-between", gap: 8, alignItems: "baseline" }}>
-                    <a href={n.source_url} target="_blank" rel="noreferrer" style={{ fontSize: 13.5, fontWeight: 700, color: "inherit" }}>{n.headline}</a>
-                    {n.published && <span style={{ fontSize: 11.5, color: "var(--muted)", fontWeight: 600, flexShrink: 0 }}>{fmtDue(n.published)}</span>}
+            {sig.news.map((n, i) => {
+              const isRate = n.category === "rates";
+              return (
+                <div key={n.id} style={{ display: "flex", gap: 10, padding: "9px 0", borderBottom: i === sig.news.length - 1 ? "none" : "1px solid #F0EAE0", alignItems: "flex-start" }}>
+                  <span style={{ fontSize: 18, lineHeight: 1.2 }}>{isRate ? "⚖️" : "📰"}</span>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", gap: 8, alignItems: "baseline" }}>
+                      <a href={n.source_url} target="_blank" rel="noreferrer" style={{ fontSize: 13.5, fontWeight: 700, color: "inherit" }}>{n.headline}</a>
+                      {n.published && <span style={{ fontSize: 11.5, color: "var(--muted)", fontWeight: 600, flexShrink: 0 }}>{fmtDue(n.published)}</span>}
+                    </div>
+                    {n.summary && <div style={{ fontSize: 12, color: "var(--ink2)", marginTop: 2 }}>{n.summary}</div>}
+                    {isRate && <div style={{ fontSize: 12, color: "var(--ink2)", marginTop: 3 }}><b style={{ color: "#006B72" }}>Rate case in play</b> — capital program under regulatory scrutiny; efficiency-story timing is now.</div>}
+                    <span style={{ background: isRate ? "#006B72" : "var(--gold)", color: "#fff", fontSize: 9.5, fontWeight: 700, borderRadius: 4, padding: "1px 6px", display: "inline-block", marginTop: 4 }}>{isRate ? "⚖️ rate case · this account" : "★ mentions this account"}</span>
                   </div>
-                  {n.summary && <div style={{ fontSize: 12, color: "var(--ink2)", marginTop: 2 }}>{n.summary}</div>}
-                  <span style={{ background: "var(--gold)", color: "#fff", fontSize: 9.5, fontWeight: 700, borderRadius: 4, padding: "1px 6px", display: "inline-block", marginTop: 4 }}>★ mentions this account</span>
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         </>
       )}

@@ -6,6 +6,7 @@ import Shell from "@/components/Shell";
 import Finn from "@/components/Finn";
 import NotificationsCard from "@/components/NotificationsCard";
 import MyTasks, { type Task } from "@/components/MyTasks";
+import GettingStarted, { type OnboardStep } from "@/components/GettingStarted";
 import { leagueStandings } from "@/lib/league";
 import { conceptScores, CONCEPTS, type Ev } from "@/lib/acumen";
 import { FileBarChart, Trophy, Zap, Target, BookOpenCheck, Map, Building2, LayoutDashboard, PenLine, Users } from "lucide-react";
@@ -39,12 +40,13 @@ export default async function Home() {
 
   // --- gather the day (parallel) ---
   const twoWeeksAgo = new Date(Date.now() - 14 * 24 * 3600 * 1000).toISOString().slice(0, 10);
-  const [{ data: openTasks }, { data: acctRows }, { data: myEvents }, { data: prog }, standings] = await Promise.all([
+  const [{ data: openTasks }, { data: acctRows }, { data: myEvents }, { data: prog }, standings, { count: pushCount }] = await Promise.all([
     supabase.from("activities").select("id, body, due_at, account_id").eq("kind", "task").eq("done", false).order("due_at", { ascending: true, nullsFirst: false }).limit(8),
     supabase.from("accounts").select("id, entity:entities(id, canonical_name, ticker)"),
-    supabase.from("score_events").select("concept_tag, correct").eq("user_id", user.id),
+    supabase.from("score_events").select("concept_tag, correct, source_mode").eq("user_id", user.id),
     supabase.from("progress").select("card_id").eq("status", "mastered").eq("user_id", user.id),
     leagueStandings(createAdminClient(), profile.tenant_id),
+    supabase.from("push_subscriptions").select("id", { count: "exact", head: true }).eq("user_id", user.id),
   ]);
 
   const acctName: Record<string, string> = {}; const acctEntity: Record<string, string> = {};
@@ -79,6 +81,16 @@ export default async function Home() {
   const hour = new Date().getHours();
   const greet = hour < 12 ? "Good morning" : hour < 17 ? "Good afternoon" : "Good evening";
 
+  // First-run checklist — every step derived from data that already exists.
+  const evs = (myEvents ?? []) as any[];
+  const onboardSteps: OnboardStep[] = [
+    { key: "book", label: "Get accounts in the book", desc: "Add the utilities you sell to — CSV, paste, or research", href: "/territory", done: (acctRows ?? []).length > 0 },
+    { key: "cards", label: "Master your first 3 cards", desc: "Swipe through the Path — real utility finance, fast", href: "/learn", done: (prog ?? []).length >= 3 },
+    { key: "challenge", label: "Earn your first Challenge points", desc: "Quiz on a real company from your book", href: "/challenge", done: evs.length > 0 },
+    { key: "cfo", label: "Meet a CFO in the Simulator", desc: "Practice the conversation before the real one", href: "/territory/cfo", done: evs.some((e) => e.source_mode === "cfo_sim") },
+    { key: "alerts", label: "Turn on filing alerts", desc: "Get pinged when an account files a 10-K/10-Q", href: "/#alerts", done: (pushCount ?? 0) > 0 },
+  ];
+
   return (
     <Shell active="home" isAdmin={isAdmin}>
       <div style={{ display: "flex", alignItems: "center", gap: 12, marginTop: 4 }}>
@@ -88,6 +100,8 @@ export default async function Home() {
           <div style={{ fontSize: 12.5, color: "var(--ink2)" }}>{user.email} · {profile.role}</div>
         </div>
       </div>
+
+      <GettingStarted steps={onboardSteps} />
 
       <MyTasks initial={tasks} />
 
@@ -166,7 +180,7 @@ export default async function Home() {
         {isAdmin && <Link href="/admin/team" className="btn btn-i" style={{ background: "var(--purple)", padding: "9px 14px", fontSize: 13 }}><Users size={15} strokeWidth={2.2} /> Roster</Link>}
       </p>
 
-      <NotificationsCard userId={user.id} />
+      <div id="alerts"><NotificationsCard userId={user.id} /></div>
 
       <form action="/auth/signout" method="post" style={{ marginTop: 24 }}>
         <button className="btn" style={{ background: "none", color: "var(--ink2)", border: "1px solid var(--border)", fontSize: 13, padding: "9px 16px" }}>

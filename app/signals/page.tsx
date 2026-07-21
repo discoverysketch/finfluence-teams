@@ -53,6 +53,10 @@ export default async function SignalsPage() {
     const hay = `${n.headline} ${n.companies || ""}`.toLowerCase();
     return bookNames.some((b) => hay.includes(b));
   };
+  // Rate cases naming a book account are account signals, not industry chatter —
+  // promote them into "Your accounts" (and out of the industry list).
+  const rateCases = freshNews.filter((n) => n.category === "rates" && mentionsBook(n));
+  const industryNews = freshNews.filter((n) => !rateCases.includes(n));
 
   const CAT: Record<string, { label: string; icon: string; color: string }> = {
     capital_projects: { label: "Capital projects", icon: "🏗️", color: "#9A6700" },
@@ -72,7 +76,29 @@ export default async function SignalsPage() {
       </p>
 
       <div className="sigttl">📁 Your accounts</div>
-      {(events ?? []).length === 0 && (
+      {rateCases.map((n: any) => {
+        let domain = "";
+        try { domain = new URL(n.source_url).hostname.replace(/^www\./, ""); } catch { /* keep empty */ }
+        return (
+          <div key={n.id} className="card" style={{ display: "flex", gap: 12, marginBottom: 8, padding: "13px 14px", outline: "2px solid var(--gold)" }}>
+            <div style={{ fontSize: 22, lineHeight: 1 }}>⚖️</div>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <a href={n.source_url} target="_blank" rel="noreferrer" style={{ fontWeight: 700, fontSize: 14, color: "inherit" }}>{n.headline}</a>
+              <div style={{ fontSize: 12.5, color: "var(--ink2)", marginTop: 3 }}>{n.summary}</div>
+              <div style={{ fontSize: 12.5, color: "var(--ink2)", marginTop: 5 }}>
+                <b style={{ color: "#006B72" }}>Rate case in play</b> — the capital program is under regulatory scrutiny; the O&amp;M-efficiency and capital-controls story lands best right now.
+              </div>
+              <div style={{ display: "flex", gap: 6, alignItems: "center", marginTop: 7, flexWrap: "wrap" }}>
+                <span style={{ background: "#006B72", color: "#fff", fontSize: 10, fontWeight: 700, borderRadius: 4, padding: "2px 7px" }}>Rate case</span>
+                <span style={{ background: "var(--gold)", color: "#fff", fontSize: 10, fontWeight: 700, borderRadius: 4, padding: "2px 7px" }}>★ your account</span>
+                {n.published && <span style={{ fontSize: 11, color: "var(--muted)", fontWeight: 600 }}>{fmtDay(n.published)}</span>}
+                {domain && <span style={{ fontSize: 11, color: "var(--muted)" }}>{domain}</span>}
+              </div>
+            </div>
+          </div>
+        );
+      })}
+      {(events ?? []).length === 0 && rateCases.length === 0 && (
         <div className="card" style={{ background: "#FAF6EE", borderColor: "#E6CF94", color: "#7A5B12", fontSize: 13.5 }}>
           Nothing in the last 60 days from your accounts. The watcher checks daily — enable notifications on the <Link href="/">Me page</Link> to get pinged when something lands.
         </div>
@@ -104,12 +130,12 @@ export default async function SignalsPage() {
       })}
 
       <div className="sigttl" style={{ marginTop: 26 }}>🏭 Across the industry</div>
-      {freshNews.length === 0 && (
+      {industryNews.length === 0 && (
         <div className="card" style={{ fontSize: 13, color: "var(--ink2)" }}>
           The industry sweep runs daily — capital projects, data-center deals, regulatory moves. First items appear after the next run.
         </div>
       )}
-      {freshNews.map((n: any) => {
+      {industryNews.map((n: any) => {
         const cat = CAT[n.category] ?? CAT.other;
         const hot = mentionsBook(n);
         let domain = "";

@@ -49,8 +49,8 @@ export async function GET(request: Request) {
         role: "user",
         content:
           `Today is ${new Date().toISOString().slice(0, 10)}. Find 6-8 significant US utility & power industry news items published within the LAST 14 DAYS — skip anything older or undated unless it is clearly this week's news. Cover a MIX of: ` +
-          "new capital projects / grid investments; data-center load-growth deals with utilities; regulatory & policy developments (FERC, EEI, state PUCs, rate cases); utility M&A or large financings. " +
-          "STRICT search budget: run ONE broad query (e.g. 'utility industry news capital projects data centers FERC') and work from its result list; at most one follow-up. Do not run more searches. " +
+          "new capital projects / grid investments; data-center load-growth deals with utilities; regulatory & policy developments (FERC, EEI, state PUCs); utility M&A or large financings; and RATE CASES. " +
+          "STRICT search budget: run ONE broad query (e.g. 'utility industry news capital projects data centers FERC') for general items, then ONE follow-up query dedicated to rate cases (e.g. 'utility rate case filing PUC this month') — rate-case filings are the highest-value buying signal, always spend the second search on them. Do not run more searches. " +
           "For each item: tight headline, 1-2 sentence factual summary, companies involved, approximate publish date, EXACT source URL from your results. " +
           "Only include items citable with a URL from your results.",
       }],
