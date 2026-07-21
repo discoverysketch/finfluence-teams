@@ -203,10 +203,10 @@ export default function Hub({ accountId, userId, entityId, ticker, initialStage,
       if (!entityId) { setSig({ events: [], news: [] }); return; }
       const since = new Date(Date.now() - 90 * 24 * 3600 * 1000).toISOString().slice(0, 10);
       const [{ data: events }, { data: news }, { data: ent }] = await Promise.all([
-        supabase.from("filing_events").select("id, form, filed, items, label")
+        supabase.from("filing_events").select("id, form, filed, items, label, accession")
           .eq("entity_id", entityId).gte("filed", since).order("filed", { ascending: false }).limit(5),
         supabase.from("news_items").select("*").order("created_at", { ascending: false }).limit(30),
-        supabase.from("entities").select("canonical_name, ticker").eq("id", entityId).maybeSingle(),
+        supabase.from("entities").select("canonical_name, ticker, cik").eq("id", entityId).maybeSingle(),
       ]);
       if (!live) return;
       const words = String(ent?.canonical_name || "").toLowerCase().replace(/[^a-z0-9 ]/g, " ").split(/\s+/)
@@ -220,7 +220,7 @@ export default function Hub({ accountId, userId, entityId, ticker, initialStage,
         const hay = `${n.headline} ${n.companies || ""} ${n.summary || ""}`.toLowerCase();
         return keys.some((k) => hay.includes(k));
       }).slice(0, 3);
-      setSig({ events: events ?? [], news: mentions });
+      setSig({ events: (events ?? []).map((e) => ({ ...e, cik: ent?.cik ?? null })), news: mentions });
     })();
     return () => { live = false; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -545,7 +545,9 @@ export default function Hub({ accountId, userId, entityId, ticker, initialStage,
                   <span style={{ fontSize: 18, lineHeight: 1.2 }}>{s.icon}</span>
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <div style={{ display: "flex", justifyContent: "space-between", gap: 8, alignItems: "baseline" }}>
-                      <span style={{ fontSize: 13.5, fontWeight: 700 }}>{ev.label || s.label}</span>
+                      {ev.accession && ev.cik
+                        ? <a href={`https://www.sec.gov/Archives/edgar/data/${Number(ev.cik)}/${String(ev.accession).replace(/-/g, "")}/`} target="_blank" rel="noreferrer" style={{ fontSize: 13.5, fontWeight: 700, color: "inherit" }}>{ev.label || s.label} <span style={{ color: "var(--blue)", fontSize: 12 }}>↗</span></a>
+                        : <span style={{ fontSize: 13.5, fontWeight: 700 }}>{ev.label || s.label}</span>}
                       <span style={{ fontSize: 11.5, color: "var(--muted)", fontWeight: 600, flexShrink: 0 }}>{fmtDue(ev.filed)}</span>
                     </div>
                     <div style={{ fontSize: 12, color: "var(--ink2)", marginTop: 2 }}>{SUGGESTED_MOVE[s.kind]}</div>

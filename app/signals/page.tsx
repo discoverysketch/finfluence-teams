@@ -30,7 +30,7 @@ export default async function SignalsPage() {
   const [{ data: events }, { data: news }, { data: bookEnts }] = await Promise.all([
     entityIds.length
       ? supabase.from("filing_events")
-          .select("id, form, filed, items, label, entity:entities(id, canonical_name, ticker)")
+          .select("id, form, filed, items, label, accession, entity:entities(id, canonical_name, ticker, cik)")
           .in("entity_id", entityIds).gte("filed", since)
           .order("filed", { ascending: false }).limit(50)
       : Promise.resolve({ data: [] as any[] }),
@@ -116,6 +116,9 @@ export default async function SignalsPage() {
         const sig = classifyFiling(ev.form, ev.items) ?? { kind: "earnings" as const, label: ev.label || `${ev.form} filed`, icon: "📄" };
         const isEarnings = sig.kind === "earnings";
         const hubId = acctOf[ev.entity.id];
+        const filingUrl = ev.accession && ev.entity.cik
+          ? `https://www.sec.gov/Archives/edgar/data/${Number(ev.entity.cik)}/${String(ev.accession).replace(/-/g, "")}/`
+          : null;
         return (
           <div key={ev.id} className="card" style={{ display: "flex", gap: 12, marginBottom: 8, padding: "13px 14px" }}>
             <div style={{ fontSize: 22, lineHeight: 1 }}>{sig.icon}</div>
@@ -124,7 +127,11 @@ export default async function SignalsPage() {
                 <span style={{ fontWeight: 700, fontSize: 14 }}>{ev.entity.canonical_name}{ev.entity.ticker ? <span style={{ color: "var(--muted)", fontWeight: 600 }}> · {ev.entity.ticker}</span> : null}</span>
                 <span style={{ fontSize: 11.5, color: "var(--muted)", fontWeight: 600, flexShrink: 0 }}>{fmtDay(ev.filed)}</span>
               </div>
-              <div style={{ fontSize: 13.5, fontWeight: 600, marginTop: 1 }}>{ev.label || sig.label}</div>
+              <div style={{ fontSize: 13.5, fontWeight: 600, marginTop: 1 }}>
+                {filingUrl
+                  ? <a href={filingUrl} target="_blank" rel="noreferrer" style={{ color: "inherit" }}>{ev.label || sig.label} <span style={{ color: "var(--blue)", fontSize: 12 }}>↗</span></a>
+                  : (ev.label || sig.label)}
+              </div>
               <div style={{ fontSize: 12.5, color: "var(--ink2)", marginTop: 3 }}>{SUGGESTED_MOVE[sig.kind]}</div>
               <div style={{ display: "flex", gap: 10, marginTop: 7, flexWrap: "wrap", alignItems: "center" }}>
                 {isEarnings && (
