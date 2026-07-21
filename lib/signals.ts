@@ -2,16 +2,16 @@ import type { FactMap } from "@/lib/facts";
 
 // Signal-based account tiering from current SEC facts (SPEC §7c, v1 — richer
 // growth/rate-case/M&A signals need time-series + FERC ingestion, later).
-export type SignalKey = "scale" | "customers" | "capex" | "cwip" | "headroom" | "profit";
+export type SignalKey = "scale" | "customers" | "capex" | "cwip" | "growth" | "headroom" | "profit";
 export type SignalWeights = Record<SignalKey, number>;
-export const DEFAULT_WEIGHTS: SignalWeights = { scale: 1, customers: 1, capex: 1.2, cwip: 1.1, headroom: 0.8, profit: 0.8 };
+export const DEFAULT_WEIGHTS: SignalWeights = { scale: 1, customers: 1, capex: 1.2, cwip: 1.1, growth: 1.2, headroom: 0.8, profit: 0.8 };
 export const SIGNAL_LABEL: Record<SignalKey, string> = {
-  scale: "Scale", customers: "Customer base", capex: "Capex program", cwip: "Construction pipeline", headroom: "Balance-sheet headroom", profit: "Margins",
+  scale: "Scale", customers: "Customer base", capex: "Capex program", cwip: "Construction pipeline", growth: "Rate-base growth", headroom: "Balance-sheet headroom", profit: "Margins",
 };
 export const SIGNAL_WHY: Record<SignalKey, string> = {
-  scale: "large scale", customers: "large customer base", capex: "heavy capex program", cwip: "big construction pipeline", headroom: "balance-sheet headroom", profit: "strong margins",
+  scale: "large scale", customers: "large customer base", capex: "heavy capex program", cwip: "big construction pipeline", growth: "fast-growing rate base", headroom: "balance-sheet headroom", profit: "strong margins",
 };
-const DIMS: SignalKey[] = ["scale", "customers", "capex", "cwip", "headroom", "profit"];
+const DIMS: SignalKey[] = ["scale", "customers", "capex", "cwip", "growth", "headroom", "profit"];
 
 export type RawSignals = Record<SignalKey, number | null>;
 // FactMap may carry eia_* (EIA-861 ops) and ferc_* (FERC Form 1) keys alongside
@@ -25,6 +25,7 @@ export function rawSignals(f: FactMap): RawSignals {
     customers: f.eia_customers && f.eia_customers > 0 ? Math.log10(f.eia_customers) : null,
     capex: capex != null && rev ? Math.abs(capex) / rev : null,
     cwip: f.ferc_cwip != null && f.ferc_net_plant ? f.ferc_cwip / f.ferc_net_plant : null,
+    growth: f.ferc_rate_base_cagr ?? null,
     headroom: debt != null && assets ? 1 - debt / assets : null,
     profit: opInc != null && rev ? opInc / rev : ni != null && assets ? ni / assets : null,
   };

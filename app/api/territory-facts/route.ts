@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
-import { ensureEntityFacts } from "@/lib/facts";
+import { ensureEntityFacts, fercRateBaseCagr } from "@/lib/facts";
 
 // Facts for every account in the tenant's book (fetch-or-cache each). Bounded by
 // book size; cached for 7 days so repeat loads are fast. Feeds Territory Board.
@@ -32,6 +32,8 @@ export async function GET() {
       for (const [k, v] of Object.entries({ ferc_net_plant: res.ferc.facts.net_utility_plant, ferc_cwip: res.ferc.facts.cwip, ferc_om: res.ferc.facts.om_expense, ferc_revenue: res.ferc.facts.electric_revenue })) {
         if (v != null && isFinite(v)) facts[k] = v;
       }
+      const g = fercRateBaseCagr(res.ferc.facts);
+      if (g != null) facts.ferc_rate_base_cagr = g;
     }
     return {
       accountId: a.id, entityId: a.entity.id, name: a.entity.canonical_name, ticker: a.entity.ticker,

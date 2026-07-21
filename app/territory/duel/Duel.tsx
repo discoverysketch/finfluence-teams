@@ -38,6 +38,7 @@ function buildDuel(tName: string, tF: FactMap, pName: string, pF: FactMap): Q[] 
   // Regulated-utility round (FERC Form 1) — the rate-base conversation.
   cmp("Which operates a larger rate base (net utility plant)?", "ret", tF.ferc_net_plant ?? null, pF.ferc_net_plant ?? null, (a, b) => `${tName}: ${fmtM(a)} vs ${pName}: ${fmtM(b)} net utility plant (FERC Form 1) — what a regulated return is earned on.`);
   cmp("Which has more construction work in progress?", "cash", tF.ferc_cwip ?? null, pF.ferc_cwip ?? null, (a, b) => `${tName}: ${fmtM(a)} vs ${pName}: ${fmtM(b)} CWIP (FERC Form 1) — tomorrow's rate base, mid-build.`);
+  cmp("Whose rate base is growing faster?", "ret", tF.ferc_rate_base_cagr ?? null, pF.ferc_rate_base_cagr ?? null, (a, b) => `${tName}: ${a >= 0 ? "+" : ""}${(a * 100).toFixed(1)}%/yr vs ${pName}: ${b >= 0 ? "+" : ""}${(b * 100).toFixed(1)}%/yr rate-base growth (FERC Form 1, 5y) — faster growth means a bigger capital program to fund and control.`);
   cmp("Which earns more retail revenue per customer?", "prof", rpc(tF), rpc(pF), (a, b) => `${tName}: $${Math.round(a).toLocaleString()} vs ${pName}: $${Math.round(b).toLocaleString()} per customer (EIA-861).`);
   cmp("Which spends more on O&M (costs that earn no regulated return)?", "prof", tF.ferc_om ?? null, pF.ferc_om ?? null, (a, b) => `${tName}: ${fmtM(a)} vs ${pName}: ${fmtM(b)} electric O&M (FERC Form 1).`);
   cmp("Which earns more on its assets (return on assets)?", "prof", roa(tF), roa(pF), (a, b) => `${tName}: ${pct(a)} vs ${pName}: ${pct(b)} return on assets.`);

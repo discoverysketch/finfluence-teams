@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
-import { ensureEntityFacts, type FactMap } from "@/lib/facts";
+import { ensureEntityFacts, fercRateBaseCagr, type FactMap } from "@/lib/facts";
 import { rankPeers } from "@/lib/lookalike";
 
 // Suggest peers for one account: ensure its facts, pool every entity that already
@@ -23,15 +23,28 @@ export async function GET(request: Request) {
   if (target.eia) for (const [k, v] of Object.entries({ eia_customers: target.eia.facts.customers, eia_revenue: target.eia.facts.revenue, eia_sales_mwh: target.eia.facts.sales_mwh })) {
     if (v != null && isFinite(v)) targetFacts[k] = v;
   }
-  if (target.ferc) for (const [k, v] of Object.entries({ ferc_net_plant: target.ferc.facts.net_utility_plant, ferc_cwip: target.ferc.facts.cwip, ferc_om: target.ferc.facts.om_expense, ferc_revenue: target.ferc.facts.electric_revenue })) {
-    if (v != null && isFinite(v)) targetFacts[k] = v;
+  if (target.ferc) {
+    for (const [k, v] of Object.entries({ ferc_net_plant: target.ferc.facts.net_utility_plant, ferc_cwip: target.ferc.facts.cwip, ferc_om: target.ferc.facts.om_expense, ferc_revenue: target.ferc.facts.electric_revenue })) {
+      if (v != null && isFinite(v)) targetFacts[k] = v;
+    }
+    const g = fercRateBaseCagr(target.ferc.facts);
+    if (g != null) targetFacts.ferc_rate_base_cagr = g;
   }
 
-  // Pool: all readable cached SEC + EIA facts (RLS scopes to shared + own).
-  const { data: fr } = await supabase.from("entity_facts")
-    .select("entity_id, fact_key, value, period, source").in("source", ["sec", "eia", "ferc"]);
+  // Pool: all readable cached SEC + EIA + FERC facts (RLS scopes to shared + own).
+  // Paginated: the default 1000-row select cap silently truncates at this scale
+  // (FERC history alone is ~1k rows) — the same trap that once bit the loaders.
+  const fr: any[] = [];
+  for (let from = 0; ; from += 1000) {
+    const { data } = await supabase.from("entity_facts")
+      .select("entity_id, fact_key, value, period, source").in("source", ["sec", "eia", "ferc"])
+      .range(from, from + 999);
+    fr.push(...(data ?? []));
+    if (!data || data.length < 1000) break;
+  }
   const byEntity: Record<string, { facts: FactMap; period: string }> = {};
-  for (const row of (fr ?? []) as any[]) {
+  const fercHist: Record<string, FactMap> = {};
+  for (const row of fr as any[]) {
     if (row.entity_id === entityId) continue;
     if (String(row.fact_key).startsWith("fy_")) continue;
     const e = (byEntity[row.entity_id] ??= { facts: {}, period: row.period });
@@ -41,10 +54,15 @@ export async function GET(request: Request) {
       const map: Record<string, string> = { net_utility_plant: "ferc_net_plant", cwip: "ferc_cwip", om_expense: "ferc_om", electric_revenue: "ferc_revenue" };
       const k = map[row.fact_key];
       if (k) e.facts[k] = Number(row.value);
+      else if (/^net_utility_plant_\d{4}$/.test(String(row.fact_key))) (fercHist[row.entity_id] ??= {})[row.fact_key] = Number(row.value);
     } else {
       e.facts[row.fact_key] = Number(row.value);
       e.period = row.period;
     }
+  }
+  for (const [id, hist] of Object.entries(fercHist)) {
+    const g = fercRateBaseCagr(hist);
+    if (g != null && byEntity[id]) byEntity[id].facts.ferc_rate_base_cagr = g;
   }
   const ids = Object.keys(byEntity).filter((id) => Object.keys(byEntity[id].facts).length >= 3);
   if (!ids.length) {

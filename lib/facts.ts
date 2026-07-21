@@ -14,6 +14,16 @@ const METRICS: (keyof Financials)[] = [
 ];
 
 export type FactMap = Record<string, number>;
+
+// 5-year rate-base CAGR from year-suffixed FERC history keys (loaded by
+// seed/load-ferc.mjs). Null unless >=3 clean years — partial histories are
+// already filtered at load time.
+export function fercRateBaseCagr(f: FactMap): number | null {
+  const ys = Object.keys(f).filter((k) => /^net_utility_plant_\d{4}$/.test(k)).sort();
+  if (ys.length < 3) return null;
+  const a = f[ys[0]], b = f[ys[ys.length - 1]];
+  return a > 0 && b > 0 ? Math.pow(b / a, 1 / (ys.length - 1)) - 1 : null;
+}
 // EIA-861 utility operations (customers, MWh, revenue by class) — loaded by
 // seed/load-eia.mjs for matched entities; present for munis/co-ops (Tier B) and
 // many SEC utilities alike.

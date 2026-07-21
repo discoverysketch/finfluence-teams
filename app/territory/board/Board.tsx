@@ -15,8 +15,12 @@ const TABLE_METRICS: [string, string][] = [
   ["operatingCashFlow", "Op. cash flow"], ["capex", "Capex"],
   ["eia_customers", "Customers (EIA)"], ["eia_revenue", "Retail revenue (EIA)"],
   ["ferc_net_plant", "Net utility plant (FERC)"], ["ferc_cwip", "CWIP (FERC)"], ["ferc_om", "Electric O&M (FERC)"],
+  ["ferc_rate_base_cagr", "Rate-base growth (FERC · 5y)"],
 ];
-const fmtCell = (k: string, v?: number) => (k === "eia_customers" ? fmtCount(v) : fmtM(v));
+const fmtCell = (k: string, v?: number) =>
+  k === "eia_customers" ? fmtCount(v)
+  : k === "ferc_rate_base_cagr" ? (v == null ? "—" : `${v >= 0 ? "+" : ""}${(v * 100).toFixed(1)}%/yr`)
+  : fmtM(v);
 const CHART_METRICS: [string, string][] = [
   ["revenue", "Revenue"], ["totalAssets", "Total assets"], ["totalDebt", "Total debt"],
   ["operatingCashFlow", "Op. cash flow"], ["netIncome", "Net income"],
