@@ -87,7 +87,7 @@ export default async function WhitespacePage() {
               {r.sim}% like <b>{entOf[r.likeId]?.canonical_name ?? "your book"}</b>{r.e.hq_state ? ` · ${r.e.hq_state}` : ""}
             </div>
           </div>
-          <AddToBook listId={list!.id} entityId={r.id} />
+          <AddToBook listId={list!.id} entityId={r.id} userId={user.id} />
         </div>
       ))}
       <p style={{ fontSize: 11, color: "var(--muted)", marginTop: 12 }}>Candidates come from the cached fact universe — it grows as your team views financials and as the peer cache is warmed.</p>

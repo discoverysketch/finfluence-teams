@@ -4,7 +4,7 @@ import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from 
 import { scoreTerritory, whyLine, DEFAULT_WEIGHTS, SIGNAL_LABEL, type SignalKey, type SignalWeights } from "@/lib/signals";
 import type { FactMap } from "@/lib/facts";
 
-type Item = { accountId: string; entityId: string; name: string; ticker: string | null; tier: string | null; facts: FactMap; period: string | null; error: string | null };
+type Item = { accountId: string; entityId: string; name: string; ticker: string | null; tier: string | null; mine?: boolean; facts: FactMap; period: string | null; error: string | null };
 
 const TIER_COLOR: Record<string, string> = { A: "#1B7A47", B: "#0572CE", C: "#9A6700" };
 const fmtM = (v?: number) => (v == null ? "—" : `${v < 0 ? "-" : ""}$${Math.abs(v) >= 1000 ? (Math.abs(v) / 1000).toFixed(1) + "B" : Math.round(Math.abs(v)) + "M"}`);
@@ -30,6 +30,7 @@ const BARS = ["#B23A2E", "#0572CE", "#9A6700", "#1B7A47"];
 export default function Board() {
   const [items, setItems] = useState<Item[] | null>(null);
   const [loading, setLoading] = useState(true);
+  const [scope, setScope] = useState<"all" | "mine">("all");
   const [weights, setWeights] = useState<SignalWeights>(DEFAULT_WEIGHTS);
   const [sel, setSel] = useState<string[]>([]);
   const [chartKey, setChartKey] = useState("revenue");
@@ -49,8 +50,9 @@ export default function Board() {
   // Scorable = enough SEC facts OR EIA ops (Tier B munis/co-ops score on
   // scale + customer base even without a single SEC figure).
   const canScore = (i: Item) => Object.keys(i.facts).filter((k) => !k.startsWith("eia_") && !k.startsWith("ferc_")).length >= 3 || i.facts.eia_customers != null || i.facts.ferc_net_plant != null;
-  const scorable = useMemo(() => (items ?? []).filter(canScore), [items]);
-  const unscored = useMemo(() => (items ?? []).filter((i) => !canScore(i)), [items]);
+  const inScope = useMemo(() => (items ?? []).filter((i) => scope === "all" || i.mine), [items, scope]);
+  const scorable = useMemo(() => inScope.filter(canScore), [inScope]);
+  const unscored = useMemo(() => inScope.filter((i) => !canScore(i)), [inScope]);
   const scored = useMemo(() => scoreTerritory(scorable.map((i) => ({ ...i, id: i.entityId })), weights), [scorable, weights]);
 
   const selItems = scored.filter((s) => sel.includes(s.entityId));
@@ -80,7 +82,13 @@ export default function Board() {
   return (
     <div>
       {/* ---- Signal tiering ---- */}
-      <div className="secttl">Signal tiers</div>
+      <div className="secttl" style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+        <span>Signal tiers</span>
+        <span style={{ display: "inline-flex", gap: 4 }}>
+          <button className="mini" onClick={() => setScope("all")} style={{ fontWeight: 700, background: scope === "all" ? "var(--cream2)" : "#fff", textTransform: "none", letterSpacing: 0 }}>All</button>
+          <button className="mini" onClick={() => setScope("mine")} style={{ fontWeight: 700, background: scope === "mine" ? "var(--cream2)" : "#fff", textTransform: "none", letterSpacing: 0 }}>Mine</button>
+        </span>
+      </div>
       <div className="card" style={{ padding: "10px 12px", marginBottom: 10 }}>
         <div style={{ fontSize: 11, fontWeight: 700, color: "var(--muted)", textTransform: "uppercase", letterSpacing: ".6px", marginBottom: 8 }}>Weights — drag to re-tier</div>
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px 16px" }}>

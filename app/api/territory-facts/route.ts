@@ -14,7 +14,7 @@ export async function GET() {
   const { data: list } = await supabase.from("account_lists")
     .select("id").eq("tenant_id", me?.tenant_id ?? "").order("created_at").limit(1).maybeSingle();
   const { data: accts } = await supabase.from("accounts")
-    .select("id, entity:entities(id,canonical_name,ticker,data_tier)")
+    .select("id, owner, entity:entities(id,canonical_name,ticker,data_tier)")
     .eq("list_id", list?.id ?? "00000000-0000-0000-0000-000000000000");
 
   const rows = ((accts ?? []) as any[]).filter((a) => a.entity);
@@ -37,7 +37,7 @@ export async function GET() {
     }
     return {
       accountId: a.id, entityId: a.entity.id, name: a.entity.canonical_name, ticker: a.entity.ticker,
-      tier: a.entity.data_tier as string | null,
+      tier: a.entity.data_tier as string | null, mine: a.owner === user.id,
       facts, period: res.ok ? res.period : null, error: res.ok ? null : res.error,
     };
   }));

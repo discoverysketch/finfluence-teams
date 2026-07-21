@@ -16,7 +16,7 @@ export default async function AccountPage({ params }: { params: Promise<{ accoun
 
   // RLS scopes this to the caller's tenant.
   const { data: acct } = await supabase.from("accounts")
-    .select("id, rep_notes, crm_stage, entity:entities(id, canonical_name, ticker, data_tier, hq_state)")
+    .select("id, rep_notes, crm_stage, owner, entity:entities(id, canonical_name, ticker, data_tier, hq_state)")
     .eq("id", accountId).maybeSingle();
   if (!acct) {
     return (
@@ -58,6 +58,7 @@ export default async function AccountPage({ params }: { params: Promise<{ accoun
         ticker={ent?.ticker ?? null}
         initialStage={acct.crm_stage}
         initialNotes={acct.rep_notes}
+        initialOwner={(acct as any).owner ?? null}
         initialContacts={(contacts ?? []) as Contact[]}
         initialActivities={(activities ?? []) as Activity[]}
         emailOf={emailOf}

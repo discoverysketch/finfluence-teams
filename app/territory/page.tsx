@@ -23,9 +23,14 @@ export default async function TerritoryPage() {
     list = created ?? null;
   }
 
-  const { data: accts } = await supabase.from("accounts")
-    .select("id, rep_notes, crm_stage, entity:entities(id,canonical_name,ticker,data_tier,entity_type,hq_state)")
-    .eq("list_id", list?.id ?? "00000000-0000-0000-0000-000000000000");
+  const [{ data: accts }, { data: members }] = await Promise.all([
+    supabase.from("accounts")
+      .select("id, rep_notes, crm_stage, owner, entity:entities(id,canonical_name,ticker,data_tier,entity_type,hq_state)")
+      .eq("list_id", list?.id ?? "00000000-0000-0000-0000-000000000000"),
+    supabase.from("users").select("id, email"),
+  ]);
+  const emailOf: Record<string, string> = {};
+  for (const m of (members ?? []) as { id: string; email: string }[]) emailOf[m.id] = m.email;
 
   return (
     <Shell active="accounts" isAdmin={isAdmin}>
@@ -36,7 +41,7 @@ export default async function TerritoryPage() {
         <Link href="/territory/map">Map</Link>
         <Link href="/territory/whitespace">Whitespace</Link>
       </div>
-      <Territory listId={list?.id ?? ""} initial={(accts ?? []) as unknown as Account[]} />
+      <Territory listId={list?.id ?? ""} userId={user.id} emailOf={emailOf} initial={(accts ?? []) as unknown as Account[]} />
     </Shell>
   );
 }

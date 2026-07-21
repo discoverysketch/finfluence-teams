@@ -9,7 +9,7 @@ import { createClient } from "@/lib/supabase/client";
 // research) lives behind one "+ Add accounts" panel. Everything about a single
 // account (financials, plan, people, remove) lives in its Account Hub.
 type Ent = { id: string; canonical_name: string; ticker: string | null; data_tier: string | null; entity_type: string | null; hq_state: string | null };
-export type Account = { id: string; rep_notes: string | null; crm_stage: string | null; entity: Ent | null };
+export type Account = { id: string; rep_notes: string | null; crm_stage: string | null; owner: string | null; entity: Ent | null };
 type Cand = { id: string; canonical_name: string; ticker: string | null; cik: string | null; entity_type: string | null; data_tier: string | null; hq_state: string | null; score: number; matched_alias?: string | null };
 type MatchRow = { name: string; candidates: Cand[]; selectedId: string };
 
@@ -40,7 +40,8 @@ function kickPeopleResearch(accountIds: string[]) {
   for (let k = 0; k < 3; k++) next();
 }
 
-export default function Territory({ listId, initial }: { listId: string; initial: Account[] }) {
+export default function Territory({ listId, userId, emailOf, initial }: { listId: string; userId: string; emailOf: Record<string, string>; initial: Account[] }) {
+  const [scope, setScope] = useState<"all" | "mine">("all");
   const supabase = createClient();
   const router = useRouter();
   const [showAdd, setShowAdd] = useState(initial.length === 0);
@@ -154,7 +155,7 @@ export default function Territory({ listId, initial }: { listId: string; initial
     const ids = uniqueToAdd(rows);
     if (!ids.length) { setMsg("Nothing new to add — pick at least one match."); return; }
     setBusy(true);
-    const { data: created, error } = await supabase.from("accounts").insert(ids.map((entity_id) => ({ list_id: listId, entity_id }))).select("id");
+    const { data: created, error } = await supabase.from("accounts").insert(ids.map((entity_id) => ({ list_id: listId, entity_id, owner: userId }))).select("id");
     setBusy(false);
     if (error) { setMsg(error.message); return; }
     if (created?.length) kickPeopleResearch(created.map((r) => r.id));
@@ -210,9 +211,13 @@ export default function Territory({ listId, initial }: { listId: string; initial
       {msg && <div className="card" style={{ borderColor: "var(--red)", color: "var(--red)", marginBottom: 12 }}>{msg}</div>}
 
       {/* ---------- The book ---------- */}
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", margin: "4px 0 8px" }}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", margin: "4px 0 8px", gap: 8 }}>
         <div style={{ fontSize: 11, fontWeight: 700, color: "#8A7E6E", textTransform: "uppercase", letterSpacing: ".6px" }}>
-          Your book · {initial.length}
+          {scope === "mine" ? "My accounts" : "Team book"} · {initial.filter((a) => scope === "all" || a.owner === userId).length}
+        </div>
+        <div style={{ display: "flex", gap: 4 }}>
+          <button className="mini" onClick={() => setScope("all")} style={{ fontWeight: 700, background: scope === "all" ? "var(--cream2)" : "#fff" }}>All</button>
+          <button className="mini" onClick={() => setScope("mine")} style={{ fontWeight: 700, background: scope === "mine" ? "var(--cream2)" : "#fff" }}>Mine</button>
         </div>
         {!showAdd && (
           <button className="btn btn-i" style={{ padding: "7px 13px", fontSize: 13 }} onClick={() => setShowAdd(true)}>
@@ -347,7 +352,7 @@ export default function Territory({ listId, initial }: { listId: string; initial
 
       {/* ---------- Account rows: tap through to the Hub ---------- */}
       {initial.length === 0 && !showAdd && <div style={{ fontSize: 13, color: "var(--muted)" }}>No accounts yet.</div>}
-      {initial.map((a) => (
+      {initial.filter((a) => scope === "all" || a.owner === userId).map((a) => (
         <Link key={a.id} href={`/territory/account/${a.id}`} style={{ color: "inherit", display: "block" }}>
           <div className="card" style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 6, padding: "12px 14px" }}>
             <div style={{ flex: 1, minWidth: 0 }}>
@@ -356,6 +361,9 @@ export default function Territory({ listId, initial }: { listId: string; initial
               </div>
               <div style={{ fontSize: 12, color: "var(--ink2)", marginTop: 2 }}>
                 {a.crm_stage ? <span style={{ background: "#EEF4FB", color: "var(--blue)", borderRadius: 4, padding: "1px 7px", fontWeight: 700, fontSize: 11, marginRight: 6 }}>{a.crm_stage.replace("_", " ")}</span> : null}
+                {a.owner && a.owner !== userId && emailOf[a.owner] && (
+                  <span style={{ background: "#F4EFE6", color: "#8A7E6E", borderRadius: 4, padding: "1px 7px", fontWeight: 700, fontSize: 11, marginRight: 6 }}>{emailOf[a.owner].split("@")[0]}</span>
+                )}
                 {a.entity?.hq_state || ""}
               </div>
             </div>

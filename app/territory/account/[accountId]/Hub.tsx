@@ -145,15 +145,16 @@ function EiaBlock({ eia }: { eia: EiaOps }) {
 type CForm = { id?: string; name: string; title: string; role_tag: string; email: string; phone: string; reports_to: string };
 const emptyC: CForm = { name: "", title: "", role_tag: "", email: "", phone: "", reports_to: "" };
 
-export default function Hub({ accountId, userId, entityId, ticker, initialStage, initialNotes, initialContacts, initialActivities, emailOf }: {
+export default function Hub({ accountId, userId, entityId, ticker, initialStage, initialNotes, initialOwner, initialContacts, initialActivities, emailOf }: {
   accountId: string; userId: string; entityId: string | null; ticker: string | null;
-  initialStage: string | null; initialNotes: string | null;
+  initialStage: string | null; initialNotes: string | null; initialOwner: string | null;
   initialContacts: Contact[]; initialActivities: Activity[]; emailOf: Record<string, string>;
 }) {
   const supabase = createClient();
   const router = useRouter();
   const [fin, setFin] = useState<FinState>({ loading: true });
   const [stage, setStage] = useState(initialStage || "prospect");
+  const [owner, setOwner] = useState<string | null>(initialOwner);
   const [notes, setNotes] = useState(initialNotes || "");
   const [notesDirty, setNotesDirty] = useState(false);
   const [contacts, setContacts] = useState<Contact[]>(initialContacts);
@@ -236,6 +237,12 @@ export default function Hub({ accountId, userId, entityId, ticker, initialStage,
   async function saveStage(s: string) {
     setStage(s);
     const { error } = await supabase.from("accounts").update({ crm_stage: s }).eq("id", accountId);
+    if (error) setMsg(error.message);
+  }
+  async function saveOwner(v: string) {
+    const next = v || null;
+    setOwner(next);
+    const { error } = await supabase.from("accounts").update({ owner: next }).eq("id", accountId);
     if (error) setMsg(error.message);
   }
   async function saveNotes() {
@@ -417,6 +424,19 @@ export default function Hub({ accountId, userId, entityId, ticker, initialStage,
       {msg && <div className="card" style={{ borderColor: "var(--red)", color: "var(--red)", margin: "10px 0" }}>{msg}</div>}
 
       <PrepBrief accountId={accountId} />
+
+      {/* ---- Owner ---- */}
+      <div style={{ display: "flex", alignItems: "center", gap: 8, margin: "10px 0 0" }}>
+        <span style={{ fontSize: 12, fontWeight: 700, color: "var(--ink2)" }}>Owner</span>
+        <select value={owner ?? ""} onChange={(e) => saveOwner(e.target.value)}
+          style={{ fontSize: 12.5, padding: "5px 8px", borderRadius: 8, border: "1px solid var(--border)", maxWidth: 240 }}>
+          <option value="">Team (unassigned)</option>
+          {Object.entries(emailOf).map(([id, email]) => (
+            <option key={id} value={id}>{email}{id === userId ? " (me)" : ""}</option>
+          ))}
+        </select>
+        {!owner && <button className="mini" onClick={() => saveOwner(userId)}>Claim</button>}
+      </div>
 
       {/* ---- Stage ---- */}
       <div className="secttl">Stage</div>

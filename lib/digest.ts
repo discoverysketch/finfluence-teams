@@ -51,20 +51,24 @@ export async function sendWeeklyDigests(admin: any): Promise<{ sent: number; ski
 
   for (const tenantId of tenants) {
     const { data: list } = await admin.from("account_lists").select("id").eq("tenant_id", tenantId).order("created_at").limit(1).maybeSingle();
-    const { data: accts } = await admin.from("accounts").select("entity_id").eq("list_id", list?.id ?? "00000000-0000-0000-0000-000000000000");
+    const { data: accts } = await admin.from("accounts").select("entity_id, owner").eq("list_id", list?.id ?? "00000000-0000-0000-0000-000000000000");
     const entityIds = ((accts ?? []) as any[]).map((a) => a.entity_id).filter(Boolean);
     const { data: events } = entityIds.length
-      ? await admin.from("filing_events").select("form, filed, items, label, entity:entities(canonical_name)").in("entity_id", entityIds).gte("filed", weekAgo).order("filed", { ascending: false }).limit(5)
+      ? await admin.from("filing_events").select("form, filed, items, label, entity_id, entity:entities(canonical_name)").in("entity_id", entityIds).gte("filed", weekAgo).order("filed", { ascending: false }).limit(10)
       : { data: [] };
-    const signals = ((events ?? []) as any[]).map((ev) => {
+    const toSignal = (ev: any) => {
       const s = classifyFiling(ev.form, ev.items);
       return { name: ev.entity?.canonical_name ?? "Account", label: ev.label || s?.label || `${ev.form} filed`, filed: ev.filed, icon: s?.icon ?? "📄" };
-    });
+    };
     const standings = await leagueStandings(admin, tenantId);
 
     for (const u of ((users ?? []) as any[]).filter((x) => x.tenant_id === tenantId)) {
       const email = emailOf[u.id];
       if (!email) continue;
+      // Scope signals to the rep's own accounts when they own any; whole-book otherwise.
+      const owned = new Set(((accts ?? []) as any[]).filter((a) => a.owner === u.id).map((a) => a.entity_id));
+      const evPool = ((events ?? []) as any[]);
+      const signals = (owned.size ? evPool.filter((ev) => owned.has(ev.entity_id)) : evPool).slice(0, 5).map(toSignal);
       const { data: tasks } = await admin.from("activities").select("body, due_at").eq("user_id", u.id).eq("kind", "task").eq("done", false).order("due_at", { ascending: true, nullsFirst: false }).limit(3);
       const rank = standings.findIndex((r: any) => r.id === u.id);
       const html = renderHtml({

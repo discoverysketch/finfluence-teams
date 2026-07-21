@@ -5,7 +5,7 @@ import Link from "next/link";
 // State tile-grid map (NPR-style): geography without shipping geometry.
 // Squares darken with account count and carry the best data-tier's color as an
 // underline; tap a state for its account list.
-export type MapItem = { accountId: string; name: string; ticker: string | null; tier: string | null; stage: string | null; state: string | null };
+export type MapItem = { accountId: string; name: string; ticker: string | null; tier: string | null; stage: string | null; state: string | null; mine?: boolean };
 
 const GRID: Record<string, [number, number]> = {
   AK: [0, 0], ME: [0, 10],
@@ -22,18 +22,24 @@ const bestTier = (items: MapItem[]) => ["A", "B", "C", "D"].find((t) => items.so
 
 export default function MapView({ items }: { items: MapItem[] }) {
   const [sel, setSel] = useState<string | null>(null);
+  const [scope, setScope] = useState<"all" | "mine">("all");
+  const visible = useMemo(() => items.filter((i) => scope === "all" || i.mine), [items, scope]);
   const byState = useMemo(() => {
     const m: Record<string, MapItem[]> = {};
-    for (const i of items) if (i.state && GRID[i.state.toUpperCase()]) (m[i.state.toUpperCase()] ??= []).push(i);
+    for (const i of visible) if (i.state && GRID[i.state.toUpperCase()]) (m[i.state.toUpperCase()] ??= []).push(i);
     return m;
-  }, [items]);
-  const unplaced = items.filter((i) => !i.state || !GRID[i.state.toUpperCase()]);
+  }, [visible]);
+  const unplaced = visible.filter((i) => !i.state || !GRID[i.state.toUpperCase()]);
   const maxCount = Math.max(1, ...Object.values(byState).map((v) => v.length));
 
   const selected = sel ? byState[sel] ?? [] : [];
 
   return (
     <div>
+      <div style={{ display: "flex", gap: 4, marginBottom: 8 }}>
+        <button className="mini" onClick={() => { setScope("all"); setSel(null); }} style={{ fontWeight: 700, background: scope === "all" ? "var(--cream2)" : "#fff" }}>All</button>
+        <button className="mini" onClick={() => { setScope("mine"); setSel(null); }} style={{ fontWeight: 700, background: scope === "mine" ? "var(--cream2)" : "#fff" }}>Mine</button>
+      </div>
       <div style={{ display: "grid", gridTemplateColumns: "repeat(11, 1fr)", gap: 4, maxWidth: 560 }}>
         {Array.from({ length: 8 }).flatMap((_, r) =>
           Array.from({ length: 11 }).map((_, c) => {

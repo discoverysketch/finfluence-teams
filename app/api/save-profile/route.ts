@@ -29,7 +29,7 @@ export async function POST(request: Request) {
   }).select("id").single();
   if (ee || !ent) return NextResponse.json({ error: ee?.message || "Couldn't save profile" }, { status: 500 });
 
-  const { data: acct, error: ae } = await supabase.from("accounts").insert({ list_id: listId, entity_id: ent.id }).select("id").single();
+  const { data: acct, error: ae } = await supabase.from("accounts").insert({ list_id: listId, entity_id: ent.id, owner: user.id }).select("id").single();
   if (ae) return NextResponse.json({ error: ae.message }, { status: 500 });
 
   // accountId lets the client kick off background people research for it.
