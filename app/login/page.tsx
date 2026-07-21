@@ -1,13 +1,17 @@
 "use client";
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import Finn from "@/components/Finn";
 
 export default function LoginPage() {
+  const router = useRouter();
   const [email, setEmail] = useState("");
   const [sent, setSent] = useState(false);
+  const [code, setCode] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [verifying, setVerifying] = useState(false);
 
   async function sendMagicLink(e: React.FormEvent) {
     e.preventDefault();
@@ -28,6 +32,27 @@ export default function LoginPage() {
     } else setSent(true);
   }
 
+  // The same email carries a 6-digit code — handy when the email is on a
+  // different device than this browser (phone inbox, laptop sign-in).
+  async function verifyCode(e: React.FormEvent) {
+    e.preventDefault();
+    const token = code.trim();
+    if (token.length < 6) return;
+    setVerifying(true);
+    setError(null);
+    const supabase = createClient();
+    const { error } = await supabase.auth.verifyOtp({ email, token, type: "email" });
+    setVerifying(false);
+    if (error) {
+      setError(/expired|invalid/i.test(error.message)
+        ? "That code didn't work — only the newest code is valid, and codes expire. Check for a newer email or request a fresh one."
+        : error.message);
+    } else {
+      router.replace("/");
+      router.refresh();
+    }
+  }
+
   return (
     <main className="container" style={{ textAlign: "center" }}>
       <Finn className="bob" style={{ width: 110, height: 130, marginTop: 24 }} />
@@ -37,7 +62,26 @@ export default function LoginPage() {
       <p style={{ color: "var(--ink2)", fontSize: 14, marginTop: -4 }}>Research &amp; role play for energy and water sellers.</p>
       <div className="card" style={{ marginTop: 16 }}>
         {sent ? (
-          <p>Check your email for a magic link to sign in.</p>
+          <form onSubmit={verifyCode}>
+            <p style={{ marginTop: 0 }}>Check your email — click the sign-in link, <b>or</b> enter the 6-digit code from it here:</p>
+            <input
+              inputMode="numeric"
+              autoComplete="one-time-code"
+              maxLength={6}
+              value={code}
+              onChange={(e) => setCode(e.target.value.replace(/\D/g, ""))}
+              placeholder="123456"
+              style={{ marginBottom: 12, textAlign: "center", fontSize: 22, letterSpacing: "8px", fontWeight: 700 }}
+            />
+            <button className="btn" disabled={verifying || code.trim().length < 6} style={{ width: "100%" }}>
+              {verifying ? "Checking…" : "Sign in with code"}
+            </button>
+            {error && <p style={{ color: "var(--red)", marginTop: 10 }}>{error}</p>}
+            <button type="button" onClick={() => { setSent(false); setCode(""); setError(null); }}
+              style={{ background: "none", border: "none", color: "var(--ink2)", fontSize: 12.5, marginTop: 12, cursor: "pointer", textDecoration: "underline" }}>
+              Use a different email
+            </button>
+          </form>
         ) : (
           <form onSubmit={sendMagicLink}>
             <label style={{ fontWeight: 700, fontSize: 13 }}>Work email</label>
