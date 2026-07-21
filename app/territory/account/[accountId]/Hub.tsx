@@ -5,6 +5,7 @@ import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer } from "rec
 import { createClient } from "@/lib/supabase/client";
 import { inferReporting } from "@/lib/orgchart";
 import { classifyFiling, SUGGESTED_MOVE } from "@/lib/signalTypes";
+import PrepBrief from "./PrepBrief";
 
 export type Contact = { id: string; account_id: string; name: string; title: string | null; role_tag: string | null; email: string | null; phone: string | null; reports_to: string | null; notes: string | null };
 export type Activity = { id: string; account_id: string; contact_id: string | null; user_id: string | null; kind: string; body: string; due_at: string | null; done: boolean; created_at: string };
@@ -411,6 +412,8 @@ export default function Hub({ accountId, userId, entityId, ticker, initialStage,
   return (
     <div>
       {msg && <div className="card" style={{ borderColor: "var(--red)", color: "var(--red)", margin: "10px 0" }}>{msg}</div>}
+
+      <PrepBrief accountId={accountId} />
 
       {/* ---- Stage ---- */}
       <div className="secttl">Stage</div>
