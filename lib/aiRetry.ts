@@ -7,8 +7,8 @@ export async function withRetry<T>(fn: () => Promise<T>, tries = 3): Promise<T> 
   for (let i = 0; i < tries; i++) {
     try { return await fn(); } catch (e: any) {
       last = e;
-      const overloaded = e?.status === 529 || /overloaded/i.test(String(e?.message ?? e));
-      if (!overloaded || i === tries - 1) throw e;
+      const transient = (typeof e?.status === "number" && e.status >= 500) || /overloaded|api_error|internal server/i.test(String(e?.message ?? e));
+      if (!transient || i === tries - 1) throw e;
       await new Promise((r) => setTimeout(r, 3000 * (i + 1)));
     }
   }
@@ -18,6 +18,7 @@ export async function withRetry<T>(fn: () => Promise<T>, tries = 3): Promise<T> 
 export function friendlyAiError(e: unknown): string {
   const raw = String((e as any)?.message ?? e);
   if (/overloaded|529/i.test(raw)) return "The AI service is busy right now — try again in a minute.";
+  if (/api_error|internal server|"type":"error"/i.test(raw)) return "The AI service hit a temporary error — try again in a minute.";
   if (/rate.?limit|429/i.test(raw)) return "Hit the AI rate limit — wait a moment and try again.";
   return raw.length > 200 ? raw.slice(0, 200) + "…" : raw;
 }
