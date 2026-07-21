@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer } from "recharts";
 import { createClient } from "@/lib/supabase/client";
 import { inferReporting } from "@/lib/orgchart";
+import { classifyFiling, SUGGESTED_MOVE } from "@/lib/signalTypes";
 
 export type Contact = { id: string; account_id: string; name: string; title: string | null; role_tag: string | null; email: string | null; phone: string | null; reports_to: string | null; notes: string | null };
 export type Activity = { id: string; account_id: string; contact_id: string | null; user_id: string | null; kind: string; body: string; due_at: string | null; done: boolean; created_at: string };
@@ -137,6 +138,8 @@ export default function Hub({ accountId, userId, entityId, ticker, initialStage,
   const [execs, setExecs] = useState<{ loading?: boolean; note?: string; staged?: boolean; list?: { name: string; title: string; suggested_role: string; source_url: string; checked: boolean }[] } | null>(null);
   const [autoResearching, setAutoResearching] = useState(false);
   const [aKind, setAKind] = useState("note");
+  /* eslint-disable-next-line @typescript-eslint/no-explicit-any */
+  const [sig, setSig] = useState<{ events: any[]; news: any[] } | null>(null);
   const [aBody, setABody] = useState("");
   const [aDue, setADue] = useState("");
   const [aContact, setAContact] = useState("");
@@ -165,6 +168,34 @@ export default function Hub({ accountId, userId, entityId, ticker, initialStage,
     })();
     return () => { live = false; };
   }, [entityId, ticker]);
+
+  // Account-level signals: this entity's recent filings + industry news that
+  // mentions it (same classification + matching as the /signals feed).
+  useEffect(() => {
+    let live = true;
+    (async () => {
+      if (!entityId) { setSig({ events: [], news: [] }); return; }
+      const since = new Date(Date.now() - 90 * 24 * 3600 * 1000).toISOString().slice(0, 10);
+      const [{ data: events }, { data: news }, { data: ent }] = await Promise.all([
+        supabase.from("filing_events").select("id, form, filed, items, label")
+          .eq("entity_id", entityId).gte("filed", since).order("filed", { ascending: false }).limit(5),
+        supabase.from("news_items").select("*").order("created_at", { ascending: false }).limit(30),
+        supabase.from("entities").select("canonical_name, ticker").eq("id", entityId).maybeSingle(),
+      ]);
+      if (!live) return;
+      const words = String(ent?.canonical_name || "").toLowerCase().replace(/[^a-z0-9 ]/g, " ").split(/\s+/)
+        .filter((w) => w.length > 3 && !["corp", "corporation", "company", "energy", "inc", "group", "holdings"].includes(w));
+      const keys = [...(ent?.ticker ? [String(ent.ticker).toLowerCase()] : []), words.slice(0, 2).join(" ")].filter((s) => s.length > 3);
+      /* eslint-disable-next-line @typescript-eslint/no-explicit-any */
+      const mentions = (news ?? []).filter((n: any) => {
+        const hay = `${n.headline} ${n.companies || ""} ${n.summary || ""}`.toLowerCase();
+        return keys.some((k) => hay.includes(k));
+      }).slice(0, 3);
+      setSig({ events: events ?? [], news: mentions });
+    })();
+    return () => { live = false; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [entityId]);
 
   async function removeAccount() {
     if (!window.confirm("Remove this account from your book? Contacts and activity for it will be deleted too.")) return;
@@ -444,6 +475,47 @@ export default function Hub({ accountId, userId, entityId, ticker, initialStage,
                 </>
               );
             })()}
+          </div>
+        </>
+      )}
+
+      {/* ---- Signals: recent filings + news mentions for THIS account ---- */}
+      {sig && (sig.events.length > 0 || sig.news.length > 0) && (
+        <>
+          <div className="secttl" style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
+            <span>Signals</span>
+            <a href="/signals" style={{ fontSize: 11, fontWeight: 700, color: "var(--blue)", textTransform: "none", letterSpacing: 0 }}>All signals →</a>
+          </div>
+          <div className="card" style={{ padding: "6px 14px" }}>
+            {sig.events.map((ev, i) => {
+              const s = classifyFiling(ev.form, ev.items) ?? { kind: "earnings" as const, label: ev.label || `${ev.form} filed`, icon: "📄" };
+              const lastRow = i === sig.events.length - 1 && sig.news.length === 0;
+              return (
+                <div key={ev.id} style={{ display: "flex", gap: 10, padding: "9px 0", borderBottom: lastRow ? "none" : "1px solid #F0EAE0", alignItems: "flex-start" }}>
+                  <span style={{ fontSize: 18, lineHeight: 1.2 }}>{s.icon}</span>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", gap: 8, alignItems: "baseline" }}>
+                      <span style={{ fontSize: 13.5, fontWeight: 700 }}>{ev.label || s.label}</span>
+                      <span style={{ fontSize: 11.5, color: "var(--muted)", fontWeight: 600, flexShrink: 0 }}>{fmtDue(ev.filed)}</span>
+                    </div>
+                    <div style={{ fontSize: 12, color: "var(--ink2)", marginTop: 2 }}>{SUGGESTED_MOVE[s.kind]}</div>
+                  </div>
+                </div>
+              );
+            })}
+            {sig.news.map((n, i) => (
+              <div key={n.id} style={{ display: "flex", gap: 10, padding: "9px 0", borderBottom: i === sig.news.length - 1 ? "none" : "1px solid #F0EAE0", alignItems: "flex-start" }}>
+                <span style={{ fontSize: 18, lineHeight: 1.2 }}>📰</span>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", gap: 8, alignItems: "baseline" }}>
+                    <a href={n.source_url} target="_blank" rel="noreferrer" style={{ fontSize: 13.5, fontWeight: 700, color: "inherit" }}>{n.headline}</a>
+                    {n.published && <span style={{ fontSize: 11.5, color: "var(--muted)", fontWeight: 600, flexShrink: 0 }}>{fmtDue(n.published)}</span>}
+                  </div>
+                  {n.summary && <div style={{ fontSize: 12, color: "var(--ink2)", marginTop: 2 }}>{n.summary}</div>}
+                  <span style={{ background: "var(--gold)", color: "#fff", fontSize: 9.5, fontWeight: 700, borderRadius: 4, padding: "1px 6px", display: "inline-block", marginTop: 4 }}>★ mentions this account</span>
+                </div>
+              </div>
+            ))}
           </div>
         </>
       )}
