@@ -36,6 +36,14 @@ export default async function SignalsPage() {
     entityIds.length ? supabase.from("entities").select("canonical_name, ticker").in("id", entityIds) : Promise.resolve({ data: [] as any[] }),
   ]);
 
+  // Only show recent stories: by publish date when we have one, else by when
+  // the sweep found it (old-published items linger in the table otherwise).
+  const newsCut = Date.now() - 30 * 24 * 3600 * 1000;
+  const freshNews = ((news ?? []) as any[]).filter((n) => {
+    const d = n.published ? new Date(n.published + "T12:00:00") : new Date(n.created_at);
+    return +d >= newsCut;
+  });
+
   // Highlight industry stories that mention one of the book's accounts.
   const bookNames = ((bookEnts ?? []) as any[]).flatMap((e) => {
     const words = String(e.canonical_name).toLowerCase().replace(/[^a-z0-9 ]/g, " ").split(/\s+/).filter((w) => w.length > 3 && !["corp", "corporation", "company", "energy", "inc", "group", "holdings"].includes(w));
@@ -96,12 +104,12 @@ export default async function SignalsPage() {
       })}
 
       <div className="sigttl" style={{ marginTop: 26 }}>🏭 Across the industry</div>
-      {(news ?? []).length === 0 && (
+      {freshNews.length === 0 && (
         <div className="card" style={{ fontSize: 13, color: "var(--ink2)" }}>
           The industry sweep runs daily — capital projects, data-center deals, regulatory moves. First items appear after the next run.
         </div>
       )}
-      {(news ?? []).map((n: any) => {
+      {freshNews.map((n: any) => {
         const cat = CAT[n.category] ?? CAT.other;
         const hot = mentionsBook(n);
         let domain = "";

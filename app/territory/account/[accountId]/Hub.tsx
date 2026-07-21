@@ -186,8 +186,11 @@ export default function Hub({ accountId, userId, entityId, ticker, initialStage,
       const words = String(ent?.canonical_name || "").toLowerCase().replace(/[^a-z0-9 ]/g, " ").split(/\s+/)
         .filter((w) => w.length > 3 && !["corp", "corporation", "company", "energy", "inc", "group", "holdings"].includes(w));
       const keys = [...(ent?.ticker ? [String(ent.ticker).toLowerCase()] : []), words.slice(0, 2).join(" ")].filter((s) => s.length > 3);
+      const newsCut = Date.now() - 30 * 24 * 3600 * 1000;
       /* eslint-disable-next-line @typescript-eslint/no-explicit-any */
       const mentions = (news ?? []).filter((n: any) => {
+        const d = n.published ? new Date(n.published + "T12:00:00") : new Date(n.created_at);
+        if (+d < newsCut) return false;
         const hay = `${n.headline} ${n.companies || ""} ${n.summary || ""}`.toLowerCase();
         return keys.some((k) => hay.includes(k));
       }).slice(0, 3);

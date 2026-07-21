@@ -48,7 +48,7 @@ export async function GET(request: Request) {
       messages: [{
         role: "user",
         content:
-          "Find 6-8 significant US utility & power industry news items from roughly the last week. Cover a MIX of: " +
+          `Today is ${new Date().toISOString().slice(0, 10)}. Find 6-8 significant US utility & power industry news items published within the LAST 14 DAYS — skip anything older or undated unless it is clearly this week's news. Cover a MIX of: ` +
           "new capital projects / grid investments; data-center load-growth deals with utilities; regulatory & policy developments (FERC, EEI, state PUCs, rate cases); utility M&A or large financings. " +
           "STRICT search budget: run ONE broad query (e.g. 'utility industry news capital projects data centers FERC') and work from its result list; at most one follow-up. Do not run more searches. " +
           "For each item: tight headline, 1-2 sentence factual summary, companies involved, approximate publish date, EXACT source URL from your results. " +
@@ -69,7 +69,12 @@ export async function GET(request: Request) {
       messages: [{ role: "user", content: `Research notes:\n\n${notes.slice(0, 20000)}` }],
     });
     const text = extract.content.filter((b) => b.type === "text").map((b) => (b as any).text).join("");
-    const items = (JSON.parse(text).items ?? []).filter((i: any) => /^https?:\/\//.test(i.source_url));
+    // Freshness gate: search results love resurfacing evergreen old articles —
+    // drop anything with a publish date older than 21 days at the door.
+    const cutoff = new Date(Date.now() - 21 * 24 * 3600 * 1000).toISOString().slice(0, 10);
+    const items = (JSON.parse(text).items ?? []).filter((i: any) =>
+      /^https?:\/\//.test(i.source_url) &&
+      (!/^\d{4}-\d{2}-\d{2}$/.test(i.published) || i.published >= cutoff));
 
     const admin = createAdminClient();
     let inserted = 0;
