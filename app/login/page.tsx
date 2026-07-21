@@ -14,13 +14,18 @@ export default function LoginPage() {
     setLoading(true);
     setError(null);
     const supabase = createClient();
+    // Invite-only: never create a user here — magic links only go to emails an
+    // admin has already added via Admin -> Team.
     const { error } = await supabase.auth.signInWithOtp({
       email,
-      options: { emailRedirectTo: `${location.origin}/auth/callback` },
+      options: { emailRedirectTo: `${location.origin}/auth/callback`, shouldCreateUser: false },
     });
     setLoading(false);
-    if (error) setError(error.message);
-    else setSent(true);
+    if (error) {
+      setError(/not allowed|not found|signups/i.test(error.message)
+        ? "AccountFluency is invite-only — this email isn't on a team yet. Ask your team admin for an invite."
+        : error.message);
+    } else setSent(true);
   }
 
   return (
@@ -48,6 +53,7 @@ export default function LoginPage() {
               {loading ? "Sending…" : "Send magic link"}
             </button>
             {error && <p style={{ color: "var(--red)", marginTop: 10 }}>{error}</p>}
+            <p style={{ fontSize: 11.5, color: "var(--muted)", margin: "10px 0 0" }}>Invite-only — sign-in links are sent to team members added by an admin.</p>
           </form>
         )}
       </div>
