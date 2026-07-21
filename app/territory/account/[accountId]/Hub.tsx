@@ -6,6 +6,8 @@ import { createClient } from "@/lib/supabase/client";
 import { inferReporting } from "@/lib/orgchart";
 import { classifyFiling, SUGGESTED_MOVE } from "@/lib/signalTypes";
 import PrepBrief from "./PrepBrief";
+import DraftOutreach from "@/components/DraftOutreach";
+import CaptureNotes from "./CaptureNotes";
 
 export type Contact = { id: string; account_id: string; name: string; title: string | null; role_tag: string | null; email: string | null; phone: string | null; reports_to: string | null; notes: string | null };
 export type Activity = { id: string; account_id: string; contact_id: string | null; user_id: string | null; kind: string; body: string; due_at: string | null; done: boolean; created_at: string };
@@ -526,6 +528,9 @@ export default function Hub({ accountId, userId, entityId, ticker, initialStage,
                       <span style={{ fontSize: 11.5, color: "var(--muted)", fontWeight: 600, flexShrink: 0 }}>{fmtDue(ev.filed)}</span>
                     </div>
                     <div style={{ fontSize: 12, color: "var(--ink2)", marginTop: 2 }}>{SUGGESTED_MOVE[s.kind]}</div>
+                    <div style={{ marginTop: 4 }}>
+                      <DraftOutreach accountId={accountId} trigger={{ kind: "filing", title: ev.label || s.label, detail: SUGGESTED_MOVE[s.kind], date: ev.filed }} />
+                    </div>
                   </div>
                 </div>
               );
@@ -542,7 +547,10 @@ export default function Hub({ accountId, userId, entityId, ticker, initialStage,
                     </div>
                     {n.summary && <div style={{ fontSize: 12, color: "var(--ink2)", marginTop: 2 }}>{n.summary}</div>}
                     {isRate && <div style={{ fontSize: 12, color: "var(--ink2)", marginTop: 3 }}><b style={{ color: "#006B72" }}>Rate case in play</b> — capital program under regulatory scrutiny; efficiency-story timing is now.</div>}
-                    <span style={{ background: isRate ? "#006B72" : "var(--gold)", color: "#fff", fontSize: 9.5, fontWeight: 700, borderRadius: 4, padding: "1px 6px", display: "inline-block", marginTop: 4 }}>{isRate ? "⚖️ rate case · this account" : "★ mentions this account"}</span>
+                    <div style={{ display: "flex", gap: 10, alignItems: "center", marginTop: 4, flexWrap: "wrap" }}>
+                      <span style={{ background: isRate ? "#006B72" : "var(--gold)", color: "#fff", fontSize: 9.5, fontWeight: 700, borderRadius: 4, padding: "1px 6px" }}>{isRate ? "⚖️ rate case · this account" : "★ mentions this account"}</span>
+                      <DraftOutreach accountId={accountId} trigger={{ kind: isRate ? "rate_case" : "news", title: n.headline, detail: n.summary, date: n.published || undefined, url: n.source_url }} />
+                    </div>
                   </div>
                 </div>
               );
@@ -654,6 +662,9 @@ export default function Hub({ accountId, userId, entityId, ticker, initialStage,
 
       {/* ---- Activity ---- */}
       <div className="secttl">Activity</div>
+      <CaptureNotes accountId={accountId} userId={userId}
+        onSaved={(rows) => setActs((a) => [...(rows as Activity[]), ...a])}
+        onStage={(s) => saveStage(s)} />
       <div className="card" style={{ marginBottom: 10 }}>
         <div style={{ display: "flex", gap: 8, marginBottom: 8, flexWrap: "wrap" }}>
           <select value={aKind} onChange={(e) => setAKind(e.target.value)} style={{ width: "auto" }}>

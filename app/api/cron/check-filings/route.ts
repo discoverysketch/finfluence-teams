@@ -1,6 +1,7 @@
 import { createAdminClient } from "@/lib/supabase/admin";
 import { pushToUsers } from "@/lib/push";
 import { classifyFiling } from "@/lib/signalTypes";
+import { sendWeeklyDigests } from "@/lib/digest";
 import { NextResponse } from "next/server";
 
 // Earnings Pulse watcher (Vercel cron, every 6h). For every entity held as an
@@ -84,5 +85,13 @@ export async function GET(request: Request) {
       }
     } catch { /* skip this entity, keep going */ }
   }
-  return NextResponse.json({ checked, filings, pushed, backfillDays });
+  // Monday: also send the weekly digest email (rides this cron — Hobby plan
+  // caps cron jobs at 2). ?digest=1 forces a send for testing.
+  let digest: { sent: number; skipped?: string; errors: number } | null = null;
+  const forceDigest = new URL(request.url).searchParams.get("digest") === "1";
+  if (forceDigest || new Date().getUTCDay() === 1) {
+    try { digest = await sendWeeklyDigests(admin); } catch (e) { digest = { sent: 0, skipped: (e as Error).message, errors: 1 }; }
+  }
+
+  return NextResponse.json({ checked, filings, pushed, backfillDays, digest });
 }

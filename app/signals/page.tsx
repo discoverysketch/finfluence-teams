@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import Link from "next/link";
 import Shell from "@/components/Shell";
 import { classifyFiling, SUGGESTED_MOVE } from "@/lib/signalTypes";
+import DraftOutreach from "@/components/DraftOutreach";
 
 // Buying-signal feed (SPEC 7c): classified SEC events for the accounts in the
 // book — earnings, exec changes, M&A, financings — each with a suggested move.
@@ -33,7 +34,7 @@ export default async function SignalsPage() {
           .order("filed", { ascending: false }).limit(50)
       : Promise.resolve({ data: [] as any[] }),
     supabase.from("news_items").select("*").order("created_at", { ascending: false }).limit(20),
-    entityIds.length ? supabase.from("entities").select("canonical_name, ticker").in("id", entityIds) : Promise.resolve({ data: [] as any[] }),
+    entityIds.length ? supabase.from("entities").select("id, canonical_name, ticker").in("id", entityIds) : Promise.resolve({ data: [] as any[] }),
   ]);
 
   // Only show recent stories: by publish date when we have one, else by when
@@ -45,14 +46,18 @@ export default async function SignalsPage() {
   });
 
   // Highlight industry stories that mention one of the book's accounts.
-  const bookNames = ((bookEnts ?? []) as any[]).flatMap((e) => {
+  // Keys keep their entity so a match can resolve back to the account (for
+  // rate-case promotion + outreach drafting).
+  const bookKeys = ((bookEnts ?? []) as any[]).flatMap((e) => {
     const words = String(e.canonical_name).toLowerCase().replace(/[^a-z0-9 ]/g, " ").split(/\s+/).filter((w) => w.length > 3 && !["corp", "corporation", "company", "energy", "inc", "group", "holdings"].includes(w));
-    return [...(e.ticker ? [String(e.ticker).toLowerCase()] : []), words.slice(0, 2).join(" ")].filter((s) => s.length > 3);
+    return [...(e.ticker ? [String(e.ticker).toLowerCase()] : []), words.slice(0, 2).join(" ")]
+      .filter((s) => s.length > 3).map((key) => ({ key, entityId: e.id as string }));
   });
-  const mentionsBook = (n: any) => {
+  const matchBook = (n: any): string | null => {
     const hay = `${n.headline} ${n.companies || ""}`.toLowerCase();
-    return bookNames.some((b) => hay.includes(b));
+    return bookKeys.find((b) => hay.includes(b.key))?.entityId ?? null;
   };
+  const mentionsBook = (n: any) => matchBook(n) != null;
   // Rate cases naming a book account are account signals, not industry chatter —
   // promote them into "Your accounts" (and out of the industry list).
   const rateCases = freshNews.filter((n) => n.category === "rates" && mentionsBook(n));
@@ -93,6 +98,7 @@ export default async function SignalsPage() {
                 <span style={{ background: "var(--gold)", color: "#fff", fontSize: 10, fontWeight: 700, borderRadius: 4, padding: "2px 7px" }}>★ your account</span>
                 {n.published && <span style={{ fontSize: 11, color: "var(--muted)", fontWeight: 600 }}>{fmtDay(n.published)}</span>}
                 {domain && <span style={{ fontSize: 11, color: "var(--muted)" }}>{domain}</span>}
+                {acctOf[matchBook(n) ?? ""] && <DraftOutreach accountId={acctOf[matchBook(n)!]} trigger={{ kind: "rate_case", title: n.headline, detail: n.summary, date: n.published || undefined, url: n.source_url }} />}
               </div>
             </div>
           </div>
@@ -118,11 +124,12 @@ export default async function SignalsPage() {
               </div>
               <div style={{ fontSize: 13.5, fontWeight: 600, marginTop: 1 }}>{ev.label || sig.label}</div>
               <div style={{ fontSize: 12.5, color: "var(--ink2)", marginTop: 3 }}>{SUGGESTED_MOVE[sig.kind]}</div>
-              <div style={{ display: "flex", gap: 10, marginTop: 7 }}>
+              <div style={{ display: "flex", gap: 10, marginTop: 7, flexWrap: "wrap", alignItems: "center" }}>
                 {isEarnings && (
                   <Link href={`/challenge/pulse?entity=${ev.entity.id}`} style={{ fontSize: 12.5, fontWeight: 700, color: "var(--red)" }}>Take the pulse →</Link>
                 )}
                 {hubId && <Link href={`/territory/account/${hubId}`} style={{ fontSize: 12.5, fontWeight: 700, color: "var(--blue)" }}>Open account →</Link>}
+                {hubId && <DraftOutreach accountId={hubId} trigger={{ kind: "filing", title: ev.label || sig.label, detail: SUGGESTED_MOVE[sig.kind], date: ev.filed }} />}
               </div>
             </div>
           </div>
