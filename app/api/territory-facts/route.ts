@@ -5,6 +5,7 @@ import { ensureEntityFacts, fercRateBaseCagr } from "@/lib/facts";
 // Facts for every account in the tenant's book (fetch-or-cache each). Bounded by
 // book size; cached for 7 days so repeat loads are fast. Feeds Territory Board.
 /* eslint-disable @typescript-eslint/no-explicit-any */
+export const maxDuration = 300; // cold load of a big book fetches many EDGAR docs
 export async function GET() {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
@@ -18,7 +19,19 @@ export async function GET() {
     .eq("list_id", list?.id ?? "00000000-0000-0000-0000-000000000000");
 
   const rows = ((accts ?? []) as any[]).filter((a) => a.entity);
-  const items = await Promise.all(rows.map(async (a) => {
+  // Bounded concurrency: a big book's first load would otherwise fire one
+  // EDGAR fetch per uncached account simultaneously and trip SEC rate limits.
+  // Cached accounts (7-day) return instantly, so warm loads stay fast.
+  const items: any[] = new Array(rows.length);
+  let cursor = 0;
+  const worker = async () => {
+    for (;;) {
+      const i = cursor++;
+      if (i >= rows.length) return;
+      items[i] = await buildItem(rows[i]);
+    }
+  };
+  const buildItem = async (a: any) => {
     const res = await ensureEntityFacts(supabase, a.entity.id);
     // Fold EIA ops + FERC regulated financials into the fact map (eia_*/ferc_*
     // keys) so the Board can score Tier B accounts and enrich Tier A ones.
@@ -40,7 +53,8 @@ export async function GET() {
       tier: a.entity.data_tier as string | null, mine: a.owner === user.id,
       facts, period: res.ok ? res.period : null, error: res.ok ? null : res.error,
     };
-  }));
+  };
+  await Promise.all(Array.from({ length: Math.min(8, rows.length) }, () => worker()));
 
   return NextResponse.json({ items });
 }

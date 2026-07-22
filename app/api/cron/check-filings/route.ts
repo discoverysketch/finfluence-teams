@@ -31,7 +31,9 @@ export async function GET(request: Request) {
     entities[a.entity.id] = a.entity;
     (holders[a.entity.id] ??= new Set()).add(a.list_id);
   }
-  const ids = Object.keys(entities).slice(0, 60); // bound EDGAR calls per run
+  // Fetches below are sequential, so a large book stays EDGAR-polite; 250 caps
+  // the run comfortably inside maxDuration.
+  const ids = Object.keys(entities).slice(0, 250);
   if (!ids.length) return NextResponse.json({ checked: 0, filings: 0, pushed: 0 });
 
   // list -> tenant -> users (whole tenant gets the pulse; assignments can narrow later)
