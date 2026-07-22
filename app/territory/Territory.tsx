@@ -142,7 +142,7 @@ export default function Territory({ listId, userId, emailOf, initial }: { listId
         const chunk = await Promise.all(list.slice(i, i + 10).map(async (name) => {
           const { data } = await supabase.rpc("match_entities", { q: name, lim: 6 });
           const qn = norm(name);
-          const candidates = ((data ?? []) as Cand[]).map((c) => {
+          const applyRules = (arr: Cand[]) => arr.map((c) => {
             const cn = norm(c.canonical_name);
             // Prefix rule: the typed name IS the entity name, or extends it
             // ("DTE Energy Corporate Services LLC" starts with "DTE Energy") —
@@ -156,6 +156,20 @@ export default function Territory({ listId, userId, emailOf, initial }: { listId
             if (c.matched_alias && c.score < 0.85) return { ...c, score: Math.round(c.score * 0.6 * 100) / 100 };
             return c;
           });
+          let candidates = applyRules((data ?? []) as Cand[]);
+          // Long subsidiary names score so low against the short parent name on
+          // trigram that the parent never even makes the candidate list — retry
+          // with the leading words so the prefix rule has something to boost.
+          const words = name.trim().split(/\s+/);
+          if (words.length >= 3 && !candidates.some((c) => c.score >= 0.9)) {
+            const { data: d2 } = await supabase.rpc("match_entities", { q: words.slice(0, 2).join(" "), lim: 4 });
+            const byId = new Map(candidates.map((c) => [c.id, c]));
+            for (const c of applyRules((d2 ?? []) as Cand[])) {
+              const ex = byId.get(c.id);
+              if (!ex || c.score > ex.score) byId.set(c.id, c);
+            }
+            candidates = [...byId.values()];
+          }
           candidates.sort((a, b) => b.score - a.score);
           // Only preselect confident matches — low-similarity top hits are often the
           // wrong company; fuzzy ALIAS hits need a higher bar (similarly-named
