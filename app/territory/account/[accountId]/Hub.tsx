@@ -206,7 +206,7 @@ export default function Hub({ accountId, userId, entityId, ticker, initialStage,
       const [{ data: events }, { data: news }, { data: ent }] = await Promise.all([
         supabase.from("filing_events").select("id, form, filed, items, label, accession")
           .eq("entity_id", entityId).gte("filed", since).order("filed", { ascending: false }).limit(5),
-        supabase.from("news_items").select("*").order("created_at", { ascending: false }).limit(30),
+        supabase.from("news_items").select("*").order("created_at", { ascending: false }).limit(400),
         supabase.from("entities").select("canonical_name, ticker, cik").eq("id", entityId).maybeSingle(),
       ]);
       if (!live) return;

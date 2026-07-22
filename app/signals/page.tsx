@@ -34,7 +34,9 @@ export default async function SignalsPage() {
           .in("entity_id", entityIds).gte("filed", since)
           .order("filed", { ascending: false }).limit(50)
       : Promise.resolve({ data: [] as any[] }),
-    supabase.from("news_items").select("*").order("created_at", { ascending: false }).limit(20),
+    // High-volume now (daily per-account harvest): fetch a full month's worth;
+    // the 30-day freshness filter below governs what's shown.
+    supabase.from("news_items").select("*").order("created_at", { ascending: false }).limit(400),
     entityIds.length ? supabase.from("entities").select("id, canonical_name, ticker").in("id", entityIds) : Promise.resolve({ data: [] as any[] }),
   ]);
 
@@ -152,7 +154,7 @@ export default async function SignalsPage() {
           The industry sweep runs daily — capital projects, data-center deals, regulatory moves. First items appear after the next run.
         </div>
       )}
-      {industryNews.map((n: any) => {
+      {industryNews.slice(0, 60).map((n: any) => {
         const cat = CAT[n.category] ?? CAT.other;
         const hot = mentionsBook(n);
         let domain = "";
@@ -174,8 +176,11 @@ export default async function SignalsPage() {
         );
       })}
 
+      {industryNews.length > 60 && (
+        <p style={{ fontSize: 11.5, color: "var(--muted)", marginTop: 4 }}>Showing the 60 most recent · older items age out after 30 days.</p>
+      )}
       <p style={{ fontSize: 11, color: "var(--muted)", marginTop: 12 }}>
-        Sources: SEC EDGAR filings + daily web sweep of trade press & official releases · verify before acting.
+        Sources: SEC EDGAR filings + daily per-account news harvest + industry web sweep · verify before acting.
       </p>
       <style>{`.sigttl{font-size:11px;font-weight:700;color:#8A7E6E;text-transform:uppercase;letter-spacing:.6px;margin:18px 0 8px}`}</style>
     </Shell>
