@@ -25,7 +25,7 @@ export default async function ManagerPage() {
     // Seeded (core) cards only — custom concepts are practice-only and don't count.
     supabase.from("progress").select("user_id, cards!inner(is_seeded)").eq("status", "mastered").eq("cards.is_seeded", true),
     supabase.from("score_events").select("user_id,concept_tag,correct"),
-    supabase.from("accounts").select("id, crm_stage, owner, created_at, entity:entities(canonical_name, ticker)"),
+    supabase.from("accounts").select("id, crm_stage, owner, entity:entities(canonical_name, ticker)"),
     supabase.from("activities").select("account_id, user_id, kind, done, created_at").order("created_at", { ascending: false }).limit(1000),
   ]);
   const members = (memberData ?? []) as Member[];
@@ -53,15 +53,16 @@ export default async function ManagerPage() {
   const lastTouch: Record<string, string> = {};
   for (const a of acts) if (!lastTouch[a.account_id]) lastTouch[a.account_id] = a.created_at; // acts are newest-first
   const now = Date.now();
-  const stalled = accts
-    .filter((a) => !String(a.crm_stage || "").startsWith("closed"))
-    .map((a) => {
-      const base = lastTouch[a.id] ?? a.created_at;
-      return { ...a, days: Math.floor((now - +new Date(base)) / 86400000), touched: !!lastTouch[a.id] };
-    })
+  const open = accts.filter((a) => !String(a.crm_stage || "").startsWith("closed"));
+  // Stalled = had activity, then went quiet. Never-touched accounts are a
+  // count, not a list (early on that's most of the book — a list would be noise).
+  const stalled = open
+    .filter((a) => lastTouch[a.id])
+    .map((a) => ({ ...a, days: Math.floor((now - +new Date(lastTouch[a.id])) / 86400000) }))
     .filter((a) => a.days >= 21)
     .sort((a, b) => b.days - a.days)
     .slice(0, 8);
+  const neverTouched = open.filter((a) => !lastTouch[a.id]).length;
 
   const weekAgo = now - 7 * 86400000;
   const weekActs = acts.filter((a) => +new Date(a.created_at) >= weekAgo);
@@ -122,12 +123,18 @@ export default async function ManagerPage() {
                   <div style={{ fontSize: 11.5, color: "var(--ink2)" }}>{(a.crm_stage || "prospect").replace("_", " ")}{short(a.owner) ? ` · ${short(a.owner)}` : " · unassigned"}</div>
                 </div>
                 <span style={{ fontSize: 12, fontWeight: 800, color: a.days >= 45 ? "var(--red)" : "#9A6700", flexShrink: 0 }}>
-                  {a.touched ? `${a.days}d quiet` : `${a.days}d, never touched`}
+                  {a.days}d quiet
                 </span>
               </div>
             </Link>
           ))}
         </>
+      )}
+
+      {neverTouched > 0 && (
+        <p style={{ fontSize: 12, color: "var(--ink2)", margin: "8px 0 0" }}>
+          {neverTouched} open account{neverTouched === 1 ? " has" : "s have"} no activity logged yet.
+        </p>
       )}
 
       <div className="secttl">Activity · last 7 days</div>
