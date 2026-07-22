@@ -67,8 +67,10 @@ export default function Territory({ listId, userId, emailOf, initial }: { listId
   // text with no newlines). Commas only separate single-line pastes. Entries
   // longer than any plausible company name are merged text — skip, never match.
   function parseNames(text: string): { list: string[]; dupes: number; truncated: number; blobs: number } {
-    const raw = text.includes("\n")
-      ? text.split(/\r?\n/).flatMap((l) => l.split("\t"))
+    // Line endings vary by source: \r\n (Windows), \n (Unix), \r alone
+    // (Excel-for-Mac CSVs — the sneaky one). Tabs = Excel row/grid copies.
+    const raw = /[\r\n]/.test(text)
+      ? text.split(/\r\n|\r|\n/).flatMap((l) => l.split("\t"))
       : text.includes("\t") ? text.split("\t") : text.split(",");
     const seen = new Set<string>();
     const list: string[] = [];
@@ -94,16 +96,29 @@ export default function Territory({ listId, userId, emailOf, initial }: { listId
   function onFile(f: File | undefined) {
     if (!f) return;
     const reader = new FileReader();
-    reader.onload = () => setNames(String(reader.result || "").split(/\r?\n/).map(firstCol).join("\n"));
+    reader.onload = () => setNames(String(reader.result || "").split(/\r\n|\r|\n/).map(firstCol).join("\n"));
     reader.readAsText(f);
   }
 
   async function match() {
     const { list, dupes, truncated, blobs } = parseNames(names);
     if (!list.length) {
-      setMsg(blobs
-        ? "That looks like merged text, not a list — paste one company name per line (copy a spreadsheet COLUMN, not a row or merged cell)."
-        : "Paste at least one account name.");
+      if (!blobs) { setMsg("Paste at least one account name."); return; }
+      // Merged-cell paste (no separators at all): let the model split it, then
+      // flow into the normal match-and-review pipeline.
+      setBusy(true); setMsg(""); setParseNote("Merged text detected — splitting it into names…");
+      try {
+        const r = await fetch("/api/split-names", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ text: names }) });
+        const j = await r.json().catch(() => null);
+        if (!r.ok || !j?.names?.length) {
+          setMsg(j?.error || "Couldn't split that text — paste one company name per line."); setParseNote("");
+          return;
+        }
+        setNames(j.names.join("\n"));
+        setParseNote(`Split merged text into ${j.names.length} names`);
+        await matchList(j.names.slice(0, 200));
+      } catch { setMsg("Network error."); }
+      finally { setBusy(false); }
       return;
     }
     setBusy(true); setMsg("");
@@ -112,6 +127,13 @@ export default function Territory({ listId, userId, emailOf, initial }: { listId
       truncated ? `first 200 kept (${truncated} over the limit skipped)` : "",
       blobs ? `${blobs} merged-text entr${blobs === 1 ? "y" : "ies"} skipped (one name per line works best)` : "",
     ].filter(Boolean).join(" · "));
+    try {
+      await matchList(list);
+    } catch { setMsg("Matching failed — is the directory loaded?"); }
+    finally { setBusy(false); }
+  }
+
+  async function matchList(list: string[]) {
     try {
       const out: MatchRow[] = [];
       for (let i = 0; i < list.length; i += 10) {
