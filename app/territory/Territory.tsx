@@ -19,6 +19,7 @@ function TierBadge({ t }: { t: string | null }) {
   return <span style={{ background: TIER_COLOR[tier] || "#8A7E6E", color: "#fff", fontSize: 10, fontWeight: 700, borderRadius: 4, padding: "2px 6px", flexShrink: 0 }}>Tier {tier}</span>;
 }
 type Profile = { canonical_name: string; entity_type: string; hq_state: string; ownership: string; est_size: string; segment: string; summary: string; sources: { title: string; url: string }[]; confidence: string };
+type RQItem = { name: string; hint: string; status: "pending" | "running" | "done" | "error" | "saved" | "discarded"; draft?: Profile; error?: string };
 const TYPE_LABEL: Record<string, string> = { iou: "Investor-owned utility", ipp: "Independent power producer", coop: "Cooperative", muni: "Municipal", retailer: "Retailer", other: "Other" };
 
 // Fire-and-forget background people research for freshly added accounts.
@@ -45,20 +46,18 @@ export default function Territory({ listId, userId, emailOf, initial }: { listId
   const supabase = createClient();
   const router = useRouter();
   const [showAdd, setShowAdd] = useState(initial.length === 0);
-  const [addMode, setAddMode] = useState<"public" | "private">("public");
   const [names, setNames] = useState("");
   const [rows, setRows] = useState<MatchRow[] | null>(null);
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState("");
   const [parseNote, setParseNote] = useState("");
-  const [pName, setPName] = useState("");
-  const [pHint, setPHint] = useState("");
-  const [researching, setResearching] = useState(false);
-  const [draft, setDraft] = useState<Profile | null>(null);
-  const [savingP, setSavingP] = useState(false);
-  const [stage, setStage] = useState("");
-  const [prog, setProg] = useState(0);
-  const [elapsed, setElapsed] = useState(0);
+  // Research queue: names the directory doesn't know (munis, co-ops, privates)
+  // get web-researched one by one after the matched ones save — the user never
+  // has to know which bucket a name belongs to.
+  const [rq, setRq] = useState<RQItem[] | null>(null);
+  const [rqBusy, setRqBusy] = useState(false);
+  const [rqElapsed, setRqElapsed] = useState(0);
+  const [savingIdx, setSavingIdx] = useState<number | null>(null);
 
   const existingIds = new Set(initial.map((a) => a.entity?.id).filter(Boolean));
 
@@ -186,55 +185,92 @@ export default function Territory({ listId, userId, emailOf, initial }: { listId
   async function confirm() {
     if (!rows) return;
     const ids = uniqueToAdd(rows);
-    if (!ids.length) { setMsg("Nothing new to add — pick at least one match."); return; }
-    setBusy(true);
-    const { data: created, error } = await supabase.from("accounts").insert(ids.map((entity_id) => ({ list_id: listId, entity_id, owner: userId }))).select("id");
+    // Names with no directory candidates (or where the rep picked "none of
+    // these") flow into the research queue — munis/co-ops/privates, sorted for
+    // the user instead of by the user.
+    const unmatched = rows.filter((r) => r.candidates.length === 0 || r.selectedId === "none").map((r) => r.name);
+    if (!ids.length && !unmatched.length) { setMsg("Nothing new to add — pick at least one match."); return; }
+    setBusy(true); setMsg("");
+    if (ids.length) {
+      const { data: created, error } = await supabase.from("accounts").insert(ids.map((entity_id) => ({ list_id: listId, entity_id, owner: userId }))).select("id");
+      if (error) { setBusy(false); setMsg(error.message); return; }
+      if (created?.length) kickPeopleResearch(created.map((r) => r.id));
+      router.refresh();
+    }
     setBusy(false);
-    if (error) { setMsg(error.message); return; }
-    if (created?.length) kickPeopleResearch(created.map((r) => r.id));
-    setRows(null); setNames(""); setParseNote(""); setShowAdd(false); router.refresh();
+    setRows(null); setNames(""); setParseNote("");
+    if (unmatched.length) {
+      runQueue(unmatched.map((name) => ({ name, hint: "", status: "pending" as const })));
+    } else {
+      setShowAdd(false);
+    }
   }
 
-  async function research() {
-    if (pName.trim().length < 2) return;
-    setResearching(true); setMsg(""); setDraft(null); setStage("Starting…"); setProg(5); setElapsed(0);
-    const t0 = Date.now();
-    const tick = setInterval(() => setElapsed(Math.round((Date.now() - t0) / 1000)), 1000);
-    const creep = setInterval(() => setProg((p) => (p < 92 ? p + (p < 60 ? 0.7 : 0.3) : p)), 400);
-    try {
-      const r = await fetch("/api/entity-profile", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name: pName, hint: pHint }) });
-      if (!r.ok || !r.body) { const j = await r.json().catch(() => ({})); setMsg(j.error || "Research failed."); return; }
-      const reader = r.body.getReader(); const dec = new TextDecoder(); let buf = ""; let terminal = false;
-      for (;;) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        buf += dec.decode(value, { stream: true });
-        let nl: number;
-        while ((nl = buf.indexOf("\n")) >= 0) {
-          const line = buf.slice(0, nl).trim(); buf = buf.slice(nl + 1);
-          if (!line) continue;
-          let ev: any; try { ev = JSON.parse(line); } catch { continue; } // eslint-disable-line @typescript-eslint/no-explicit-any
-          if (ev.stage === "searching") { setStage("Searching the web…"); setProg((p) => Math.max(p, 14)); }
-          else if (ev.stage === "structuring") { setStage(ev.sources ? `Found ${ev.sources} source${ev.sources === 1 ? "" : "s"} — writing the profile…` : "Writing the profile…"); setProg((p) => Math.max(p, 74)); }
-          else if (ev.stage === "done") { setProg(100); setStage("Done"); setDraft(ev.profile); terminal = true; }
-          else if (ev.stage === "error") { setMsg(ev.error || "Research failed."); terminal = true; }
-        }
+  // One web-research pass (streamed NDJSON) -> profile draft, or throws.
+  async function researchOne(name: string, hint: string): Promise<Profile> {
+    const r = await fetch("/api/entity-profile", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name, hint }) });
+    if (!r.ok || !r.body) { const j = await r.json().catch(() => ({})); throw new Error(j.error || "Research failed."); }
+    const reader = r.body.getReader(); const dec = new TextDecoder(); let buf = "";
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buf += dec.decode(value, { stream: true });
+      let nl: number;
+      while ((nl = buf.indexOf("\n")) >= 0) {
+        const line = buf.slice(0, nl).trim(); buf = buf.slice(nl + 1);
+        if (!line) continue;
+        let ev: any; try { ev = JSON.parse(line); } catch { continue; } // eslint-disable-line @typescript-eslint/no-explicit-any
+        if (ev.stage === "done") return ev.profile as Profile;
+        if (ev.stage === "error") throw new Error(ev.error || "Research failed.");
       }
-      if (!terminal) setMsg("Research is taking unusually long — please try again, ideally with a state or parent-company hint.");
-    } catch { setMsg("Network error."); }
-    finally { clearInterval(tick); clearInterval(creep); setResearching(false); setStage(""); }
+    }
+    throw new Error("Research ran long — retry, ideally with a state or parent hint.");
   }
-  async function saveProfile() {
-    if (!draft || !listId) return;
-    setSavingP(true); setMsg("");
+
+  async function runQueue(items: RQItem[]) {
+    setRq(items); setRqBusy(true);
+    for (let i = 0; i < items.length; i++) {
+      setRq((q) => q!.map((x, j) => (j === i ? { ...x, status: "running" } : x)));
+      const t0 = Date.now();
+      const tick = setInterval(() => setRqElapsed(Math.round((Date.now() - t0) / 1000)), 1000);
+      try {
+        const draft = await researchOne(items[i].name, items[i].hint);
+        setRq((q) => q!.map((x, j) => (j === i ? { ...x, status: "done", draft } : x)));
+      } catch (e) {
+        setRq((q) => q!.map((x, j) => (j === i ? { ...x, status: "error", error: (e as Error).message } : x)));
+      } finally { clearInterval(tick); setRqElapsed(0); }
+    }
+    setRqBusy(false);
+  }
+
+  async function retryItem(i: number) {
+    if (rqBusy || !rq) return;
+    const item = rq[i];
+    setRqBusy(true);
+    setRq((q) => q!.map((x, j) => (j === i ? { ...x, status: "running", error: undefined } : x)));
+    const t0 = Date.now();
+    const tick = setInterval(() => setRqElapsed(Math.round((Date.now() - t0) / 1000)), 1000);
     try {
-      const r = await fetch("/api/save-profile", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ profile: draft, listId }) });
+      const draft = await researchOne(item.name, item.hint);
+      setRq((q) => q!.map((x, j) => (j === i ? { ...x, status: "done", draft } : x)));
+    } catch (e) {
+      setRq((q) => q!.map((x, j) => (j === i ? { ...x, status: "error", error: (e as Error).message } : x)));
+    } finally { clearInterval(tick); setRqElapsed(0); setRqBusy(false); }
+  }
+
+  async function saveDraft(i: number) {
+    const item = rq?.[i];
+    if (!item?.draft || !listId) return;
+    setSavingIdx(i); setMsg("");
+    try {
+      const r = await fetch("/api/save-profile", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ profile: item.draft, listId }) });
       const j = await r.json();
       if (!r.ok) { setMsg(j.error || "Save failed."); return; }
       if (j.accountId) kickPeopleResearch([j.accountId]);
-      setDraft(null); setPName(""); setPHint(""); setShowAdd(false); router.refresh();
+      setRq((q) => q!.map((x, jx) => (jx === i ? { ...x, status: "saved" } : x)));
+      router.refresh();
     } catch { setMsg("Network error."); }
-    finally { setSavingP(false); }
+    finally { setSavingIdx(null); }
   }
 
   const matched = rows?.filter((r) => r.selectedId !== "none").length ?? 0;
@@ -268,26 +304,24 @@ export default function Territory({ listId, userId, emailOf, initial }: { listId
               <button className="mini" aria-label="Close" onClick={() => { setShowAdd(false); setRows(null); setMsg(""); setParseNote(""); }}><X size={14} /></button>
             )}
           </div>
-          <div className="seg" style={{ marginBottom: 12 }}>
-            <button className={addMode === "public" ? "on" : ""} onClick={() => setAddMode("public")}>Public (SEC)</button>
-            <button className={addMode === "private" ? "on" : ""} onClick={() => setAddMode("private")}>Private / muni</button>
-          </div>
-
-          {addMode === "public" && !rows && (
+          {!rows && !rq && (
             <>
               <label style={{ display: "inline-flex", alignItems: "center", gap: 8, cursor: "pointer", background: "#fff", border: "1.5px dashed var(--border)", borderRadius: 10, padding: "10px 14px", fontSize: 13, fontWeight: 700, color: "var(--ink2)", marginBottom: 10 }}>
                 <Paperclip size={15} strokeWidth={2.2} /> Upload a CSV
                 <input type="file" accept=".csv,.txt" style={{ display: "none" }} onChange={(e) => { onFile(e.target.files?.[0]); e.target.value = ""; }} />
               </label>
-              <textarea value={names} onChange={(e) => setNames(e.target.value)} rows={5} placeholder={"NextEra Energy\nDuke Energy\nAEP\n…one per line, names or tickers"}
+              <textarea value={names} onChange={(e) => setNames(e.target.value)} rows={5} placeholder={"NextEra Energy\nDuke Energy\nPedernales Electric Cooperative\nJEA\n…one per line — public, muni, co-op, private, all in one list"}
                 style={{ width: "100%", border: "1px solid var(--border)", borderRadius: 8, padding: 8, fontFamily: "inherit", fontSize: 14 }} />
               <button className="btn" style={{ marginTop: 10 }} disabled={busy || names.trim().length < 2} onClick={match}>
                 {busy ? "Matching…" : "Match accounts"}
               </button>
+              <p style={{ fontSize: 11.5, color: "var(--muted)", margin: "8px 0 0" }}>
+                Mix freely — known companies match instantly; anything the directory doesn&apos;t know gets web-researched for you.
+              </p>
             </>
           )}
 
-          {addMode === "public" && rows && (
+          {rows && (
             <div>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
                 <div style={{ fontSize: 12, color: "var(--ink2)", fontWeight: 600 }}>
@@ -304,7 +338,7 @@ export default function Territory({ listId, userId, emailOf, initial }: { listId
                   <div key={i} className="card" style={{ marginBottom: 8, padding: "12px 14px", opacity: inBook || dupOf ? 0.75 : 1 }}>
                     <div style={{ fontWeight: 700, fontSize: 15, marginBottom: 6 }}>{r.name}</div>
                     {r.candidates.length === 0 ? (
-                      <div style={{ fontSize: 13, color: "var(--muted)" }}>No directory match — try the &quot;Private / muni&quot; tab instead.</div>
+                      <div style={{ fontSize: 13, color: "#9A6700", fontWeight: 600 }}>🔍 Not in the directory (likely muni/co-op/private) — will be web-researched after you confirm.</div>
                     ) : (
                       <>
                         <select value={r.selectedId} onChange={(e) => setRows((rs) => rs!.map((x, j) => j === i ? { ...x, selectedId: e.target.value } : x))}
@@ -323,62 +357,76 @@ export default function Territory({ listId, userId, emailOf, initial }: { listId
                   </div>
                 );
               })}
-              <button className="btn" disabled={busy} onClick={confirm} style={{ marginTop: 4 }}>
-                {busy ? "Saving…" : `Confirm & save ${uniqueToAdd(rows).length} account(s)`}
-              </button>
+              {(() => {
+                const nMatch = uniqueToAdd(rows).length;
+                const nResearch = rows.filter((r) => r.candidates.length === 0 || r.selectedId === "none").length;
+                return (
+                  <button className="btn" disabled={busy || (!nMatch && !nResearch)} onClick={confirm} style={{ marginTop: 4 }}>
+                    {busy ? "Saving…" : `Confirm — save ${nMatch} matched${nResearch ? ` · research ${nResearch} unmatched` : ""}`}
+                  </button>
+                );
+              })()}
             </div>
           )}
 
-          {addMode === "private" && (
-            <>
-              <p style={{ fontSize: 12, color: "var(--ink2)", margin: "0 0 8px" }}>
-                Co-op, municipal, private IPP, retailer? Claude web-researches a <b>sourced</b> profile you review before saving. Can take up to ~2 minutes.
-              </p>
-              <input value={pName} onChange={(e) => setPName(e.target.value)} placeholder="Company name, e.g. Pedernales Electric Cooperative" style={{ marginBottom: 8 }} />
-              <input value={pHint} onChange={(e) => setPHint(e.target.value)} placeholder="Optional hint — state, parent company…" style={{ marginBottom: 8 }} disabled={researching} />
-              <button className="btn btn-i" disabled={researching || pName.trim().length < 2} onClick={research}>
-                <Search size={15} strokeWidth={2.2} /> {researching ? "Researching…" : "Research"}
-              </button>
-              {researching && (
-                <div style={{ marginTop: 10 }}>
-                  <div style={{ height: 8, background: "var(--cream2)", borderRadius: 5, overflow: "hidden" }}>
-                    <div style={{ width: `${prog}%`, height: "100%", background: "var(--gold)", transition: "width .4s ease" }} />
-                  </div>
-                  <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, color: "var(--ink2)", marginTop: 5 }}>
-                    <span>{stage || "Starting…"}</span><span>{elapsed}s</span>
-                  </div>
+          {rq && (
+            <div>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+                <div style={{ fontSize: 12, color: "var(--ink2)", fontWeight: 600 }}>
+                  <Search size={13} strokeWidth={2.2} style={{ verticalAlign: "-2px" }} /> Researching unmatched names · {rq.filter((x) => ["done", "saved", "discarded", "error"].includes(x.status)).length} of {rq.length} done
+                  {rqBusy && <span style={{ color: "var(--muted)", fontWeight: 500 }}> · ~1-2 min each, review as they land</span>}
                 </div>
-              )}
-
-              {draft && (
-                <div className="card" style={{ marginTop: 10 }}>
-                  <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}>
-                    <div style={{ flex: 1, fontWeight: 800, fontSize: 15 }}>{draft.canonical_name}</div>
-                    <TierBadge t="D" />
-                    <span style={{ fontSize: 10, fontWeight: 700, color: "#fff", background: draft.confidence === "high" ? "var(--green)" : draft.confidence === "medium" ? "var(--gold)" : "#8A7E6E", borderRadius: 4, padding: "2px 6px" }}>{draft.confidence} confidence</span>
+                {!rqBusy && (
+                  <button className="mini" onClick={() => { setRq(null); setShowAdd(false); router.refresh(); }}>Done</button>
+                )}
+              </div>
+              {rq.map((item, i) => (
+                <div key={i} className="card" style={{ marginBottom: 8, padding: "12px 14px", opacity: item.status === "discarded" ? 0.6 : 1 }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                    <div style={{ flex: 1, fontWeight: 700, fontSize: 14.5 }}>{item.name}</div>
+                    {item.status === "pending" && <span style={{ fontSize: 12, color: "var(--muted)", fontWeight: 600 }}>queued</span>}
+                    {item.status === "running" && <span style={{ fontSize: 12, color: "#9A6700", fontWeight: 700 }}>researching… {rqElapsed}s</span>}
+                    {item.status === "saved" && <span style={{ fontSize: 12, color: "var(--green)", fontWeight: 700 }}>✓ added to book</span>}
+                    {item.status === "discarded" && <span style={{ fontSize: 12, color: "var(--muted)", fontWeight: 600 }}>discarded</span>}
                   </div>
-                  <div style={{ display: "grid", gridTemplateColumns: "auto 1fr", gap: "3px 10px", fontSize: 13, marginBottom: 6 }}>
-                    {draft.entity_type && (<><b style={{ color: "var(--ink2)" }}>Type</b><span>{TYPE_LABEL[draft.entity_type] || draft.entity_type}</span></>)}
-                    {draft.hq_state && (<><b style={{ color: "var(--ink2)" }}>HQ</b><span>{draft.hq_state}</span></>)}
-                    {draft.ownership && (<><b style={{ color: "var(--ink2)" }}>Ownership</b><span>{draft.ownership}</span></>)}
-                    {draft.est_size && (<><b style={{ color: "var(--ink2)" }}>Size</b><span>{draft.est_size}</span></>)}
-                    {draft.segment && (<><b style={{ color: "var(--ink2)" }}>Segment</b><span>{draft.segment}</span></>)}
-                  </div>
-                  {draft.summary && <p style={{ fontSize: 13.5, lineHeight: 1.5, margin: "0 0 8px" }}>{draft.summary}</p>}
-                  {draft.sources?.length > 0 && (
-                    <div style={{ fontSize: 12, marginBottom: 10 }}>
-                      <b style={{ color: "var(--ink2)" }}>Sources:</b>{" "}
-                      {draft.sources.map((s, i) => <a key={i} href={s.url} target="_blank" rel="noreferrer" style={{ color: "var(--blue)", marginRight: 8 }}>{s.title?.slice(0, 24) || "source"} ↗</a>)}
+                  {item.status === "error" && (
+                    <div style={{ marginTop: 6 }}>
+                      <div style={{ fontSize: 12.5, color: "var(--red)", marginBottom: 6 }}>{item.error}</div>
+                      <div style={{ display: "flex", gap: 8 }}>
+                        <input value={item.hint} onChange={(e) => setRq((q) => q!.map((x, j) => (j === i ? { ...x, hint: e.target.value } : x)))}
+                          placeholder="Hint — state, parent company…" style={{ flex: 1, fontSize: 12.5 }} />
+                        <button className="mini" disabled={rqBusy} onClick={() => retryItem(i)}>Retry</button>
+                      </div>
                     </div>
                   )}
-                  {draft.confidence === "low" && <div style={{ fontSize: 12, color: "#9A6700", marginBottom: 8 }}>⚠ Low confidence — verify before relying on this.</div>}
-                  <div style={{ display: "flex", gap: 8 }}>
-                    <button className="btn" disabled={savingP} onClick={saveProfile}>{savingP ? "Saving…" : "Save to my book"}</button>
-                    <button className="mini del" onClick={() => setDraft(null)}>Discard</button>
-                  </div>
+                  {item.status === "done" && item.draft && (
+                    <div style={{ marginTop: 8 }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}>
+                        <div style={{ flex: 1, fontWeight: 800, fontSize: 14 }}>{item.draft.canonical_name}</div>
+                        <TierBadge t="D" />
+                        <span style={{ fontSize: 10, fontWeight: 700, color: "#fff", background: item.draft.confidence === "high" ? "var(--green)" : item.draft.confidence === "medium" ? "var(--gold)" : "#8A7E6E", borderRadius: 4, padding: "2px 6px" }}>{item.draft.confidence} confidence</span>
+                      </div>
+                      <div style={{ display: "grid", gridTemplateColumns: "auto 1fr", gap: "2px 10px", fontSize: 12.5, marginBottom: 6 }}>
+                        {item.draft.entity_type && (<><b style={{ color: "var(--ink2)" }}>Type</b><span>{TYPE_LABEL[item.draft.entity_type] || item.draft.entity_type}</span></>)}
+                        {item.draft.hq_state && (<><b style={{ color: "var(--ink2)" }}>HQ</b><span>{item.draft.hq_state}</span></>)}
+                        {item.draft.ownership && (<><b style={{ color: "var(--ink2)" }}>Ownership</b><span>{item.draft.ownership}</span></>)}
+                        {item.draft.est_size && (<><b style={{ color: "var(--ink2)" }}>Size</b><span>{item.draft.est_size}</span></>)}
+                      </div>
+                      {item.draft.summary && <p style={{ fontSize: 13, lineHeight: 1.5, margin: "0 0 8px" }}>{item.draft.summary}</p>}
+                      {item.draft.sources?.length > 0 && (
+                        <div style={{ fontSize: 11.5, marginBottom: 8 }}>
+                          {item.draft.sources.map((s, si) => <a key={si} href={s.url} target="_blank" rel="noreferrer" style={{ color: "var(--blue)", marginRight: 8 }}>{s.title?.slice(0, 24) || "source"} ↗</a>)}
+                        </div>
+                      )}
+                      <div style={{ display: "flex", gap: 8 }}>
+                        <button className="btn" style={{ padding: "8px 14px", fontSize: 13 }} disabled={savingIdx === i} onClick={() => saveDraft(i)}>{savingIdx === i ? "Saving…" : "Save to book"}</button>
+                        <button className="mini del" onClick={() => setRq((q) => q!.map((x, j) => (j === i ? { ...x, status: "discarded" } : x)))}>Discard</button>
+                      </div>
+                    </div>
+                  )}
                 </div>
-              )}
-            </>
+              ))}
+            </div>
           )}
         </div>
       )}
