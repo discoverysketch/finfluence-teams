@@ -1,9 +1,15 @@
 import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
+import Link from "next/link";
 import Shell from "@/components/Shell";
 import { CONCEPTS, conceptScores, overallAcumen, tier, heatColor, type Ev } from "@/lib/acumen";
 
 type Member = { id: string; email: string; role: string };
+/* eslint-disable @typescript-eslint/no-explicit-any */
+const STAGES: [string, string][] = [
+  ["prospect", "Prospect"], ["discovery", "Discovery"], ["evaluation", "Evaluation"],
+  ["proposal", "Proposal"], ["negotiation", "Negotiation"], ["closed_won", "Won"], ["closed_lost", "Lost"],
+];
 
 export default async function ManagerPage() {
   const supabase = await createClient();
@@ -14,11 +20,13 @@ export default async function ManagerPage() {
     return <Shell active="home" isAdmin={false}><h1>Team dashboard</h1><div className="card">Managers and admins only.</div></Shell>;
   }
 
-  const [{ data: memberData }, { data: progData }, { data: evData }] = await Promise.all([
+  const [{ data: memberData }, { data: progData }, { data: evData }, { data: acctData }, { data: actData }] = await Promise.all([
     supabase.from("users").select("id,email,role").eq("tenant_id", me.tenant_id).order("email"),
     // Seeded (core) cards only — custom concepts are practice-only and don't count.
     supabase.from("progress").select("user_id, cards!inner(is_seeded)").eq("status", "mastered").eq("cards.is_seeded", true),
     supabase.from("score_events").select("user_id,concept_tag,correct"),
+    supabase.from("accounts").select("id, crm_stage, owner, created_at, entity:entities(canonical_name, ticker)"),
+    supabase.from("activities").select("account_id, user_id, kind, done, created_at").order("created_at", { ascending: false }).limit(1000),
   ]);
   const members = (memberData ?? []) as Member[];
   const mastered = (progData ?? []) as { user_id: string }[];
@@ -32,6 +40,36 @@ export default async function ManagerPage() {
   const acumenOf = (uid: string) => overallAcumen(evBy[uid] || [], masteredBy[uid] || 0);
   const teamAcumen = members.length ? Math.round(members.reduce((n, m) => n + acumenOf(m.id), 0) / members.length) : 0;
   const totalMastered = mastered.length;
+
+  // ---- pipeline / stalled / activity (CRM roll-up) ----
+  const emailOf: Record<string, string> = {};
+  for (const m of members) emailOf[m.id] = m.email;
+  const short = (id: string | null) => (id && emailOf[id] ? emailOf[id].split("@")[0] : null);
+  const accts = (acctData ?? []) as any[];
+  const acts = (actData ?? []) as any[];
+  const byStage: Record<string, any[]> = {};
+  for (const a of accts) (byStage[a.crm_stage || "prospect"] ??= []).push(a);
+
+  const lastTouch: Record<string, string> = {};
+  for (const a of acts) if (!lastTouch[a.account_id]) lastTouch[a.account_id] = a.created_at; // acts are newest-first
+  const now = Date.now();
+  const stalled = accts
+    .filter((a) => !String(a.crm_stage || "").startsWith("closed"))
+    .map((a) => {
+      const base = lastTouch[a.id] ?? a.created_at;
+      return { ...a, days: Math.floor((now - +new Date(base)) / 86400000), touched: !!lastTouch[a.id] };
+    })
+    .filter((a) => a.days >= 21)
+    .sort((a, b) => b.days - a.days)
+    .slice(0, 8);
+
+  const weekAgo = now - 7 * 86400000;
+  const weekActs = acts.filter((a) => +new Date(a.created_at) >= weekAgo);
+  const actBy: Record<string, { touch: number; tasksDone: number }> = {};
+  for (const a of weekActs) {
+    const s = (actBy[a.user_id] ??= { touch: 0, tasksDone: 0 });
+    if (a.kind === "task") { if (a.done) s.tasksDone++; } else s.touch++;
+  }
 
   const Stat = ({ n, l }: { n: string; l: string }) => (
     <div className="card" style={{ flex: 1, textAlign: "center", padding: 12 }}>
@@ -48,6 +86,63 @@ export default async function ManagerPage() {
         <Stat n={String(members.length)} l="members" />
         <Stat n={String(teamAcumen)} l="team acumen" />
         <Stat n={String(totalMastered)} l="cards mastered" />
+      </div>
+
+      <div className="secttl">Pipeline · {accts.length} accounts</div>
+      <div style={{ display: "flex", gap: 6, overflowX: "auto", paddingBottom: 4 }}>
+        {STAGES.map(([k, label]) => {
+          const rows = byStage[k] ?? [];
+          return (
+            <div key={k} style={{ minWidth: 128, flex: 1, background: "#fff", border: "1px solid var(--border)", borderRadius: 10, padding: "8px 9px" }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 6 }}>
+                <span style={{ fontSize: 10.5, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".4px", color: k === "closed_won" ? "var(--green)" : k === "closed_lost" ? "var(--muted)" : "var(--ink2)" }}>{label}</span>
+                <span style={{ fontSize: 13, fontWeight: 800 }}>{rows.length}</span>
+              </div>
+              {rows.slice(0, 6).map((a) => (
+                <Link key={a.id} href={`/territory/account/${a.id}`} style={{ color: "inherit", display: "block" }}>
+                  <div style={{ fontSize: 11, fontWeight: 600, padding: "3px 6px", background: "var(--cream2)", borderRadius: 5, marginBottom: 3, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                    {a.entity?.ticker || a.entity?.canonical_name || "?"}{short(a.owner) ? <span style={{ color: "var(--muted)" }}> · {short(a.owner)}</span> : null}
+                  </div>
+                </Link>
+              ))}
+              {rows.length > 6 && <div style={{ fontSize: 10.5, color: "var(--muted)" }}>+{rows.length - 6} more</div>}
+            </div>
+          );
+        })}
+      </div>
+
+      {stalled.length > 0 && (
+        <>
+          <div className="secttl">Stalled · no touch in 21+ days</div>
+          {stalled.map((a) => (
+            <Link key={a.id} href={`/territory/account/${a.id}`} style={{ color: "inherit", display: "block" }}>
+              <div className="card" style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 6, padding: "10px 12px" }}>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontWeight: 700, fontSize: 13.5, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{a.entity?.canonical_name || "Account"}</div>
+                  <div style={{ fontSize: 11.5, color: "var(--ink2)" }}>{(a.crm_stage || "prospect").replace("_", " ")}{short(a.owner) ? ` · ${short(a.owner)}` : " · unassigned"}</div>
+                </div>
+                <span style={{ fontSize: 12, fontWeight: 800, color: a.days >= 45 ? "var(--red)" : "#9A6700", flexShrink: 0 }}>
+                  {a.touched ? `${a.days}d quiet` : `${a.days}d, never touched`}
+                </span>
+              </div>
+            </Link>
+          ))}
+        </>
+      )}
+
+      <div className="secttl">Activity · last 7 days</div>
+      <div className="card" style={{ padding: "10px 12px", marginBottom: 4 }}>
+        {members.map((m) => {
+          const s = actBy[m.id] ?? { touch: 0, tasksDone: 0 };
+          return (
+            <div key={m.id} style={{ display: "flex", alignItems: "center", gap: 10, padding: "5px 0", borderBottom: "1px solid #F0EAE0" }}>
+              <span style={{ flex: 1, fontSize: 13, fontWeight: 600 }}>{m.email.split("@")[0]}</span>
+              <span style={{ fontSize: 12, color: "var(--ink2)" }}>{s.touch} touchpoints logged</span>
+              <span style={{ fontSize: 12, color: s.tasksDone ? "var(--green)" : "var(--muted)", fontWeight: 700 }}>{s.tasksDone} tasks done</span>
+            </div>
+          );
+        })}
+        <div style={{ fontSize: 10.5, color: "var(--muted)", marginTop: 6 }}>Touchpoints = notes, calls, meetings, emails logged on accounts.</div>
       </div>
 
       <div className="secttl">Reps by acumen</div>
