@@ -11,7 +11,7 @@
         <div style="font-size:15px;line-height:1.55;color:#3A342B;margin-bottom:24px;">
           Welcome back — here's your secure sign-in link. No password needed.
         </div>
-        <a href="{{ .ConfirmationURL }}" style="display:inline-block;background:#B23A2E;color:#ffffff;font-size:15px;font-weight:700;text-decoration:none;border-radius:10px;padding:13px 24px;">Sign in to AccountFluency</a>
+        <a href="https://accountfluency.com/auth/confirm?token_hash={{ .TokenHash }}&type=email" style="display:inline-block;background:#B23A2E;color:#ffffff;font-size:15px;font-weight:700;text-decoration:none;border-radius:10px;padding:13px 24px;">Sign in to AccountFluency</a>
         <div style="font-size:13px;color:#6B6254;margin-top:22px;">Or enter this code on the sign-in page:</div>
         <div style="font-size:26px;font-weight:800;letter-spacing:6px;color:#2B2620;margin-top:6px;font-family:ui-monospace,Consolas,monospace;">{{ .Token }}</div>
         <div style="font-size:12px;color:#8A7E6E;margin-top:26px;line-height:1.5;">

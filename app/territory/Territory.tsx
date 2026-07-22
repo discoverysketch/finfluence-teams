@@ -142,19 +142,21 @@ export default function Territory({ listId, userId, emailOf, initial }: { listId
         const chunk = await Promise.all(list.slice(i, i + 10).map(async (name) => {
           const { data } = await supabase.rpc("match_entities", { q: name, lim: 6 });
           const qn = norm(name);
-          // If the official name IS the typed name (minus suffixes), it's a direct
-          // match even when a subsidiary alias happened to score highest — don't let
-          // the alias tag drag it under the stricter alias bar ("Duke Energy" vs
-          // "Duke Energy CORP" tagged via "Duke Energy Ohio").
           const candidates = ((data ?? []) as Cand[]).map((c) => {
             const cn = norm(c.canonical_name);
-            return c.matched_alias && (cn === qn || cn.startsWith(qn + " ") || qn.startsWith(cn + " "))
-              ? { ...c, matched_alias: null } : c;
+            // Prefix rule: the typed name IS the entity name, or extends it
+            // ("DTE Energy Corporate Services LLC" starts with "DTE Energy") —
+            // near-certain parentage, boost to 95% and drop any alias tag.
+            if (cn === qn || cn.startsWith(qn + " ") || qn.startsWith(cn + " ")) {
+              return { ...c, matched_alias: null, score: Math.max(c.score, 0.95) };
+            }
+            // Weak alias hits (<85%) are often generic-word noise ("NV Energy"
+            // partial-matching anything with "Energy") — deflate them so display
+            // order and displayed % always agree.
+            if (c.matched_alias && c.score < 0.85) return { ...c, score: Math.round(c.score * 0.6 * 100) / 100 };
+            return c;
           });
-          // Weak alias hits (<85%) are often generic-word noise ("NV Energy" partial-
-          // matching anything with "Energy") — sink them below direct name matches.
-          const adj = (c: Cand) => (c.matched_alias && c.score < 0.85 ? c.score * 0.6 : c.score);
-          candidates.sort((a, b) => adj(b) - adj(a));
+          candidates.sort((a, b) => b.score - a.score);
           // Only preselect confident matches — low-similarity top hits are often the
           // wrong company; fuzzy ALIAS hits need a higher bar (similarly-named
           // subsidiaries of different parents can cross-match).
