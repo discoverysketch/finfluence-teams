@@ -433,7 +433,9 @@ export default function Territory({ listId, userId, emailOf, initial }: { listId
 
       {/* ---------- Account rows: tap through to the Hub ---------- */}
       {initial.length === 0 && !showAdd && <div style={{ fontSize: 13, color: "var(--muted)" }}>No accounts yet.</div>}
-      {initial.filter((a) => scope === "all" || a.owner === userId).map((a) => (
+      {initial.filter((a) => scope === "all" || a.owner === userId)
+        .slice().sort((a, b) => (a.entity?.canonical_name ?? "").localeCompare(b.entity?.canonical_name ?? "", "en", { sensitivity: "base" }))
+        .map((a) => (
         <Link key={a.id} href={`/territory/account/${a.id}`} style={{ color: "inherit", display: "block" }}>
           <div className="card" style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 6, padding: "12px 14px" }}>
             <div style={{ flex: 1, minWidth: 0 }}>

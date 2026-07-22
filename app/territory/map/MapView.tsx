@@ -82,7 +82,7 @@ export default function MapView({ items }: { items: MapItem[] }) {
           <div className="secttl" style={{ fontSize: 11, fontWeight: 700, color: "#8A7E6E", textTransform: "uppercase", letterSpacing: ".6px", margin: "14px 0 8px" }}>
             {sel} · {selected.length} account{selected.length === 1 ? "" : "s"}
           </div>
-          {selected.map((a) => (
+          {selected.slice().sort((a, b) => a.name.localeCompare(b.name, "en", { sensitivity: "base" })).map((a) => (
             <Link key={a.accountId} href={`/territory/account/${a.accountId}`} style={{ color: "inherit", display: "block" }}>
               <div className="card" style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 6, padding: "11px 14px" }}>
                 <div style={{ flex: 1, minWidth: 0 }}>
