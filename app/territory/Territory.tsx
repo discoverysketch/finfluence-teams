@@ -62,22 +62,27 @@ export default function Territory({ listId, userId, emailOf, initial }: { listId
 
   const existingIds = new Set(initial.map((a) => a.entity?.id).filter(Boolean));
 
-  // Names contain commas ("NRG Energy, Inc."), so split on newlines when present;
-  // only treat commas as separators for single-line pastes. Strip CSV quotes.
-  function parseNames(text: string): { list: string[]; dupes: number; truncated: number } {
-    const raw = text.includes("\n") ? text.split(/\r?\n/) : text.split(",");
+  // Names contain commas ("NRG Energy, Inc."), so split on newlines when
+  // present — and ALWAYS on tabs (copying an Excel row/grid yields tab-separated
+  // text with no newlines). Commas only separate single-line pastes. Entries
+  // longer than any plausible company name are merged text — skip, never match.
+  function parseNames(text: string): { list: string[]; dupes: number; truncated: number; blobs: number } {
+    const raw = text.includes("\n")
+      ? text.split(/\r?\n/).flatMap((l) => l.split("\t"))
+      : text.includes("\t") ? text.split("\t") : text.split(",");
     const seen = new Set<string>();
     const list: string[] = [];
-    let dupes = 0;
+    let dupes = 0, blobs = 0;
     for (const s0 of raw) {
       const s = s0.trim().replace(/^"(.*)"$/s, "$1").trim();
       if (s.length < 2) continue;
+      if (s.length > 80) { blobs++; continue; } // merged cells / run-together text
       const k = s.toLowerCase();
       if (seen.has(k)) { dupes++; continue; }
       seen.add(k); list.push(s);
     }
     const truncated = Math.max(0, list.length - 200);
-    return { list: list.slice(0, 200), dupes, truncated };
+    return { list: list.slice(0, 200), dupes, truncated, blobs };
   }
 
   // First CSV column, honoring quoted fields (names often contain commas).
@@ -94,12 +99,18 @@ export default function Territory({ listId, userId, emailOf, initial }: { listId
   }
 
   async function match() {
-    const { list, dupes, truncated } = parseNames(names);
-    if (!list.length) { setMsg("Paste at least one account name."); return; }
+    const { list, dupes, truncated, blobs } = parseNames(names);
+    if (!list.length) {
+      setMsg(blobs
+        ? "That looks like merged text, not a list — paste one company name per line (copy a spreadsheet COLUMN, not a row or merged cell)."
+        : "Paste at least one account name.");
+      return;
+    }
     setBusy(true); setMsg("");
     setParseNote([
       dupes ? `${dupes} exact duplicate${dupes === 1 ? "" : "s"} removed` : "",
       truncated ? `first 200 kept (${truncated} over the limit skipped)` : "",
+      blobs ? `${blobs} merged-text entr${blobs === 1 ? "y" : "ies"} skipped (one name per line works best)` : "",
     ].filter(Boolean).join(" · "));
     try {
       const out: MatchRow[] = [];
