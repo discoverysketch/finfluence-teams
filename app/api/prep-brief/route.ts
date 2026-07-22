@@ -41,7 +41,7 @@ export async function POST(request: Request) {
 
   // RLS scopes all reads to the caller's tenant.
   const { data: acct } = await supabase.from("accounts")
-    .select("id, crm_stage, rep_notes, entity:entities(id, canonical_name, ticker, hq_state, entity_type, data_tier, profile_json)")
+    .select("id, crm_stage, rep_notes, entity:entities(id, canonical_name, ticker, hq_state, entity_type, data_tier, profile_json, decision_locus, decision_note)")
     .eq("id", accountId).maybeSingle();
   const ent: any = acct?.entity;
   if (!ent) return NextResponse.json({ error: "Account not found" }, { status: 404 });
@@ -61,6 +61,7 @@ export async function POST(request: Request) {
   L.push(`ACCOUNT: ${ent.canonical_name}${ent.ticker ? ` (${ent.ticker})` : ""} · ${ent.entity_type || "utility"}${ent.hq_state ? ` · HQ ${ent.hq_state}` : ""} · data tier ${ent.data_tier || "?"}`);
   L.push(`DEAL STAGE: ${acct!.crm_stage || "prospect"}`);
   if (acct!.rep_notes) L.push(`REP NOTES: ${String(acct!.rep_notes).slice(0, 600)}`);
+  if (ent.decision_locus) L.push(`DECISION AUTHORITY: ${ent.decision_locus === "corporate" ? "the corporate parent decides major software purchases" : ent.decision_locus === "local" ? "this company decides for itself" : "mixed — depends on the purchase"}${ent.decision_note ? ` — ${String(ent.decision_note).slice(0, 300)}` : ""}. Aim the strategy at where the decision actually lives.`);
   if (ent.profile_json?.summary) L.push(`RESEARCHED PROFILE: ${String(ent.profile_json.summary).slice(0, 700)}`);
 
   if (facts.ok) {

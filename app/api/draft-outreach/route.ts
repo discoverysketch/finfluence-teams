@@ -28,7 +28,7 @@ export async function POST(request: Request) {
   if (!accountId || !trigger?.title) return NextResponse.json({ error: "Missing account or signal" }, { status: 400 });
 
   const { data: acct } = await supabase.from("accounts")
-    .select("id, crm_stage, entity:entities(id, canonical_name, ticker)").eq("id", accountId).maybeSingle();
+    .select("id, crm_stage, entity:entities(id, canonical_name, ticker, decision_locus, decision_note)").eq("id", accountId).maybeSingle();
   const ent: any = acct?.entity;
   if (!ent) return NextResponse.json({ error: "Account not found" }, { status: 404 });
 
@@ -63,6 +63,7 @@ export async function POST(request: Request) {
     if (keyFigs.length) L.push(`REAL FIGURES YOU MAY CITE: ${keyFigs.join(", ")}`);
   }
   if (recipient) L.push(`RECIPIENT: ${recipient.name}${recipient.title ? `, ${recipient.title}` : ""}`);
+  if (ent.decision_locus === "corporate") L.push(`NOTE: major software decisions are made at the corporate parent${ent.decision_note ? ` (${String(ent.decision_note).slice(0, 200)})` : ""} — frame this as building the local case/champion, not asking for a signature.`);
 
   const client = new Anthropic();
   try {
