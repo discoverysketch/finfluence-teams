@@ -87,6 +87,33 @@ export async function GET(request: Request) {
       }
     } catch { /* skip this entity, keep going */ }
   }
+  // Morning task radar: anyone with tasks due today (or overdue) gets one push
+  // — the app starts the rep's day instead of waiting to be opened.
+  let radar = 0;
+  try {
+    const endOfToday = new Date(); endOfToday.setUTCHours(23, 59, 59, 999);
+    const { data: due } = await admin.from("activities")
+      .select("user_id, body, due_at, account_id").eq("kind", "task").eq("done", false)
+      .not("due_at", "is", null).lte("due_at", endOfToday.toISOString())
+      .order("due_at", { ascending: true }).limit(200);
+    const acctIds = [...new Set(((due ?? []) as any[]).map((t) => t.account_id).filter(Boolean))];
+    const { data: acctNames } = acctIds.length
+      ? await admin.from("accounts").select("id, entity:entities(canonical_name)").in("id", acctIds)
+      : { data: [] };
+    const nameOf: Record<string, string> = {};
+    for (const a of (acctNames ?? []) as any[]) nameOf[a.id] = a.entity?.canonical_name ?? "an account";
+    const byUser: Record<string, any[]> = {};
+    for (const t of (due ?? []) as any[]) if (t.user_id) (byUser[t.user_id] ??= []).push(t);
+    for (const [uid, tasks] of Object.entries(byUser)) {
+      const first = tasks[0];
+      radar += await pushToUsers([uid], {
+        title: `📋 ${tasks.length} task${tasks.length === 1 ? "" : "s"} due today`,
+        body: `First up — ${nameOf[first.account_id] ?? "an account"}: ${String(first.body).slice(0, 90)}`,
+        url: "/", tag: `radar-${new Date().toISOString().slice(0, 10)}`,
+      });
+    }
+  } catch { /* radar is best-effort */ }
+
   // Monday: also send the weekly digest email (rides this cron — Hobby plan
   // caps cron jobs at 2). ?digest=1 forces a send for testing.
   let digest: { sent: number; skipped?: string; errors: number } | null = null;
@@ -95,5 +122,5 @@ export async function GET(request: Request) {
     try { digest = await sendWeeklyDigests(admin); } catch (e) { digest = { sent: 0, skipped: (e as Error).message, errors: 1 }; }
   }
 
-  return NextResponse.json({ checked, filings, pushed, backfillDays, digest });
+  return NextResponse.json({ checked, filings, pushed, backfillDays, digest, radar });
 }

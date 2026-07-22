@@ -12,7 +12,10 @@ const FROM = process.env.DIGEST_FROM || "AccountFluency <finn@accountfluency.com
 
 function esc(s: string) { return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;"); }
 
-function renderHtml(o: { rank: number | null; weekPts: number; signals: { name: string; label: string; filed: string; icon: string }[]; tasks: { body: string; due: string | null }[] }) {
+const STAGE_ODDS: Record<string, number> = { prospect: 0.1, discovery: 0.25, evaluation: 0.4, proposal: 0.6, negotiation: 0.8, closed_won: 1, closed_lost: 0 };
+const fmtK = (v: number) => (v >= 1e6 ? `$${(v / 1e6).toFixed(1)}M` : v >= 1e3 ? `$${Math.round(v / 1e3)}k` : `$${Math.round(v)}`);
+
+function renderHtml(o: { rank: number | null; weekPts: number; weighted: number; signals: { name: string; label: string; filed: string; icon: string }[]; tasks: { body: string; due: string | null }[] }) {
   const sigRows = o.signals.length
     ? o.signals.map((s) => `<div style="padding:8px 0;border-bottom:1px solid #F0EAE0;font-size:13.5px;"><b>${s.icon} ${esc(s.name)}</b> — ${esc(s.label)} <span style="color:#8A7E6E;">· ${esc(s.filed)}</span></div>`).join("")
     : `<div style="font-size:13px;color:#6B6254;">No filings from your accounts this week.</div>`;
@@ -28,6 +31,7 @@ function renderHtml(o: { rank: number | null; weekPts: number; signals: { name: 
         <div style="font-size:22px;font-weight:800;color:#2B2620;letter-spacing:-.02em;">AccountFluency</div>
         <div style="font-size:11px;font-weight:700;color:#9A6700;text-transform:uppercase;letter-spacing:.7px;margin:4px 0 16px;">Your week, in one look</div>
         ${o.rank != null ? `<div style="font-size:14px;color:#3A342B;">You're <b>#${o.rank}</b> in the league with <b>${o.weekPts}</b> points this week.</div>` : ""}
+        ${o.weighted > 0 ? `<div style="font-size:14px;color:#3A342B;margin-top:4px;">Your weighted pipeline: <b>${fmtK(o.weighted)}</b>.</div>` : ""}
         ${sec("Signals from your accounts")}${sigRows}
         ${sec("Open next steps")}${taskRows}
         <a href="${SITE}" style="display:inline-block;background:#B23A2E;color:#ffffff;font-size:14px;font-weight:700;text-decoration:none;border-radius:10px;padding:12px 22px;margin-top:22px;">Open AccountFluency</a>
@@ -51,7 +55,7 @@ export async function sendWeeklyDigests(admin: any): Promise<{ sent: number; ski
 
   for (const tenantId of tenants) {
     const { data: list } = await admin.from("account_lists").select("id").eq("tenant_id", tenantId).order("created_at").limit(1).maybeSingle();
-    const { data: accts } = await admin.from("accounts").select("entity_id, owner").eq("list_id", list?.id ?? "00000000-0000-0000-0000-000000000000");
+    const { data: accts } = await admin.from("accounts").select("entity_id, owner, crm_stage, deal_value").eq("list_id", list?.id ?? "00000000-0000-0000-0000-000000000000");
     const entityIds = ((accts ?? []) as any[]).map((a) => a.entity_id).filter(Boolean);
     const { data: events } = entityIds.length
       ? await admin.from("filing_events").select("form, filed, items, label, entity_id, entity:entities(canonical_name)").in("entity_id", entityIds).gte("filed", weekAgo).order("filed", { ascending: false }).limit(10)
@@ -71,9 +75,13 @@ export async function sendWeeklyDigests(admin: any): Promise<{ sent: number; ski
       const signals = (owned.size ? evPool.filter((ev) => owned.has(ev.entity_id)) : evPool).slice(0, 5).map(toSignal);
       const { data: tasks } = await admin.from("activities").select("body, due_at").eq("user_id", u.id).eq("kind", "task").eq("done", false).order("due_at", { ascending: true, nullsFirst: false }).limit(3);
       const rank = standings.findIndex((r: any) => r.id === u.id);
+      const weighted = ((accts ?? []) as any[])
+        .filter((a) => a.owner === u.id)
+        .reduce((n, a) => n + (Number(a.deal_value) || 0) * (STAGE_ODDS[a.crm_stage || "prospect"] ?? 0.1), 0);
       const html = renderHtml({
         rank: rank >= 0 ? rank + 1 : null,
         weekPts: rank >= 0 ? (standings[rank] as any).week ?? 0 : 0,
+        weighted,
         signals,
         tasks: ((tasks ?? []) as any[]).map((t) => ({ body: String(t.body).slice(0, 120), due: t.due_at ? String(t.due_at).slice(0, 10) : null })),
       });

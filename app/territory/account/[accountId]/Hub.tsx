@@ -146,9 +146,9 @@ function EiaBlock({ eia }: { eia: EiaOps }) {
 type CForm = { id?: string; name: string; title: string; role_tag: string; email: string; phone: string; reports_to: string };
 const emptyC: CForm = { name: "", title: "", role_tag: "", email: "", phone: "", reports_to: "" };
 
-export default function Hub({ accountId, userId, entityId, ticker, initialStage, initialNotes, initialOwner, initialContacts, initialActivities, emailOf }: {
+export default function Hub({ accountId, userId, entityId, ticker, initialStage, initialNotes, initialOwner, initialDealValue, initialContacts, initialActivities, emailOf }: {
   accountId: string; userId: string; entityId: string | null; ticker: string | null;
-  initialStage: string | null; initialNotes: string | null; initialOwner: string | null;
+  initialStage: string | null; initialNotes: string | null; initialOwner: string | null; initialDealValue: number | null;
   initialContacts: Contact[]; initialActivities: Activity[]; emailOf: Record<string, string>;
 }) {
   const supabase = createClient();
@@ -156,6 +156,7 @@ export default function Hub({ accountId, userId, entityId, ticker, initialStage,
   const [fin, setFin] = useState<FinState>({ loading: true });
   const [stage, setStage] = useState(initialStage || "prospect");
   const [owner, setOwner] = useState<string | null>(initialOwner);
+  const [dealValue, setDealValue] = useState<string>(initialDealValue != null ? String(initialDealValue) : "");
   const [notes, setNotes] = useState(initialNotes || "");
   const [notesDirty, setNotesDirty] = useState(false);
   const [contacts, setContacts] = useState<Contact[]>(initialContacts);
@@ -238,6 +239,12 @@ export default function Hub({ accountId, userId, entityId, ticker, initialStage,
   async function saveStage(s: string) {
     setStage(s);
     const { error } = await supabase.from("accounts").update({ crm_stage: s }).eq("id", accountId);
+    if (error) setMsg(error.message);
+  }
+  async function saveDealValue() {
+    const v = dealValue.trim() === "" ? null : Number(dealValue.replace(/[^0-9.]/g, ""));
+    if (v != null && !isFinite(v)) return;
+    const { error } = await supabase.from("accounts").update({ deal_value: v }).eq("id", accountId);
     if (error) setMsg(error.message);
   }
   async function saveOwner(v: string) {
@@ -437,6 +444,9 @@ export default function Hub({ accountId, userId, entityId, ticker, initialStage,
           ))}
         </select>
         {!owner && <button className="mini" onClick={() => saveOwner(userId)}>Claim</button>}
+        <span style={{ fontSize: 12, fontWeight: 700, color: "var(--ink2)", marginLeft: 8 }}>Deal $</span>
+        <input inputMode="numeric" value={dealValue} onChange={(e) => setDealValue(e.target.value.replace(/[^0-9.]/g, ""))} onBlur={saveDealValue}
+          placeholder="e.g. 250000" style={{ width: 110, fontSize: 12.5, padding: "5px 8px", borderRadius: 8, border: "1px solid var(--border)" }} />
       </div>
 
       {/* ---- Stage ---- */}

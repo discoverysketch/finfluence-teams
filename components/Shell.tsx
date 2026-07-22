@@ -1,6 +1,7 @@
 import Link from "next/link";
 import Finn from "./Finn";
 import MuteButton from "./MuteButton";
+import GlobalSearch from "./GlobalSearch";
 import { createClient } from "@/lib/supabase/server";
 import { overallAcumen, tier, level, type Ev } from "@/lib/acumen";
 import { Map, Target, Building2, UserRound, PenLine } from "lucide-react";
@@ -46,6 +47,7 @@ export default async function Shell({
             <div className="xpwrap"><div className="xpbar" style={{ width: `${lv.pct}%` }} /></div>
           </>
         )}
+        <GlobalSearch />
         <MuteButton />
       </header>
       <main className="container">{children}</main>

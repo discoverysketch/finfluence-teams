@@ -25,7 +25,7 @@ export default async function ManagerPage() {
     // Seeded (core) cards only — custom concepts are practice-only and don't count.
     supabase.from("progress").select("user_id, cards!inner(is_seeded)").eq("status", "mastered").eq("cards.is_seeded", true),
     supabase.from("score_events").select("user_id,concept_tag,correct"),
-    supabase.from("accounts").select("id, crm_stage, owner, entity:entities(canonical_name, ticker)"),
+    supabase.from("accounts").select("id, crm_stage, owner, deal_value, entity:entities(canonical_name, ticker)"),
     supabase.from("activities").select("account_id, user_id, kind, done, created_at").order("created_at", { ascending: false }).limit(1000),
   ]);
   const members = (memberData ?? []) as Member[];
@@ -49,6 +49,14 @@ export default async function ManagerPage() {
   const acts = (actData ?? []) as any[];
   const byStage: Record<string, any[]> = {};
   for (const a of accts) (byStage[a.crm_stage || "prospect"] ??= []).push(a);
+
+  // Dollars: sum per stage + probability-weighted total (standard stage odds).
+  const STAGE_ODDS: Record<string, number> = { prospect: 0.1, discovery: 0.25, evaluation: 0.4, proposal: 0.6, negotiation: 0.8, closed_won: 1, closed_lost: 0 };
+  const fmtK = (v: number) => (v >= 1e6 ? `$${(v / 1e6).toFixed(1)}M` : v >= 1e3 ? `$${Math.round(v / 1e3)}k` : `$${Math.round(v)}`);
+  const stageSum = (k: string) => (byStage[k] ?? []).reduce((n, a) => n + (Number(a.deal_value) || 0), 0);
+  const weighted = accts.reduce((n, a) => n + (Number(a.deal_value) || 0) * (STAGE_ODDS[a.crm_stage || "prospect"] ?? 0.1), 0);
+  const wonTotal = stageSum("closed_won");
+  const valuedCount = accts.filter((a) => Number(a.deal_value) > 0).length;
 
   const lastTouch: Record<string, string> = {};
   for (const a of acts) if (!lastTouch[a.account_id]) lastTouch[a.account_id] = a.created_at; // acts are newest-first
@@ -89,7 +97,12 @@ export default async function ManagerPage() {
         <Stat n={String(totalMastered)} l="cards mastered" />
       </div>
 
-      <div className="secttl">Pipeline · {accts.length} accounts</div>
+      <div className="secttl">Pipeline · {accts.length} accounts{valuedCount > 0 ? ` · ${fmtK(weighted)} weighted · ${fmtK(wonTotal)} won` : ""}</div>
+      {valuedCount === 0 && (
+        <p style={{ fontSize: 12, color: "var(--ink2)", margin: "0 0 8px" }}>
+          No deal values yet — set &ldquo;Deal $&rdquo; on account pages and this becomes a weighted $ pipeline.
+        </p>
+      )}
       <div style={{ display: "flex", gap: 6, overflowX: "auto", paddingBottom: 4 }}>
         {STAGES.map(([k, label]) => {
           const rows = byStage[k] ?? [];
@@ -97,7 +110,7 @@ export default async function ManagerPage() {
             <div key={k} style={{ minWidth: 128, flex: 1, background: "#fff", border: "1px solid var(--border)", borderRadius: 10, padding: "8px 9px" }}>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 6 }}>
                 <span style={{ fontSize: 10.5, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".4px", color: k === "closed_won" ? "var(--green)" : k === "closed_lost" ? "var(--muted)" : "var(--ink2)" }}>{label}</span>
-                <span style={{ fontSize: 13, fontWeight: 800 }}>{rows.length}</span>
+                <span style={{ fontSize: 13, fontWeight: 800 }}>{rows.length}{stageSum(k) > 0 ? <span style={{ fontSize: 10.5, color: "var(--ink2)", fontWeight: 700 }}> · {fmtK(stageSum(k))}</span> : null}</span>
               </div>
               {rows.slice(0, 6).map((a) => (
                 <Link key={a.id} href={`/territory/account/${a.id}`} style={{ color: "inherit", display: "block" }}>
