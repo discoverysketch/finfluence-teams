@@ -9,6 +9,7 @@ import PrepBrief from "./PrepBrief";
 import DraftOutreach from "@/components/DraftOutreach";
 import CaptureNotes from "./CaptureNotes";
 import WhatChanged from "@/components/WhatChanged";
+import WinWire from "./WinWire";
 
 export type Contact = { id: string; account_id: string; name: string; title: string | null; role_tag: string | null; email: string | null; phone: string | null; reports_to: string | null; notes: string | null };
 export type Activity = { id: string; account_id: string; contact_id: string | null; user_id: string | null; kind: string; body: string; due_at: string | null; done: boolean; created_at: string };
@@ -450,6 +451,8 @@ export default function Hub({ accountId, userId, entityId, ticker, initialStage,
           </button>
         ))}
       </div>
+
+      {stage === "closed_won" && <WinWire accountId={accountId} />}
 
       {/* ---- Open tasks ---- */}
       {openTasks.length > 0 && (
