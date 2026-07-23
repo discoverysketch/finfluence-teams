@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import Link from "next/link";
 import Shell from "@/components/Shell";
 import StoryShowcase from "@/components/StoryShowcase";
+import { STORY_UNIT_RE } from "@/lib/storySweep";
 
 type Card = { id: string; cseq: number };
 type Unit = { id: string; title: string; icon: string | null; seq: number; is_seeded: boolean; cards: Card[] };
@@ -32,7 +33,7 @@ export default async function Learn() {
   const units = ((data ?? []) as unknown as Unit[]).slice().sort((a, b) => a.seq - b.seq);
   // Customer stories are selling ammunition, not curriculum — pull them out of
   // the path lists into their own showcase section.
-  const isStoryUnit = (u: Unit) => /customer stor|win wire/i.test(u.title);
+  const isStoryUnit = (u: Unit) => STORY_UNIT_RE.test(u.title);
   const storyUnits = units.filter(isStoryUnit);
   const core = units.filter((u) => u.is_seeded && !isStoryUnit(u));
   const custom = units.filter((u) => !u.is_seeded && !isStoryUnit(u));

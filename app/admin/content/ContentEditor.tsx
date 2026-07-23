@@ -1,6 +1,7 @@
 "use client";
 import { useEffect, useState, useCallback } from "react";
 import { createClient } from "@/lib/supabase/client";
+import { STORY_BUCKETS, STORY_UNIT_RE } from "@/lib/storySweep";
 
 type Unit = { id: string; title: string; icon: string | null; order: number; is_seeded: boolean };
 type Body = {
@@ -177,14 +178,7 @@ export default function ContentEditor() {
   // drafting every citable utility/energy/water win story into a dedicated
   // "Customer Stories" unit. Re-running only ADDS — customers already in the
   // library are excluded from the search, so the same button is the updater.
-  const LIB_BUCKETS: [string, string][] = [
-    ["Cloud ERP & financials", "Oracle Cloud ERP financials general ledger"],
-    ["EPM · planning & close", "Oracle EPM financial planning and close"],
-    ["Primavera · capital projects", "Primavera P6 capital project management"],
-    ["Aconex · construction", "Oracle Aconex construction project delivery"],
-    ["SCM · procurement", "Oracle Fusion SCM procurement supply chain"],
-    ["Energy & Water · CIS/meter/grid", "Oracle Energy and Water customer care billing meter data"],
-  ];
+  const LIB_BUCKETS = STORY_BUCKETS;
   async function buildLibrary() {
     if (!packId || libBusy) return;
     setMsg(""); setLibAdded(0);
@@ -199,14 +193,15 @@ export default function ContentEditor() {
     }
     await selectUnit(unit);
     setLibBusy(true);
-    // Covered customers = the "Customer — product" fronts already in the unit.
-    // New finds save STRAIGHT into the unit as each bucket lands (every story
-    // is sourced + deduped; the editor below is where you prune) — so a tab
-    // reload mid-sweep loses nothing, and re-runs pick up where the data is.
-    const { data: existing } = await supabase.from("cards").select("front").eq("unit_id", unit.id);
+    // Covered customers = "Customer — product" fronts across ALL story units
+    // (library, win wires, any "...Wins" collection) so sweeps never duplicate
+    // a story that lives in a sibling deck. New finds save STRAIGHT into the
+    // unit as each bucket lands — a tab reload mid-sweep loses nothing.
+    const storyIds = [...new Set([...units.filter((u) => STORY_UNIT_RE.test(u.title)).map((u) => u.id), unit.id])];
+    const { data: existing } = await supabase.from("cards").select("front, unit_id").in("unit_id", storyIds);
     const covered = new Set(((existing ?? []) as any[])
       .map((c) => String(c.front).split("—")[0].trim().toLowerCase()).filter((s) => s.length > 2));
-    let nextOrder = (existing ?? []).length;
+    let nextOrder = ((existing ?? []) as any[]).filter((c) => c.unit_id === unit.id).length;
     let added = 0;
     for (let b = 0; b < LIB_BUCKETS.length; b++) {
       const [label, q] = LIB_BUCKETS[b];
