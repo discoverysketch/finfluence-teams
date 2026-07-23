@@ -200,9 +200,13 @@ export default function ContentEditor() {
     await selectUnit(unit);
     setLibBusy(true);
     // Covered customers = the "Customer — product" fronts already in the unit.
+    // New finds save STRAIGHT into the unit as each bucket lands (every story
+    // is sourced + deduped; the editor below is where you prune) — so a tab
+    // reload mid-sweep loses nothing, and re-runs pick up where the data is.
     const { data: existing } = await supabase.from("cards").select("front").eq("unit_id", unit.id);
     const covered = new Set(((existing ?? []) as any[])
       .map((c) => String(c.front).split("—")[0].trim().toLowerCase()).filter((s) => s.length > 2));
+    let nextOrder = (existing ?? []).length;
     let added = 0;
     for (let b = 0; b < LIB_BUCKETS.length; b++) {
       const [label, q] = LIB_BUCKETS[b];
@@ -217,16 +221,21 @@ export default function ContentEditor() {
         for (const c of j.cards as any[]) {
           const cust = String(c.front || "").split("—")[0].trim().toLowerCase();
           if (!cust || covered.has(cust)) continue;
-          covered.add(cust); added++; setLibAdded(added);
-          setDrafts((d) => [...d, {
-            id: "", front: c.front || "", concept_tag: c.concept_tag || null, order: 0,
+          const { error } = await supabase.from("cards").insert({
+            unit_id: unit.id, type: "flashcard", order: nextOrder++, is_seeded: false,
+            front: c.front || "", concept_tag: c.concept_tag || null,
             body_json: { prompt: c.prompt, whatItIs: c.whatItIs, whyItMatters: c.whyItMatters, link: c.link, utility: c.utility, worked: c.worked },
-          }]);
+          });
+          if (error) continue;
+          covered.add(cust); added++; setLibAdded(added);
         }
+        await loadCards(unit.id); // reflect the growing unit live
       } catch { /* next bucket */ }
     }
     setLibStage(""); setLibBusy(false);
-    if (!added) setMsg("No new stories found — the library already covers everything the search can reach right now.");
+    setMsg(added
+      ? `Library updated: ${added} new customer stor${added === 1 ? "y" : "ies"} saved to "${unit.title}" — skim the unit and delete any that don't earn their place.`
+      : "No new stories found — the library already covers everything the search can reach right now.");
   }
 
   async function approveDraft(idx: number) {
@@ -293,7 +302,7 @@ export default function ContentEditor() {
       <div className="edsec" style={{ marginTop: 26 }}>📚 Customer Story Library</div>
       <div className="card" style={{ background: "#F0F7F7", borderColor: "#C4DEDF" }}>
         <p style={{ fontSize: 12.5, color: "var(--ink2)", margin: "0 0 10px", lineHeight: 1.5 }}>
-          One sweep across <b>ERP · EPM · Primavera · Aconex · SCM · Energy &amp; Water</b> finds every citable utility/energy/water win story on the web and drafts them into the <b>Customer Stories</b> unit — each with its source URL, each reviewed by you before it saves. Re-run any time: customers already in the library are skipped, so it only <b>adds what&apos;s new</b>.
+          One sweep across <b>ERP · EPM · Primavera · Aconex · SCM · Energy &amp; Water</b> finds every citable utility/energy/water win story on the web and saves them into the <b>Customer Stories</b> unit as they land — each with its source URL. Skim the unit afterward and delete any that don&apos;t earn their place. Re-run any time: customers already in the library are skipped, so it only <b>adds what&apos;s new</b>.
         </p>
         <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
           <button className="btn" style={{ background: "var(--teal)" }} disabled={libBusy || genLoading} onClick={buildLibrary}>
