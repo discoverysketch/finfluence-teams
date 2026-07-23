@@ -98,11 +98,6 @@ export default async function ManagerPage() {
       </div>
 
       <div className="secttl">Pipeline · {accts.length} accounts{valuedCount > 0 ? ` · ${fmtK(weighted)} weighted · ${fmtK(wonTotal)} won` : ""}</div>
-      {valuedCount === 0 && (
-        <p style={{ fontSize: 12, color: "var(--ink2)", margin: "0 0 8px" }}>
-          No deal values yet — set &ldquo;Deal $&rdquo; on account pages and this becomes a weighted $ pipeline.
-        </p>
-      )}
       <div style={{ display: "flex", gap: 6, overflowX: "auto", paddingBottom: 4 }}>
         {STAGES.map(([k, label]) => {
           const rows = byStage[k] ?? [];

@@ -99,6 +99,7 @@ export default function CaptureNotes({ accountId, userId, onSaved, onStage }: {
           <textarea value={raw} onChange={(e) => setRaw(e.target.value)} rows={5}
             placeholder={"Dump your rough notes — shorthand is fine.\ne.g. met w dan h, close takes 12d mostly manual plant acctg, wants primavera-erp overview + capex refs by fri, bring closson next time"}
             style={{ width: "100%", border: "1px solid #E2D8EE", borderRadius: 8, padding: 10, fontSize: 13.5, fontFamily: "inherit", background: "#fff" }} />
+          <p style={{ fontSize: 10.5, color: "var(--muted)", margin: "4px 0 0" }}>Companion rule: your own prep and public info only — keep company-confidential details (real deal figures, contract terms) out of the app.</p>
           <div style={{ display: "flex", gap: 8, marginTop: 8, alignItems: "center" }}>
             <button className="btn" disabled={busy || raw.trim().length < 10} onClick={structure}>
               {busy ? "Structuring…" : "Structure my notes"}

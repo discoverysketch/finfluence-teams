@@ -444,9 +444,10 @@ export default function Hub({ accountId, userId, entityId, ticker, initialStage,
           ))}
         </select>
         {!owner && <button className="mini" onClick={() => saveOwner(userId)}>Claim</button>}
-        <span style={{ fontSize: 12, fontWeight: 700, color: "var(--ink2)", marginLeft: 8 }}>Deal $</span>
+        <span style={{ fontSize: 12, fontWeight: 700, color: "var(--ink2)", marginLeft: 8 }} title="Optional — rough personal estimate only; keep confidential figures out of the app">Deal $</span>
         <input inputMode="numeric" value={dealValue} onChange={(e) => setDealValue(e.target.value.replace(/[^0-9.]/g, ""))} onBlur={saveDealValue}
-          placeholder="e.g. 250000" style={{ width: 110, fontSize: 12.5, padding: "5px 8px", borderRadius: 8, border: "1px solid var(--border)" }} />
+          placeholder="optional" title="Optional — rough personal estimate only; keep confidential figures out of the app"
+          style={{ width: 110, fontSize: 12.5, padding: "5px 8px", borderRadius: 8, border: "1px solid var(--border)" }} />
       </div>
 
       {/* ---- Stage ---- */}
