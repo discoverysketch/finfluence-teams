@@ -128,7 +128,7 @@ export default function ContentEditor() {
     if (genSrc.trim()) parts.push(genSrc.trim());
     return parts.join("\n\n");
   };
-  const hasSource = () => genFiles.some((g) => g.kind === "pdf") || combinedSource().length >= 40;
+  const hasSource = () => genFiles.some((g) => g.kind === "pdf") || combinedSource().length >= 6; // short topic lists count (topic mode)
 
   async function generate() {
     if (!sel) return;
