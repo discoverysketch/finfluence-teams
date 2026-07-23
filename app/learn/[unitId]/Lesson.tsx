@@ -46,6 +46,11 @@ export default function Lesson({
 
   const card = cards[i];
   const b = card.body_json;
+  // Customer-story cards embed their citation as "Source: <url>" (usually in
+  // the worked field). Pull it out to a proper clickable link and strip the
+  // raw URL from the body text so it reads clean.
+  const srcUrl = [b?.worked, b?.utility, b?.whyItMatters, b?.link].map((t) => t?.match(/https?:\/\/[^\s)"']+/)?.[0]).find(Boolean) || null;
+  const clean = (t?: string) => (t ? t.replace(/\s*(?:·\s*)?Source:?\s*https?:\/\/[^\s)"']+/i, "").replace(/\s*https?:\/\/[^\s)"']+/i, "").trim() : t);
 
   function reset(el: HTMLDivElement | null) {
     if (el) { el.style.transition = "transform .35s, opacity .35s"; el.style.transform = ""; el.style.opacity = "1"; }
@@ -113,11 +118,19 @@ export default function Lesson({
             <div className="face back">
               <div style={{ fontWeight: 700, marginBottom: 8 }}>{card.front}</div>
               <div className="rule" />
-              {b?.whatItIs && <p style={{ margin: "6px 0", fontSize: 14 }}><b style={{ color: "var(--blue)" }}>What it is:</b> {b.whatItIs}</p>}
-              {b?.whyItMatters && <p style={{ margin: "6px 0", fontSize: 14 }}><b style={{ color: "var(--purple)" }}>Why it matters:</b> {b.whyItMatters}</p>}
-              {b?.link && <p style={{ margin: "6px 0", fontSize: 14 }}><b>{b.linkLabel || "Link"}:</b> {b.link}</p>}
-              {b?.utility && <p style={{ margin: "6px 0", fontSize: 14 }}><b>{b.utilityLabel || "⚡ Utility lens"}:</b> {b.utility}</p>}
-              {b?.worked && <p style={{ margin: "6px 0", fontSize: 14, background: "#F7F2E9", borderLeft: "3px solid var(--gold)", borderRadius: 6, padding: "8px 10px" }}><b>{b.workedLabel || "🧮 Worked example"}:</b> {b.worked}</p>}
+              {b?.whatItIs && <p style={{ margin: "6px 0", fontSize: 14 }}><b style={{ color: "var(--blue)" }}>What it is:</b> {clean(b.whatItIs)}</p>}
+              {b?.whyItMatters && <p style={{ margin: "6px 0", fontSize: 14 }}><b style={{ color: "var(--purple)" }}>Why it matters:</b> {clean(b.whyItMatters)}</p>}
+              {b?.link && !/https?:\/\//.test(b.link) && <p style={{ margin: "6px 0", fontSize: 14 }}><b>{b.linkLabel || "Link"}:</b> {b.link}</p>}
+              {b?.utility && <p style={{ margin: "6px 0", fontSize: 14 }}><b>{b.utilityLabel || "⚡ Utility lens"}:</b> {clean(b.utility)}</p>}
+              {b?.worked && clean(b.worked) && <p style={{ margin: "6px 0", fontSize: 14, background: "#F7F2E9", borderLeft: "3px solid var(--gold)", borderRadius: 6, padding: "8px 10px" }}><b>{b.workedLabel || "🧮 Worked example"}:</b> {clean(b.worked)}</p>}
+              {srcUrl && (
+                <p style={{ margin: "8px 0 0", fontSize: 13 }}>
+                  <a href={srcUrl} target="_blank" rel="noreferrer" onPointerDown={(e) => e.stopPropagation()} onClick={(e) => e.stopPropagation()}
+                    style={{ color: "var(--blue)", fontWeight: 700, textDecoration: "none" }}>
+                    📎 Read the source ↗
+                  </a>
+                </p>
+              )}
             </div>
           </div>
         </div>
