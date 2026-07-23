@@ -51,6 +51,11 @@ export default function Lesson({
   // raw URL from the body text so it reads clean.
   const srcUrl = [b?.worked, b?.utility, b?.whyItMatters, b?.link].map((t) => t?.match(/https?:\/\/[^\s)"']+/)?.[0]).find(Boolean) || null;
   const clean = (t?: string) => (t ? t.replace(/\s*(?:·\s*)?Source:?\s*https?:\/\/[^\s)"']+/i, "").replace(/\s*https?:\/\/[^\s)"']+/i, "").trim() : t);
+  // Story cards live in the "…Stories/Wins/Win Wire" units. Those without a
+  // stored URL get a search fallback so every story reaches its real source.
+  const isStory = /customer stor|win wire|\bwins\b/i.test(unitTitle);
+  const custName = card.front.split("—")[0].replace(/^WIN:\s*/i, "").trim();
+  const searchUrl = isStory && !srcUrl && custName ? `https://www.google.com/search?q=${encodeURIComponent(`${custName} Oracle customer story`)}` : null;
 
   function reset(el: HTMLDivElement | null) {
     if (el) { el.style.transition = "transform .35s, opacity .35s"; el.style.transform = ""; el.style.opacity = "1"; }
@@ -123,11 +128,11 @@ export default function Lesson({
               {b?.link && !/https?:\/\//.test(b.link) && <p style={{ margin: "6px 0", fontSize: 14 }}><b>{b.linkLabel || "Link"}:</b> {b.link}</p>}
               {b?.utility && <p style={{ margin: "6px 0", fontSize: 14 }}><b>{b.utilityLabel || "⚡ Utility lens"}:</b> {clean(b.utility)}</p>}
               {b?.worked && clean(b.worked) && <p style={{ margin: "6px 0", fontSize: 14, background: "#F7F2E9", borderLeft: "3px solid var(--gold)", borderRadius: 6, padding: "8px 10px" }}><b>{b.workedLabel || "🧮 Worked example"}:</b> {clean(b.worked)}</p>}
-              {srcUrl && (
+              {(srcUrl || searchUrl) && (
                 <p style={{ margin: "8px 0 0", fontSize: 13 }}>
-                  <a href={srcUrl} target="_blank" rel="noreferrer" onPointerDown={(e) => e.stopPropagation()} onClick={(e) => e.stopPropagation()}
+                  <a href={srcUrl || searchUrl!} target="_blank" rel="noreferrer" onPointerDown={(e) => e.stopPropagation()} onClick={(e) => e.stopPropagation()}
                     style={{ color: "var(--blue)", fontWeight: 700, textDecoration: "none" }}>
-                    📎 Read the source ↗
+                    {srcUrl ? "📎 Read the source ↗" : "🔎 Find the source ↗"}
                   </a>
                 </p>
               )}
