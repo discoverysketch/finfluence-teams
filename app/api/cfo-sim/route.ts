@@ -40,7 +40,7 @@ export async function POST(request: Request) {
   if (!user) return NextResponse.json({ error: "Not signed in" }, { status: 401 });
   if (!process.env.ANTHROPIC_API_KEY) return NextResponse.json({ error: "ANTHROPIC_API_KEY is not set on the server." }, { status: 500 });
 
-  const { entityId, messages, mode } = await request.json().catch(() => ({}));
+  const { entityId, messages, mode, live } = await request.json().catch(() => ({}));
   if (!entityId) return NextResponse.json({ error: "Missing account" }, { status: 400 });
 
   const target = await ensureEntityFacts(supabase, entityId);
@@ -55,8 +55,10 @@ export async function POST(request: Request) {
     const transcript = history.slice(-8).map((m) => `${m.role === "cfo" ? "CFO" : "REP"}: ${m.content}`).join("\n\n");
     const kb = await loadKnowledge(supabase);
     const sys =
-      `You are an elite Oracle sales coach whispering in a rep's ear during a rehearsal meeting with the CFO of ${target.company}, a US utility. ` +
-      `Craft what the rep should SAY next, answering the CFO's most recent question head-on.\n` +
+      (live
+        ? `You are an elite Oracle sales coach whispering in a rep's ear during a LIVE meeting with a senior leader at ${target.company}, a US utility. Every word must be safe to say out loud verbatim — no placeholders, no hedges the rep would have to edit. `
+        : `You are an elite Oracle sales coach whispering in a rep's ear during a rehearsal meeting with the CFO of ${target.company}, a US utility. `) +
+      `Craft what the rep should SAY next, answering the customer's most recent statement or question head-on.\n` +
       `Rules:\n` +
       `- Ground value claims in the PRODUCT KNOWLEDGE BASE below (the team's approved content) whenever it covers the topic; for capital-project questions you may also draw on Oracle Primavera P6 and Aconex (established products). Prefer current product names as given in the knowledge base.\n` +
       `- Tie the answer to the CFO's OWN numbers (below) — never invent figures about their company.\n` +
