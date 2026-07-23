@@ -36,9 +36,12 @@ export async function POST(request: Request) {
   if (me?.role !== "admin") return NextResponse.json({ error: "Admins only" }, { status: 403 });
   if (!process.env.ANTHROPIC_API_KEY) return NextResponse.json({ error: "ANTHROPIC_API_KEY is not set on the server." }, { status: 500 });
 
-  const { topic, count } = await request.json().catch(() => ({}));
-  const n = Math.min(Math.max(Number(count) || 4, 1), 6);
+  const { topic, count, exclude } = await request.json().catch(() => ({}));
+  const n = Math.min(Math.max(Number(count) || 4, 1), 8);
   const focus = String(topic || "").trim() || "Oracle Cloud ERP, EPM, Fusion SCM, Primavera P6, Aconex, and Oracle Energy and Water";
+  // Library mode: customers already covered — skip them so re-runs only ADD.
+  const excl = (Array.isArray(exclude) ? exclude : []).map((s: unknown) => String(s)).filter(Boolean).slice(0, 80);
+  const exclLine = excl.length ? ` DO NOT include stories about these customers (already in our library): ${excl.join("; ")}.` : "";
 
   const client = new Anthropic();
   try {
@@ -52,7 +55,7 @@ export async function POST(request: Request) {
           `Find ${n} REAL, citable customer success stories where UTILITY, ENERGY, or WATER companies (IOUs, municipals, co-ops, water districts, grid operators — any country, prefer US) used ${focus}. ` +
           `You have a limited search budget — be efficient: start with ONE broad targeted query (e.g. site:oracle.com/customers utility energy) whose results list several stories at once, then at most 1-2 follow-ups on specific candidates. ` +
           `Prefer oracle.com/customers case studies and official press releases. For each story capture: customer name; which Oracle product(s); what they deployed/replaced; concrete outcomes with numbers where published (cost, close time, project delivery, customers served); and the EXACT source URL from your search results. ` +
-          `Only include stories you can cite with a URL that appeared in your search results — skip anything you can't source. Plain compact notes, one story per paragraph.`,
+          `Only include stories you can cite with a URL that appeared in your search results — skip anything you can't source. Plain compact notes, one story per paragraph.` + exclLine,
       }],
     });
     const notes = research.content.filter((b) => b.type === "text").map((b) => (b as any).text).join("\n").trim();
@@ -68,7 +71,7 @@ export async function POST(request: Request) {
         "whatItIs = what they deployed and why. whyItMatters = the outcomes, with numbers when the notes have them. link = the Oracle products used. " +
         "utility = why this story resonates with a utility CFO. worked = the single best metric or result, ending with the source on its own: 'Source: <url>'. " +
         "concept_tag = the closest finance concept (prof/liq/ret/cash/found). Drop any story whose notes lack a source URL.",
-      messages: [{ role: "user", content: `Research notes:\n\n${notes.slice(0, 20000)}` }],
+      messages: [{ role: "user", content: `${excl.length ? `Drop any story about these already-covered customers: ${excl.join("; ")}.\n\n` : ""}Research notes:\n\n${notes.slice(0, 20000)}` }],
     });
     const text = extract.content.filter((b) => b.type === "text").map((b) => (b as any).text).join("");
     const cards = JSON.parse(text).cards ?? [];

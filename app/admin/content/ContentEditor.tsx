@@ -26,8 +26,9 @@ export default function ContentEditor() {
   // Claude natively by path (inline base64 dies at Vercel's ~4.5MB body cap);
   // Word/text files are extracted client-side and joined into the source text.
   const [genFiles, setGenFiles] = useState<{ name: string; kind: "pdf" | "text"; file?: File; text?: string }[]>([]);
-  const [proofTopic, setProofTopic] = useState("");
-  const [proofLoading, setProofLoading] = useState(false);
+  const [libBusy, setLibBusy] = useState(false);
+  const [libStage, setLibStage] = useState("");
+  const [libAdded, setLibAdded] = useState(0);
 
   const core = units.filter((u) => u.is_seeded);
   const custom = units.filter((u) => !u.is_seeded);
@@ -172,23 +173,60 @@ export default function ContentEditor() {
     } catch { setMsg("Couldn't reach the generator — the connection dropped (very large batches can exceed the 5-minute server limit) or you're offline. Try again with fewer cards or smaller files."); }
     finally { setGenLoading(false); }
   }
-  async function researchProofs() {
-    if (!sel) return;
-    setProofLoading(true); setMsg(""); setDrafts([]);
-    try {
-      const r = await fetch("/api/research-proofs", {
-        method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ topic: proofTopic, count: 5 }),
-      });
-      const j = await r.json();
-      if (!r.ok) { setMsg(j.error || "Research failed."); return; }
-      const raw = (j.cards ?? []) as any[];
-      setDrafts(raw.map((c) => ({
-        id: "", front: c.front || "", concept_tag: c.concept_tag || null, order: 0,
-        body_json: { prompt: c.prompt, whatItIs: c.whatItIs, whyItMatters: c.whyItMatters, link: c.link, utility: c.utility, worked: c.worked },
-      })));
-    } catch { setMsg("Couldn't reach the researcher."); }
-    finally { setProofLoading(false); }
+  // Customer Story Library: one exhaustive sweep across the product areas,
+  // drafting every citable utility/energy/water win story into a dedicated
+  // "Customer Stories" unit. Re-running only ADDS — customers already in the
+  // library are excluded from the search, so the same button is the updater.
+  const LIB_BUCKETS: [string, string][] = [
+    ["Cloud ERP & financials", "Oracle Cloud ERP financials general ledger"],
+    ["EPM · planning & close", "Oracle EPM financial planning and close"],
+    ["Primavera · capital projects", "Primavera P6 capital project management"],
+    ["Aconex · construction", "Oracle Aconex construction project delivery"],
+    ["SCM · procurement", "Oracle Fusion SCM procurement supply chain"],
+    ["Energy & Water · CIS/meter/grid", "Oracle Energy and Water customer care billing meter data"],
+  ];
+  async function buildLibrary() {
+    if (!packId || libBusy) return;
+    setMsg(""); setLibAdded(0);
+    let unit = units.find((u) => /customer stor/i.test(u.title));
+    if (!unit) {
+      const { data, error } = await supabase.from("units")
+        .insert({ pack_id: packId, title: "Customer Stories", order: units.length, icon: "📚", is_seeded: false })
+        .select("id,title,icon,ord:order,is_seeded").single();
+      if (error || !data) { setMsg(error?.message || "Couldn't create the library unit."); return; }
+      unit = { id: data.id, title: data.title, icon: data.icon, order: (data as any).ord, is_seeded: data.is_seeded };
+      await loadUnits(packId);
+    }
+    await selectUnit(unit);
+    setLibBusy(true);
+    // Covered customers = the "Customer — product" fronts already in the unit.
+    const { data: existing } = await supabase.from("cards").select("front").eq("unit_id", unit.id);
+    const covered = new Set(((existing ?? []) as any[])
+      .map((c) => String(c.front).split("—")[0].trim().toLowerCase()).filter((s) => s.length > 2));
+    let added = 0;
+    for (let b = 0; b < LIB_BUCKETS.length; b++) {
+      const [label, q] = LIB_BUCKETS[b];
+      setLibStage(`${b + 1}/${LIB_BUCKETS.length} · ${label}`);
+      try {
+        const r = await fetch("/api/research-proofs", {
+          method: "POST", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ topic: q, count: 8, exclude: [...covered].slice(0, 80) }),
+        });
+        const j = await r.json().catch(() => null);
+        if (!r.ok || !j?.cards) continue; // a dry bucket is fine — keep sweeping
+        for (const c of j.cards as any[]) {
+          const cust = String(c.front || "").split("—")[0].trim().toLowerCase();
+          if (!cust || covered.has(cust)) continue;
+          covered.add(cust); added++; setLibAdded(added);
+          setDrafts((d) => [...d, {
+            id: "", front: c.front || "", concept_tag: c.concept_tag || null, order: 0,
+            body_json: { prompt: c.prompt, whatItIs: c.whatItIs, whyItMatters: c.whyItMatters, link: c.link, utility: c.utility, worked: c.worked },
+          }]);
+        }
+      } catch { /* next bucket */ }
+    }
+    setLibStage(""); setLibBusy(false);
+    if (!added) setMsg("No new stories found — the library already covers everything the search can reach right now.");
   }
 
   async function approveDraft(idx: number) {
@@ -251,6 +289,20 @@ export default function ContentEditor() {
       ))}
       <button className="btn" style={{ marginTop: 6 }} onClick={addConcept}>+ New concept</button>
 
+      {/* ---------- Customer Story Library ---------- */}
+      <div className="edsec" style={{ marginTop: 26 }}>📚 Customer Story Library</div>
+      <div className="card" style={{ background: "#F0F7F7", borderColor: "#C4DEDF" }}>
+        <p style={{ fontSize: 12.5, color: "var(--ink2)", margin: "0 0 10px", lineHeight: 1.5 }}>
+          One sweep across <b>ERP · EPM · Primavera · Aconex · SCM · Energy &amp; Water</b> finds every citable utility/energy/water win story on the web and drafts them into the <b>Customer Stories</b> unit — each with its source URL, each reviewed by you before it saves. Re-run any time: customers already in the library are skipped, so it only <b>adds what&apos;s new</b>.
+        </p>
+        <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
+          <button className="btn" style={{ background: "var(--teal)" }} disabled={libBusy || genLoading} onClick={buildLibrary}>
+            {libBusy ? `Searching ${libStage}…` : "🔎 Build / update the library (~5–10 min)"}
+          </button>
+          {libBusy && <span style={{ fontSize: 12.5, color: "var(--ink2)", fontWeight: 600 }}>{libAdded} new stor{libAdded === 1 ? "y" : "ies"} drafted — review below as they land</span>}
+        </div>
+      </div>
+
       {sel && !sel.is_seeded && (
         <div className="card" style={{ marginTop: 24, background: "#FAF6EE", borderColor: "#E6CF94" }}>
           <div className="edsec" style={{ marginTop: 0 }}>✨ Generate cards with AI</div>
@@ -288,20 +340,6 @@ export default function ContentEditor() {
             </label>
             <button className="btn" disabled={genLoading || !hasSource()} onClick={generate}>
               {genLoading ? `Drafting ${genCount}… (bigger batches take longer)` : "Draft cards"}
-            </button>
-          </div>
-
-          <div style={{ fontSize: 11, fontWeight: 700, color: "var(--muted)", textTransform: "uppercase", letterSpacing: ".6px", margin: "14px 0 6px" }}>
-            or harvest real proof points from the web
-          </div>
-          <p style={{ fontSize: 12, color: "var(--ink2)", margin: "0 0 8px" }}>
-            Searches for <b>utility / energy / water</b> customer stories (oracle.com case studies, press releases) and drafts them as cards — every one carries its source URL. You still approve each.
-          </p>
-          <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-            <input value={proofTopic} onChange={(e) => setProofTopic(e.target.value)} placeholder="Focus (optional) — e.g. Primavera capital projects, EPM close"
-              style={{ flex: 1, minWidth: 200 }} disabled={proofLoading} />
-            <button className="btn" style={{ background: "var(--teal)" }} disabled={proofLoading || genLoading} onClick={researchProofs}>
-              {proofLoading ? "Searching the web… (~1–2 min)" : "🔎 Find customer win stories"}
             </button>
           </div>
 
