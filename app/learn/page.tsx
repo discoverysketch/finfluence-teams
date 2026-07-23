@@ -77,7 +77,6 @@ export default async function Learn() {
     <Shell active="path" isAdmin={isAdmin}>
       <h1>Your <span style={{ color: "var(--red)" }}>path</span></h1>
       <p style={{ color: "var(--ink2)", fontSize: 13, marginTop: 0 }}>{masteredTotal} / {total} cards mastered</p>
-      {core.map((u) => UnitCard(u))}
       {storyUnits.length > 0 && (
         <StoryShowcase
           units={storyUnits.map((u) => ({ id: u.id, title: u.title, icon: iconOf[u.id] ?? null, count: u.cards.length }))}
@@ -87,6 +86,7 @@ export default async function Learn() {
           isAdmin={isAdmin}
         />
       )}
+      {core.map((u) => UnitCard(u))}
       {custom.length > 0 && (
         <>
           <div style={{ fontSize: 11, fontWeight: 700, color: "#8A7E6E", textTransform: "uppercase", letterSpacing: ".6px", margin: "26px 0 2px" }}>

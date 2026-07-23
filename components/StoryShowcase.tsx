@@ -45,7 +45,7 @@ export default function StoryShowcase({ units, targetUnitId, covered, samples, i
   }
 
   return (
-    <div style={{ margin: "26px 0 4px" }}>
+    <div style={{ margin: "12px 0 18px" }}>
       <div style={{ fontSize: 11, fontWeight: 700, color: "#006B72", textTransform: "uppercase", letterSpacing: ".6px", marginBottom: 6 }}>
         📚 Customer stories · {total} on file
       </div>
