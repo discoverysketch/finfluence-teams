@@ -72,7 +72,11 @@ export async function POST(request: Request) {
     }
   }
   const cleanup = async () => { if (adminStorage && paths.length) await adminStorage.storage.from("uploads").remove(paths).then(() => {}, () => {}); };
-  if (!pdfArr.length && src.length < 40) return NextResponse.json({ error: "Upload a file or paste at least a paragraph of source material." }, { status: 400 });
+  if (!pdfArr.length && src.length < 6) return NextResponse.json({ error: "Upload a file, paste source material, or list the topics you want cards on." }, { status: 400 });
+  // Topic mode: a short list of subjects rather than real source prose
+  // ("capitalization of SaaS, ASC 980, FASB ASC 350-40"). Author from expert
+  // knowledge instead of pretending the keywords are a document.
+  const topicMode = !pdfArr.length && src.length < 400 && !/[.!?]\s/.test(src.trim());
   // Anthropic caps requests at 32MB — reject early with a clear message instead
   // of a cryptic API error.
   const totalPdfBytes = pdfArr.reduce((s, p) => s + p.length, 0);
@@ -90,7 +94,8 @@ export async function POST(request: Request) {
     "Concept tags: prof = Profitability, liq = Liquidity & Leverage, ret = Returns, cash = Cash & Capital, found = Foundations. " +
     "Keep each field to 1-2 sentences. 'front' is the term/concept (2-5 words). 'prompt' is a one-line question shown on the card front. " +
     "'worked' is a short numeric example (use round illustrative numbers if the source lacks them, and say so). " +
-    "If a field genuinely doesn't apply, use an empty string.";
+    "If a field genuinely doesn't apply, use an empty string. " +
+    "TOPIC MODE: when given only a topic list (no source document), author each card from expert accounting/finance knowledge — precise definitions, why it matters to a utility CFO, a worked example with clearly illustrative numbers, and NAME the governing standard in the body where one exists (e.g. FASB ASC 980 regulated operations, ASC 350-40 internal-use software / SaaS implementation-cost capitalization, ASU 2018-15). Never invent customer stories, vendor claims, or real-company figures in topic mode.";
   const promptFor = (count: number, hasPdf: boolean, withSrc: boolean) =>
     `Draft ${count} flashcards for the unit titled "${unitTitle || "Financial Foundations"}" from ` +
     (hasPdf && withSrc ? "the attached document and the source text below" : hasPdf ? "the attached document" : "the source material below") +
@@ -126,6 +131,11 @@ export async function POST(request: Request) {
         { type: "text" as const, text: promptFor(per, true, withSrc) },
       ], per));
     });
+  } else if (topicMode) {
+    jobs.push(draft(
+      `Draft ${n} flashcards for the unit titled "${unitTitle || "Financial Foundations"}" covering these TOPICS (no source document — author from expert knowledge per TOPIC MODE):\n\n${src}\n\nSpread the cards across the topics; go deep enough that a rep could hold their own with a utility controller.`,
+      n,
+    ));
   } else {
     jobs.push(draft(promptFor(n, false, true), n));
   }

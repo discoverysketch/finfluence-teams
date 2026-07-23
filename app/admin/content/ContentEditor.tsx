@@ -255,7 +255,7 @@ export default function ContentEditor() {
         <div className="card" style={{ marginTop: 24, background: "#FAF6EE", borderColor: "#E6CF94" }}>
           <div className="edsec" style={{ marginTop: 0 }}>✨ Generate cards with AI</div>
           <p style={{ fontSize: 12, color: "var(--ink2)", margin: "0 0 10px" }}>
-            Upload one or more documents (mix PDFs, Word, text) and/or paste text. Claude drafts cards for <b>{sel.title}</b> from all of it — you review and approve each before it saves. Nothing is published automatically.
+            Upload documents (mix PDFs, Word, text), paste source text, <b>or just list topics</b> (e.g. &ldquo;SaaS capitalization, ASC 980, ASC 350-40&rdquo;) and Claude authors teaching cards on them. Drafts land below for <b>{sel.title}</b> — you review and approve each before it saves. Nothing is published automatically.
           </p>
 
           <label style={{ display: "inline-flex", alignItems: "center", gap: 8, cursor: "pointer", background: "#fff", border: "1.5px dashed var(--border)", borderRadius: 10, padding: "12px 16px", fontSize: 13, fontWeight: 700, color: "var(--ink2)" }}>
@@ -278,7 +278,7 @@ export default function ContentEditor() {
           <div style={{ fontSize: 11, fontWeight: 700, color: "var(--muted)", textTransform: "uppercase", letterSpacing: ".6px", margin: "12px 0 6px" }}>
             {genFiles.length ? "and / or paste text" : "or paste text"}
           </div>
-          <textarea value={genSrc} onChange={(e) => setGenSrc(e.target.value)} rows={4} placeholder="Paste the source text here…"
+          <textarea value={genSrc} onChange={(e) => setGenSrc(e.target.value)} rows={4} placeholder={"Paste source text — or just list topics, e.g.\nSaaS capitalization, ASC 980 regulated accounting, FASB ASC 350-40"}
             style={{ width: "100%", border: "1px solid var(--border)", borderRadius: 8, padding: 8, fontFamily: "inherit", fontSize: 13 }} />
           <div style={{ display: "flex", gap: 8, alignItems: "center", marginTop: 8 }}>
             <label style={{ fontSize: 12, fontWeight: 700, color: "var(--ink2)" }}>Cards:
@@ -301,7 +301,7 @@ export default function ContentEditor() {
             <input value={proofTopic} onChange={(e) => setProofTopic(e.target.value)} placeholder="Focus (optional) — e.g. Primavera capital projects, EPM close"
               style={{ flex: 1, minWidth: 200 }} disabled={proofLoading} />
             <button className="btn" style={{ background: "var(--teal)" }} disabled={proofLoading || genLoading} onClick={researchProofs}>
-              {proofLoading ? "Searching the web… (~1–2 min)" : "🔎 Research proof points"}
+              {proofLoading ? "Searching the web… (~1–2 min)" : "🔎 Find customer win stories"}
             </button>
           </div>
 
