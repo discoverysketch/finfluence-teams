@@ -308,7 +308,7 @@ export default function ContentEditor() {
           <button className="btn" style={{ background: "var(--teal)" }} disabled={libBusy || genLoading} onClick={buildLibrary}>
             {libBusy ? `Searching ${libStage}…` : "🔎 Build / update the library (~5–10 min)"}
           </button>
-          {libBusy && <span style={{ fontSize: 12.5, color: "var(--ink2)", fontWeight: 600 }}>{libAdded} new stor{libAdded === 1 ? "y" : "ies"} drafted — review below as they land</span>}
+          {libBusy && <span style={{ fontSize: 12.5, color: "var(--ink2)", fontWeight: 600 }}>{libAdded} new stor{libAdded === 1 ? "y" : "ies"} saved to the unit so far</span>}
         </div>
       </div>
 
