@@ -24,7 +24,9 @@ export default function DeepIntel({ entityId }: { entityId: string }) {
   const [sweep, setSweep] = useState({ running: false, done: 0, total: 0 });
   const [elapsed, setElapsed] = useState(0);
   const [open, setOpen] = useState<Facet | null>(null);
-  const [err, setErr] = useState("");
+  // Errors are per-topic: concurrent lookups would otherwise wipe each
+  // other's message and a failed topic would fail silently.
+  const [errs, setErrs] = useState<Partial<Record<Facet, string>>>({});
 
   useEffect(() => {
     (async () => {
@@ -50,35 +52,28 @@ export default function DeepIntel({ entityId }: { entityId: string }) {
 
   async function research(mode: Facet, focus = true) {
     setBusy((b) => (b.includes(mode) ? b : [...b, mode]));
-    setErr("");
+    setErrs((e) => ({ ...e, [mode]: undefined }));
     try {
       const r = await fetch("/api/enrich-account", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ entityId, mode }) });
       const j = await r.json().catch(() => null);
-      if (!r.ok || !j?.data) { setErr(j?.error || `${META[mode].label}: research failed — try again.`); return false; }
+      if (!r.ok || !j?.data) { setErrs((e) => ({ ...e, [mode]: j?.error || "Research failed — try again." })); return false; }
       setData((d) => ({ ...d, [mode]: j.data }));
       // A single run opens that topic; a sweep opens whichever lands first.
       setOpen((o) => (focus ? mode : o ?? mode));
       return true;
-    } catch { setErr("Network error — check your connection and try again."); return false; }
-    finally { setBusy((b) => b.filter((x) => x !== mode)); }
+    } catch {
+      setErrs((e) => ({ ...e, [mode]: "Network error — check your connection." }));
+      return false;
+    } finally { setBusy((b) => b.filter((x) => x !== mode)); }
   }
 
-  // Research every topic, two at a time (each is a ~1-minute web lookup).
+  // Research every topic at once — they're independent lookups, so the whole
+  // sweep takes about as long as the slowest one, and every row shows progress.
   async function researchAll() {
     const missing = facets.filter((f) => !data[f]);
     const list = missing.length ? missing : facets; // nothing missing = refresh everything
-    setErr("");
     setSweep({ running: true, done: 0, total: list.length });
-    const queue = [...list];
-    const worker = async () => {
-      while (queue.length) {
-        const m = queue.shift();
-        if (!m) break;
-        await research(m, false);
-        setSweep((s) => ({ ...s, done: s.done + 1 }));
-      }
-    };
-    await Promise.all([worker(), worker()]);
+    await Promise.all(list.map((m) => research(m, false).finally(() => setSweep((s) => ({ ...s, done: s.done + 1 })))));
     setSweep((s) => ({ ...s, running: false }));
   }
 
@@ -97,14 +92,14 @@ export default function DeepIntel({ entityId }: { entityId: string }) {
             <button className="btn" style={{ background: "var(--teal)", padding: "8px 13px", fontSize: 13 }}
               disabled={anyBusy} onClick={researchAll}>
               {sweep.running
-                ? `Researching ${Math.min(sweep.done + busy.length, sweep.total)} of ${sweep.total}…`
+                ? `Researching all ${sweep.total} topics…`
                 : missingCount ? `🔎 Research all ${missingCount} topic${missingCount === 1 ? "" : "s"}` : "↻ Refresh all topics"}
             </button>
             {anyBusy
               ? <span style={{ fontSize: 12.5, color: "var(--ink2)", fontWeight: 600 }}>
-                  <span className="di-live">●</span> {busy.map((f) => META[f].label).join(" · ")} · {mmss(elapsed)}
+                  <span className="di-live">●</span> {sweep.running ? `${sweep.done} of ${sweep.total} done` : busy.map((f) => META[f].label).join(" · ")} · {mmss(elapsed)}
                 </span>
-              : <span style={{ fontSize: 11.5, color: "var(--muted)" }}>Public web research · about a minute per topic</span>}
+              : <span style={{ fontSize: 11.5, color: "var(--muted)" }}>Public web research · about a minute, all topics at once</span>}
           </div>
           {sweep.running && (
             <div className="di-track"><div className="di-fill" style={{ width: `${Math.round((sweep.done / Math.max(1, sweep.total)) * 100)}%` }} /></div>
@@ -116,6 +111,7 @@ export default function DeepIntel({ entityId }: { entityId: string }) {
           const m = META[f];
           const isOpen = open === f;
           const running = busy.includes(f);
+          const fErr = errs[f];
           return (
             <div key={f} style={{ borderTop: i ? "1px solid #F0EAE0" : "none", padding: "9px 0" }}>
               <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
@@ -133,7 +129,12 @@ export default function DeepIntel({ entityId }: { entityId: string }) {
                   <span className="di-bar"><span /></span> Searching public sources… {mmss(elapsed)}
                 </div>
               )}
-              {!d && !isOpen && !running && <div style={{ fontSize: 11.5, color: "var(--muted)", marginTop: 2 }}>{m.blurb}</div>}
+              {fErr && !running && (
+                <div style={{ fontSize: 11.5, color: "var(--red)", fontWeight: 600, marginTop: 3 }}>
+                  {fErr} <button className="di-retry" onClick={() => research(f)} disabled={anyBusy}>Retry</button>
+                </div>
+              )}
+              {!d && !isOpen && !running && !fErr && <div style={{ fontSize: 11.5, color: "var(--muted)", marginTop: 2 }}>{m.blurb}</div>}
               {isOpen && d && (
                 <div style={{ marginTop: 8, fontSize: 13, lineHeight: 1.5 }}>
                   {d.summary && <div style={{ marginBottom: 6 }}>{d.summary}</div>}
@@ -175,7 +176,6 @@ export default function DeepIntel({ entityId }: { entityId: string }) {
             </div>
           );
         })}
-        {err && <p style={{ color: "var(--red)", fontSize: 12.5, margin: "6px 0 4px" }}>{err}</p>}
       </div>
 
       <style>{`
@@ -185,6 +185,8 @@ export default function DeepIntel({ entityId }: { entityId: string }) {
         .di-bar{display:block;width:64px;height:3px;background:#DCEBEB;border-radius:2px;overflow:hidden;flex:none}
         .di-bar>span{display:block;width:40%;height:100%;background:var(--teal);border-radius:2px;animation:di-slide 1.1s ease-in-out infinite}
         @keyframes di-slide{0%{transform:translateX(-100%)}100%{transform:translateX(250%)}}
+        .di-retry{background:none;border:none;color:var(--red);font-weight:700;font-size:11.5px;text-decoration:underline;cursor:pointer;padding:0 0 0 2px}
+        .di-retry:disabled{opacity:.5;cursor:default}
         .di-live{color:var(--teal);animation:di-blink 1.2s ease-in-out infinite}
         @keyframes di-blink{0%,100%{opacity:1}50%{opacity:.25}}
         @media (prefers-reduced-motion:reduce){.di-bar>span,.di-live{animation:none}}
