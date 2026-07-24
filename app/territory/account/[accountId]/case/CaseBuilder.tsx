@@ -1,12 +1,16 @@
 "use client";
 import { useEffect, useState } from "react";
+import { createClient } from "@/lib/supabase/client";
 
 // Savings levers on the account's REAL figures. All math is deterministic and
 // visible; the AI only writes the narrative around numbers it's handed.
 type Narr = { headline: string; rationale: string[]; risks: string; cfo_line: string };
+type Price = { id: string; family: string; name: string; metric: string; list_price: number; as_of: string | null };
 const fmtM = (v: number) => (Math.abs(v) >= 1000 ? `$${(v / 1000).toFixed(2)}B` : `$${v >= 10 ? Math.round(v) : v.toFixed(1)}M`);
+const perEmployee = (m: string) => /employee/i.test(m);
 
 export default function CaseBuilder({ entityId, company, dealValueUsd }: { entityId: string; company: string; dealValueUsd: number | null }) {
+  const supabase = createClient();
   const [base, setBase] = useState<{ om: number | null; capex: number | null; revenue: number | null; rateBase: number | null }>({ om: null, capex: null, revenue: null, rateBase: null });
   const [loading, setLoading] = useState(true);
   // Levers (the rep's assumptions — always shown as assumptions)
@@ -18,6 +22,12 @@ export default function CaseBuilder({ entityId, company, dealValueUsd }: { entit
   const [narr, setNarr] = useState<Narr | null>(null);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
+  // License estimator (public Oracle list price)
+  const [prices, setPrices] = useState<Price[]>([]);
+  const [showEst, setShowEst] = useState(false);
+  const [qty, setQty] = useState<Record<string, number>>({});
+  const [employees, setEmployees] = useState(1500);
+  const [users, setUsers] = useState(150);
 
   useEffect(() => {
     (async () => {
@@ -32,11 +42,27 @@ export default function CaseBuilder({ entityId, company, dealValueUsd }: { entit
             revenue: f.fy_revenue ?? null,
             rateBase: j.ferc?.facts?.net_utility_plant ?? null,
           });
+          // Rough utility staffing proxy from retail customers (~1 employee per
+          // 350 customers) so the employee default isn't a wild guess.
+          const cust = j.eia?.facts?.customers;
+          if (cust) setEmployees(Math.max(200, Math.round(cust / 350 / 50) * 50));
         }
       } catch { /* levers still work with manual entry */ }
       setLoading(false);
     })();
-  }, [entityId]);
+    (async () => {
+      const { data } = await supabase.from("pricing_products").select("id, family, name, metric, list_price, as_of").order("ord");
+      setPrices((data ?? []) as Price[]);
+    })();
+  }, [entityId, supabase]);
+
+  // ---- license estimate (public list price × quantities) ----
+  const licenseAnnual = prices.reduce((sum, p) => {
+    const q = qty[p.id]; if (!q) return sum;
+    const units = q === -1 ? (perEmployee(p.metric) ? employees : users) : q; // -1 = "use headcount"
+    return sum + p.list_price * units * 12;
+  }, 0) / 1e6; // $M/yr
+  const pricedAsOf = prices[0]?.as_of;
 
   // ---- deterministic model ($M/yr) ----
   const omSave = base.om != null ? (base.om * omPct) / 100 : 0;
@@ -101,12 +127,48 @@ export default function CaseBuilder({ entityId, company, dealValueUsd }: { entit
         {base.capex != null && <Lever label="Capital-program efficiency" baseline={fmtM(base.capex)} value={capexPct} set={setCapexPct} min={0} max={3} step={0.25} unit="%" />}
         <Lever label="Close days saved / month" value={closeDays} set={setCloseDays} min={0} max={10} step={1} unit="d" />
         <Lever label="Finance team size" value={financeFtes} set={setFinanceFtes} min={5} max={200} step={5} unit=" FTEs" />
-        <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 4 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 4, flexWrap: "wrap" }}>
           <span style={{ fontSize: 12.5, fontWeight: 700 }}>Indicative investment ($M)</span>
           <input inputMode="decimal" value={investM} onChange={(e) => setInvestM(Number(e.target.value.replace(/[^0-9.]/g, "")) || 0)}
             style={{ width: 90, fontSize: 13, padding: "5px 8px", borderRadius: 8, border: "1px solid var(--border)" }} />
           {dealValueUsd ? <span style={{ fontSize: 11, color: "var(--muted)" }}>prefilled from Deal $</span> : null}
+          {prices.length > 0 && <button className="mini" onClick={() => setShowEst((v) => !v)}>{showEst ? "Hide estimate" : "🧮 Estimate from Oracle list price"}</button>}
         </div>
+
+        {showEst && prices.length > 0 && (
+          <div style={{ marginTop: 10, borderTop: "1px solid var(--border)", paddingTop: 10 }}>
+            <div style={{ display: "flex", gap: 12, flexWrap: "wrap", marginBottom: 8 }}>
+              <label style={{ fontSize: 12, fontWeight: 700 }}>Employees <input inputMode="numeric" value={employees} onChange={(e) => setEmployees(Number(e.target.value.replace(/\D/g, "")) || 0)} style={{ width: 70, marginLeft: 4, fontSize: 12.5, padding: "3px 6px", borderRadius: 6, border: "1px solid var(--border)" }} /></label>
+              <label style={{ fontSize: 12, fontWeight: 700 }}>Named users <input inputMode="numeric" value={users} onChange={(e) => setUsers(Number(e.target.value.replace(/\D/g, "")) || 0)} style={{ width: 70, marginLeft: 4, fontSize: 12.5, padding: "3px 6px", borderRadius: 6, border: "1px solid var(--border)" }} /></label>
+            </div>
+            <div style={{ maxHeight: 220, overflowY: "auto", border: "1px solid var(--border)", borderRadius: 8 }}>
+              {["ERP", "EPM", "SCM", "HCM", "EnergyWater"].map((fam) => {
+                const items = prices.filter((p) => p.family === fam);
+                if (!items.length) return null;
+                return (
+                  <div key={fam}>
+                    <div style={{ fontSize: 10.5, fontWeight: 700, color: "var(--muted)", textTransform: "uppercase", letterSpacing: ".5px", padding: "6px 10px 2px", background: "#FBF8F1" }}>{fam}</div>
+                    {items.map((p) => {
+                      const on = !!qty[p.id];
+                      return (
+                        <label key={p.id} style={{ display: "flex", alignItems: "center", gap: 8, padding: "5px 10px", fontSize: 12.5, cursor: "pointer", borderTop: "1px solid #F4EFE6" }}>
+                          <input type="checkbox" checked={on} onChange={() => setQty((q) => { const n = { ...q }; if (on) delete n[p.id]; else n[p.id] = -1; return n; })} />
+                          <span style={{ flex: 1, minWidth: 0 }}>{p.name.replace(/ Cloud Service$/, "").slice(0, 46)}</span>
+                          <span style={{ color: "var(--muted)", fontSize: 11 }}>${p.list_price}/{perEmployee(p.metric) ? "emp" : "user"}/mo</span>
+                        </label>
+                      );
+                    })}
+                  </div>
+                );
+              })}
+            </div>
+            <div style={{ display: "flex", alignItems: "center", gap: 10, marginTop: 8 }}>
+              <span style={{ fontSize: 14, fontWeight: 800 }}>≈ {fmtM(licenseAnnual)}/yr list</span>
+              <button className="mini" disabled={licenseAnnual <= 0} onClick={() => setInvestM(Math.round(licenseAnnual * 10) / 10)}>Use as investment →</button>
+              <span style={{ fontSize: 10.5, color: "var(--muted)" }}>Public list price{pricedAsOf ? ` (${pricedAsOf})` : ""} — indicative, not a quote. Enterprise deals are discounted.</span>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Results */}

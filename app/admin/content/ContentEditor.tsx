@@ -256,9 +256,37 @@ export default function ContentEditor() {
   }
   function editDraft(idx: number) { setEditing(drafts[idx]); setDrafts((d) => d.filter((_, i) => i !== idx)); }
 
+  const [priceBusy, setPriceBusy] = useState(false);
+  const [priceCount, setPriceCount] = useState<number | null>(null);
+  const [priceUrl, setPriceUrl] = useState("https://www.oracle.com/a/ocom/docs/corporate/pricing/oracle-fusion-cloud-global-price-list.pdf");
+  useEffect(() => { (async () => { const { count } = await supabase.from("pricing_products").select("id", { count: "exact", head: true }); setPriceCount(count ?? 0); })(); }, [supabase]);
+  async function ingestPricing() {
+    setPriceBusy(true); setMsg("");
+    try {
+      const r = await fetch("/api/ingest-pricing", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ url: priceUrl }) });
+      const j = await r.json().catch(() => null);
+      if (!r.ok || !j?.ok) { setMsg(j?.error || "Pricing ingest failed."); return; }
+      setPriceCount(j.count); setMsg(`✓ Loaded ${j.count} products${j.asOf ? ` (as of ${j.asOf})` : ""} into the pricing reference.`);
+    } catch { setMsg("Network error."); }
+    finally { setPriceBusy(false); }
+  }
+
   return (
     <div>
       {msg && <div className="card" style={{ borderColor: "var(--red)", color: "var(--red)", marginBottom: 12 }}>{msg}</div>}
+
+      {/* ---------- Oracle list pricing (public) ---------- */}
+      <div className="edsec">💲 Oracle list pricing</div>
+      <div className="card" style={{ background: "#F0F7F7", borderColor: "#C4DEDF" }}>
+        <p style={{ fontSize: 12.5, color: "var(--ink2)", margin: "0 0 8px", lineHeight: 1.5 }}>
+          Load Oracle&apos;s <b>public</b> Fusion Cloud price-list PDF — the utility-relevant SaaS SKUs power the license estimator in each account&apos;s Business Case. Re-run when Oracle updates the list. {priceCount != null && <b>{priceCount} products on file.</b>}
+        </p>
+        <input value={priceUrl} onChange={(e) => setPriceUrl(e.target.value)} style={{ width: "100%", fontSize: 12, marginBottom: 8 }} />
+        <button className="btn" style={{ background: "var(--teal)" }} disabled={priceBusy} onClick={ingestPricing}>
+          {priceBusy ? "Reading the price list… (~30s)" : priceCount ? "↻ Refresh pricing" : "💲 Load pricing"}
+        </button>
+      </div>
+
 
       {/* ---------- Core curriculum: locked reference ---------- */}
       <div className="edsec">Core curriculum · 🔒 built-in</div>
