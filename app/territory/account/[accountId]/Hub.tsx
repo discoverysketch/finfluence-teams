@@ -165,6 +165,7 @@ export default function Hub({ accountId, userId, entityId, ticker, initialStage,
   const [prioBusy, setPrioBusy] = useState(false);
   const [personView, setPersonView] = useState<Contact | null>(null);
   const [personaBusy, setPersonaBusy] = useState(false);
+  const [personaAll, setPersonaAll] = useState<{ busy: boolean; done: number; total: number }>({ busy: false, done: 0, total: 0 });
   const [notes, setNotes] = useState(initialNotes || "");
   const [notesDirty, setNotesDirty] = useState(false);
   const [contacts, setContacts] = useState<Contact[]>(initialContacts);
@@ -250,14 +251,38 @@ export default function Hub({ accountId, userId, entityId, ticker, initialStage,
   async function researchPerson(c: Contact) {
     if (personaBusy) return;
     setPersonaBusy(true); setMsg("");
+    const persona = await researchOnePerson(c.id);
+    if (persona === "err") setMsg("Couldn't research this person.");
+    setPersonaBusy(false);
+  }
+  // Single-person research used by both the sheet button and the bulk run.
+  async function researchOnePerson(contactId: string): Promise<Persona | "err"> {
     try {
-      const r = await fetch("/api/research-person", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ contactId: c.id }) });
+      const r = await fetch("/api/research-person", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ contactId }) });
       const j = await r.json().catch(() => null);
-      if (!r.ok || !j?.persona) { setMsg(j?.error || "Couldn't research this person."); return; }
-      setContacts((cs) => cs.map((x) => (x.id === c.id ? { ...x, persona_json: j.persona } : x)));
-      setPersonView((pv) => (pv && pv.id === c.id ? { ...pv, persona_json: j.persona } : pv));
-    } catch { setMsg("Network error."); }
-    finally { setPersonaBusy(false); }
+      if (!r.ok || !j?.persona) return "err";
+      setContacts((cs) => cs.map((x) => (x.id === contactId ? { ...x, persona_json: j.persona } : x)));
+      setPersonView((pv) => (pv && pv.id === contactId ? { ...pv, persona_json: j.persona } : pv));
+      return j.persona as Persona;
+    } catch { return "err"; }
+  }
+  // Research everyone in the chart who doesn't have a brief yet — 2 at a time
+  // so a full org chart takes a few minutes, not one-by-one clicking.
+  async function researchAllPeople() {
+    const todo = contacts.filter((c) => !c.persona_json).map((c) => c.id);
+    if (!todo.length || personaAll.busy) return;
+    setPersonaAll({ busy: true, done: 0, total: todo.length });
+    let cursor = 0, done = 0;
+    const worker = async () => {
+      for (;;) {
+        const i = cursor++;
+        if (i >= todo.length) return;
+        await researchOnePerson(todo[i]);
+        done++; setPersonaAll((p) => ({ ...p, done }));
+      }
+    };
+    await Promise.all([worker(), worker()]);
+    setPersonaAll({ busy: false, done: 0, total: 0 });
   }
 
   async function removeAccount() {
@@ -709,6 +734,12 @@ export default function Hub({ accountId, userId, entityId, ticker, initialStage,
               cursor: execs?.loading || autoResearching ? "default" : "pointer", opacity: execs?.loading || autoResearching ? 0.45 : 1 }}>
             🔍 {autoResearching ? "Researching in the background…" : execs?.loading ? "Searching the web… (~1 min)" : "Find executives"}
           </button>
+          {contacts.some((c) => !c.persona_json) && (
+            <button onClick={researchAllPeople} disabled={personaAll.busy}
+              style={{ background: "#fff", border: "1.5px dashed #C9BFE0", color: "#6A3E8E", borderRadius: 10, padding: "10px 16px", fontSize: 14, fontWeight: 700, cursor: personaAll.busy ? "default" : "pointer", opacity: personaAll.busy ? 0.55 : 1 }}>
+              🧠 {personaAll.busy ? `Researching people… ${personaAll.done}/${personaAll.total}` : `Research all ${contacts.filter((c) => !c.persona_json).length} people`}
+            </button>
+          )}
         </div>
       )}
 
