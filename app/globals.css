@@ -14,7 +14,14 @@ html, body { margin: 0; padding: 0; }
 body {
   font-family: "Source Sans 3", "Segoe UI", system-ui, sans-serif;
   color: var(--ink); min-height: 100vh;
-  background: linear-gradient(180deg, #faf6ed 0%, var(--cream) 320px) fixed, var(--cream);
+  background: var(--cream);
+}
+/* Fixed gradient as an isolated layer, NOT background-attachment:fixed —
+   the latter forces a broken repaint path on mobile that makes fixed +
+   backdrop-filter bars (the bottom nav) flicker or drop out on scroll. */
+body::before {
+  content: ""; position: fixed; inset: 0; z-index: -1; pointer-events: none;
+  background: linear-gradient(180deg, #faf6ed 0%, var(--cream) 320px);
 }
 ::selection { background: rgba(200, 144, 46, .28); }
 a { color: var(--red); text-decoration: none; }
@@ -52,6 +59,10 @@ h2 { font-size: 19px; font-weight: 700; letter-spacing: -.01em; }
   box-shadow: 0 -8px 24px rgba(20, 15, 5, .10);
   z-index: 20;
   padding-bottom: env(safe-area-inset-bottom);
+  /* Own compositing layer — keeps the fixed bar pinned and repainting
+     cleanly through momentum scroll instead of flickering/vanishing. */
+  transform: translateZ(0);
+  will-change: transform;
 }
 .nav a {
   flex: 1; position: relative; color: #a9a294; font-weight: 600; font-size: 11px; letter-spacing: .01em;

@@ -16,6 +16,7 @@
     "seed-aliases": "node --env-file=.env.local --experimental-strip-types seed/seed-aliases.ts",
     "test:isolation": "node --env-file=.env.local seed/test-isolation.mjs",
     "load-eia": "node --env-file=.env.local seed/load-eia.mjs",
+    "load-eia860": "node --env-file=.env.local seed/load-eia860.mjs",
     "load-ferc": "node --env-file=.env.local seed/load-ferc.mjs"
   },
   "dependencies": {
