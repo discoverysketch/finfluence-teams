@@ -1,9 +1,21 @@
 import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { redirect } from "next/navigation";
 import Shell from "@/components/Shell";
 import { inviteMember, updateRole, removeMember, setDisplayMode } from "./actions";
 
 type Member = { id: string; email: string; role: string };
+
+// Relative "last seen" from an ISO timestamp (last_sign_in_at lives in Supabase
+// auth, readable only via the service role).
+function lastSeen(iso: string | null): { label: string; stale: boolean } {
+  if (!iso) return { label: "never signed in", stale: true };
+  const d = Date.now() - new Date(iso).getTime();
+  const day = 86400000;
+  const mins = Math.floor(d / 60000), hrs = Math.floor(d / 3600000), days = Math.floor(d / day);
+  const label = mins < 2 ? "just now" : mins < 60 ? `${mins} min ago` : hrs < 24 ? `${hrs} hr ago` : days === 1 ? "yesterday" : days < 30 ? `${days} days ago` : new Date(iso).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+  return { label, stale: d > 14 * day };
+}
 
 export default async function TeamPage() {
   const supabase = await createClient();
@@ -28,6 +40,14 @@ export default async function TeamPage() {
   const mode = tenant?.display_mode ?? "playful";
   const roleOptions = ["rep", "manager", "admin"];
 
+  // Last sign-in per member from the auth system (service role).
+  const lastById: Record<string, string | null> = {};
+  try {
+    const admin = createAdminClient();
+    const { data: auth } = await admin.auth.admin.listUsers({ perPage: 200 });
+    for (const u of auth?.users ?? []) lastById[u.id] = (u as { last_sign_in_at?: string | null }).last_sign_in_at ?? null;
+  } catch { /* fall back to no last-seen data */ }
+
   return (
     <Shell active="home" isAdmin>
       <h1>Team <span style={{ color: "var(--red)" }}>roster</span></h1>
@@ -49,10 +69,15 @@ export default async function TeamPage() {
         {members.length} member{members.length === 1 ? "" : "s"} · invites send a magic-link email; new people also just log in with their email.
       </p>
 
-      {members.map((m) => (
+      {members.map((m) => {
+        const seen = lastSeen(lastById[m.id] ?? null);
+        return (
         <div key={m.id} className="card" style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 6, padding: "10px 12px", flexWrap: "wrap" }}>
-          <div style={{ flex: 1, minWidth: 160, fontSize: 14, fontWeight: 600 }}>
-            {m.email}{m.id === user.id && <span style={{ color: "var(--muted)", fontWeight: 400 }}> (you)</span>}
+          <div style={{ flex: 1, minWidth: 160 }}>
+            <div style={{ fontSize: 14, fontWeight: 600 }}>{m.email}{m.id === user.id && <span style={{ color: "var(--muted)", fontWeight: 400 }}> (you)</span>}</div>
+            <div style={{ fontSize: 11.5, marginTop: 1, color: seen.stale ? "var(--red)" : "var(--ink2)", fontWeight: seen.stale ? 700 : 500 }}>
+              {seen.stale && seen.label !== "never signed in" ? "⚠ " : ""}Last seen: {seen.label}
+            </div>
           </div>
           <form action={updateRole} style={{ display: "flex", gap: 6, width: "auto" }}>
             <input type="hidden" name="id" value={m.id} />
@@ -68,7 +93,8 @@ export default async function TeamPage() {
             </form>
           )}
         </div>
-      ))}
+        );
+      })}
 
       <form action={inviteMember} className="card" style={{ marginTop: 16 }}>
         <div style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".6px", color: "var(--muted)", marginBottom: 8 }}>Add a member</div>
