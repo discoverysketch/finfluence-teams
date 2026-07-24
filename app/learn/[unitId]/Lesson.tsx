@@ -88,7 +88,7 @@ export default function Lesson({
     const d = drag.current; if (!d.on) return; d.on = false;
     if (d.scroll) return; // was a scroll, not a card gesture
     const el = flipRef.current;
-    if (!d.moved) { unlockAudio(); SFX.flip(); setFlipped((f) => !f); reset(el); return; }
+    if (!d.moved) { setFlipped((f) => !f); reset(el); try { unlockAudio(); SFX.flip(); } catch { /* audio optional */ } return; }
     if (d.dx > 90) commit(1);
     else if (d.dx < -90) commit(-1);
     else reset(el);
