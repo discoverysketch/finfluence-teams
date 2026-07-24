@@ -11,7 +11,9 @@ import CaptureNotes from "./CaptureNotes";
 import WhatChanged from "@/components/WhatChanged";
 import WinWire from "./WinWire";
 
-export type Contact = { id: string; account_id: string; name: string; title: string | null; role_tag: string | null; email: string | null; phone: string | null; reports_to: string | null; notes: string | null };
+export type Persona = { headline: string; background: string; priorities: string[]; quote: string; talk_to_them: string; source: string; confidence?: string };
+export type Contact = { id: string; account_id: string; name: string; title: string | null; role_tag: string | null; email: string | null; phone: string | null; reports_to: string | null; notes: string | null; persona_json?: Persona | null };
+type Priorities = { summary: string; as_of: string; priorities: { theme: string; detail: string; quote: string; who: string; source: string; angle: string }[] };
 export type Activity = { id: string; account_id: string; contact_id: string | null; user_id: string | null; kind: string; body: string; due_at: string | null; done: boolean; created_at: string };
 
 const STAGES: [string, string][] = [
@@ -146,9 +148,10 @@ function EiaBlock({ eia }: { eia: EiaOps }) {
 type CForm = { id?: string; name: string; title: string; role_tag: string; email: string; phone: string; reports_to: string };
 const emptyC: CForm = { name: "", title: "", role_tag: "", email: "", phone: "", reports_to: "" };
 
-export default function Hub({ accountId, userId, entityId, ticker, initialStage, initialNotes, initialOwner, initialDealValue, initialContacts, initialActivities, emailOf }: {
+export default function Hub({ accountId, userId, entityId, ticker, initialStage, initialNotes, initialOwner, initialDealValue, initialPriorities, prioritiesAt, initialContacts, initialActivities, emailOf }: {
   accountId: string; userId: string; entityId: string | null; ticker: string | null;
   initialStage: string | null; initialNotes: string | null; initialOwner: string | null; initialDealValue: number | null;
+  initialPriorities: Priorities | null; prioritiesAt: string | null;
   initialContacts: Contact[]; initialActivities: Activity[]; emailOf: Record<string, string>;
 }) {
   const supabase = createClient();
@@ -157,6 +160,11 @@ export default function Hub({ accountId, userId, entityId, ticker, initialStage,
   const [stage, setStage] = useState(initialStage || "prospect");
   const [owner, setOwner] = useState<string | null>(initialOwner);
   const [dealValue, setDealValue] = useState<string>(initialDealValue != null ? String(initialDealValue) : "");
+  const [priorities, setPriorities] = useState<Priorities | null>(initialPriorities);
+  const [prioAt, setPrioAt] = useState<string | null>(prioritiesAt);
+  const [prioBusy, setPrioBusy] = useState(false);
+  const [personView, setPersonView] = useState<Contact | null>(null);
+  const [personaBusy, setPersonaBusy] = useState(false);
   const [notes, setNotes] = useState(initialNotes || "");
   const [notesDirty, setNotesDirty] = useState(false);
   const [contacts, setContacts] = useState<Contact[]>(initialContacts);
@@ -227,6 +235,30 @@ export default function Hub({ accountId, userId, entityId, ticker, initialStage,
     return () => { live = false; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [entityId]);
+
+  async function researchPriorities() {
+    if (prioBusy || !entityId) return;
+    setPrioBusy(true); setMsg("");
+    try {
+      const r = await fetch("/api/research-priorities", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ entityId }) });
+      const j = await r.json().catch(() => null);
+      if (!r.ok || !j?.priorities) { setMsg(j?.error || "Couldn't research priorities."); return; }
+      setPriorities(j.priorities); setPrioAt(j.at);
+    } catch { setMsg("Network error."); }
+    finally { setPrioBusy(false); }
+  }
+  async function researchPerson(c: Contact) {
+    if (personaBusy) return;
+    setPersonaBusy(true); setMsg("");
+    try {
+      const r = await fetch("/api/research-person", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ contactId: c.id }) });
+      const j = await r.json().catch(() => null);
+      if (!r.ok || !j?.persona) { setMsg(j?.error || "Couldn't research this person."); return; }
+      setContacts((cs) => cs.map((x) => (x.id === c.id ? { ...x, persona_json: j.persona } : x)));
+      setPersonView((pv) => (pv && pv.id === c.id ? { ...pv, persona_json: j.persona } : pv));
+    } catch { setMsg("Network error."); }
+    finally { setPersonaBusy(false); }
+  }
 
   async function removeAccount() {
     if (!window.confirm("Remove this account from your book? Contacts and activity for it will be deleted too.")) return;
@@ -400,8 +432,9 @@ export default function Hub({ accountId, userId, entityId, ticker, initialStage,
     return (
       <li>
         <div className="ocnode" style={{ borderTop: `3px solid ${role ? role.color : "var(--border)"}` }}
-          onClick={() => setCForm({ id: c.id, name: c.name, title: c.title || "", role_tag: c.role_tag || "", email: c.email || "", phone: c.phone || "", reports_to: c.reports_to || "" })}>
+          onClick={() => setPersonView(c)}>
           <button className="ocdel" aria-label={`Remove ${c.name}`} onClick={(e) => { e.stopPropagation(); deleteContact(c.id); }}>×</button>
+          {c.persona_json && <span aria-label="Has a persona brief" style={{ position: "absolute", top: 3, left: 5, fontSize: 10 }}>🧠</span>}
           <div style={{ fontWeight: 700, fontSize: 12.5, lineHeight: 1.2 }}>{c.name}</div>
           <div style={{ fontSize: 10.5, color: "var(--ink2)", marginTop: 2, lineHeight: 1.25 }}>{c.title || "—"}</div>
           {role && <div style={{ fontSize: 9, fontWeight: 700, color: role.color, marginTop: 3, textTransform: "uppercase", letterSpacing: ".4px" }}>{role.label}</div>}
@@ -543,6 +576,45 @@ export default function Hub({ accountId, userId, entityId, ticker, initialStage,
         </>
       )}
 
+      {/* ---- What leadership is saying (earnings calls + 10-K/8-K) ---- */}
+      {entityId && (
+        <>
+          <div className="secttl" style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
+            <span>📣 What leadership is saying</span>
+            {priorities && <button className="mini" onClick={researchPriorities} disabled={prioBusy}>{prioBusy ? "…" : "↻"}</button>}
+          </div>
+          {!priorities ? (
+            <div className="card" style={{ padding: "13px 14px" }}>
+              <p style={{ fontSize: 12.5, color: "var(--ink2)", margin: "0 0 10px" }}>
+                Pull management&apos;s own stated priorities from their latest earnings call and 10-K/8-K — quotes, sources, and how to tie value to each. Public sources only.
+              </p>
+              <button className="btn" onClick={researchPriorities} disabled={prioBusy}>
+                {prioBusy ? "Researching… (~1 min)" : "🔎 Research their priorities"}
+              </button>
+            </div>
+          ) : (
+            <div className="card" style={{ padding: "13px 14px" }}>
+              <div style={{ fontSize: 13.5, lineHeight: 1.5, marginBottom: 4 }}>{priorities.summary}</div>
+              <div style={{ fontSize: 11, color: "var(--muted)", marginBottom: 10 }}>As of {priorities.as_of}{prioAt ? ` · pulled ${fmtDate(prioAt)}` : ""}</div>
+              {priorities.priorities.map((p, i) => (
+                <div key={i} style={{ padding: "9px 0", borderTop: i ? "1px solid #F0EAE0" : "none" }}>
+                  <div style={{ fontSize: 13.5, fontWeight: 800 }}>{p.theme}</div>
+                  <div style={{ fontSize: 12.5, color: "var(--ink2)", margin: "2px 0 5px" }}>{p.detail}</div>
+                  {p.quote && (
+                    <div style={{ fontSize: 12.5, fontStyle: "italic", background: "#F7F2E9", borderLeft: "3px solid var(--gold)", borderRadius: 6, padding: "6px 9px", margin: "4px 0" }}>
+                      &ldquo;{p.quote}&rdquo;{p.who ? <span style={{ fontStyle: "normal", color: "var(--muted)", fontWeight: 600 }}> — {p.who}</span> : null}
+                    </div>
+                  )}
+                  <div style={{ fontSize: 12, color: "#006B72", marginTop: 3 }}><b>Your angle:</b> {p.angle}</div>
+                  {p.source && <a href={p.source} target="_blank" rel="noreferrer" style={{ fontSize: 11.5, color: "var(--blue)", fontWeight: 700 }}>source ↗</a>}
+                </div>
+              ))}
+              <div style={{ fontSize: 10.5, color: "var(--muted)", marginTop: 8 }}>Their own public words — verify before quoting in writing.</div>
+            </div>
+          )}
+        </>
+      )}
+
       {/* ---- Signals: recent filings + news mentions for THIS account ---- */}
       {sig && (sig.events.length > 0 || sig.news.length > 0) && (
         <>
@@ -626,7 +698,7 @@ export default function Hub({ accountId, userId, entityId, ticker, initialStage,
               </>
             )}
           </div>
-          <p style={{ fontSize: 11, color: "var(--muted)", margin: "6px 0 0" }}>Tap a person to edit · set &quot;Reports to&quot; to build the chart{ocArrows.right ? " · scroll for more →" : ""}</p>
+          <p style={{ fontSize: 11, color: "var(--muted)", margin: "6px 0 0" }}>Tap a person for details · 🧠 = researched · set &quot;Reports to&quot; to build the chart{ocArrows.right ? " · scroll for more →" : ""}</p>
         </>
       )}
       {!cForm && (
@@ -671,6 +743,59 @@ export default function Hub({ accountId, userId, entityId, ticker, initialStage,
           </div>
         </div>
       )}
+
+      {/* ---- Person detail sheet (org-chart flip) ---- */}
+      {personView && (() => {
+        const c = contacts.find((x) => x.id === personView.id) ?? personView;
+        const role = c.role_tag ? ROLES[c.role_tag] : null;
+        const p = c.persona_json;
+        return (
+          <div onClick={() => setPersonView(null)}
+            style={{ position: "fixed", inset: 0, background: "rgba(30,24,12,.35)", zIndex: 200, display: "flex", justifyContent: "center", alignItems: "flex-end" }}>
+            <div onClick={(e) => e.stopPropagation()}
+              style={{ width: "min(560px, 100%)", maxHeight: "88vh", overflowY: "auto", background: "#fff", borderRadius: "16px 16px 0 0", padding: "18px 18px 24px" }}>
+              <div style={{ display: "flex", alignItems: "flex-start", gap: 8 }}>
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontSize: 18, fontWeight: 800 }}>{c.name}</div>
+                  <div style={{ fontSize: 13, color: "var(--ink2)" }}>{c.title || "—"}</div>
+                  {role && <span style={{ background: role.color, color: "#fff", fontSize: 10, fontWeight: 700, borderRadius: 4, padding: "2px 7px", display: "inline-block", marginTop: 4 }}>{role.label}</span>}
+                </div>
+                <button onClick={() => setPersonView(null)} style={{ background: "none", border: "none", color: "var(--red)", fontWeight: 800, cursor: "pointer", fontSize: 18, lineHeight: 1 }}>×</button>
+              </div>
+              {(c.email || c.phone) && <div style={{ fontSize: 12.5, color: "var(--ink2)", marginTop: 6 }}>{[c.email, c.phone].filter(Boolean).join(" · ")}</div>}
+
+              {p ? (
+                <div style={{ marginTop: 12 }}>
+                  <div style={{ fontSize: 14, fontWeight: 700, lineHeight: 1.4 }}>{p.headline}</div>
+                  <p style={{ fontSize: 13, lineHeight: 1.55, margin: "6px 0" }}>{p.background}</p>
+                  {p.priorities?.length > 0 && (
+                    <div style={{ margin: "6px 0" }}>
+                      <div style={{ fontSize: 10.5, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".5px", color: "#9A6700", marginBottom: 2 }}>Focus areas</div>
+                      {p.priorities.map((x, i) => <div key={i} style={{ fontSize: 13, padding: "1px 0 1px 12px", textIndent: -12 }}>· {x}</div>)}
+                    </div>
+                  )}
+                  {p.quote && <div style={{ fontSize: 13, fontStyle: "italic", background: "#F7F2E9", borderLeft: "3px solid var(--gold)", borderRadius: 6, padding: "7px 10px", margin: "6px 0" }}>&ldquo;{p.quote}&rdquo;</div>}
+                  {p.talk_to_them && <div style={{ fontSize: 12.5, color: "#006B72", margin: "6px 0" }}><b>How to engage:</b> {p.talk_to_them}</div>}
+                  <div style={{ display: "flex", gap: 10, alignItems: "center", marginTop: 6 }}>
+                    {p.source && <a href={p.source} target="_blank" rel="noreferrer" style={{ fontSize: 12, color: "var(--blue)", fontWeight: 700 }}>source ↗</a>}
+                    <button className="mini" onClick={() => researchPerson(c)} disabled={personaBusy}>{personaBusy ? "…" : "↻ refresh"}</button>
+                  </div>
+                  <div style={{ fontSize: 10.5, color: "var(--muted)", marginTop: 6 }}>Public sources · verify before relying on it.</div>
+                </div>
+              ) : (
+                <div style={{ marginTop: 14 }}>
+                  <p style={{ fontSize: 12.5, color: "var(--ink2)", margin: "0 0 10px" }}>No brief yet. Research {c.name.split(" ")[0]}&apos;s public background, focus areas, and how to engage them — public sources only.</p>
+                  <button className="btn" onClick={() => researchPerson(c)} disabled={personaBusy}>{personaBusy ? "Researching… (~45s)" : "🔎 Research this person"}</button>
+                </div>
+              )}
+
+              <div style={{ borderTop: "1px solid #F0EAE0", marginTop: 14, paddingTop: 12, display: "flex", gap: 8 }}>
+                <button className="mini" onClick={() => { setCForm({ id: c.id, name: c.name, title: c.title || "", role_tag: c.role_tag || "", email: c.email || "", phone: c.phone || "", reports_to: c.reports_to || "" }); setPersonView(null); }}>✎ Edit</button>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
 
       {cForm && (
         <div className="card" style={{ marginTop: 10 }}>

@@ -41,7 +41,7 @@ export async function POST(request: Request) {
 
   // RLS scopes all reads to the caller's tenant.
   const { data: acct } = await supabase.from("accounts")
-    .select("id, crm_stage, rep_notes, entity:entities(id, canonical_name, ticker, hq_state, entity_type, data_tier, profile_json, decision_locus, decision_note)")
+    .select("id, crm_stage, rep_notes, entity:entities(id, canonical_name, ticker, hq_state, entity_type, data_tier, profile_json, decision_locus, decision_note, priorities_json)")
     .eq("id", accountId).maybeSingle();
   const ent: any = acct?.entity;
   if (!ent) return NextResponse.json({ error: "Account not found" }, { status: 404 });
@@ -63,6 +63,10 @@ export async function POST(request: Request) {
   if (acct!.rep_notes) L.push(`REP NOTES: ${String(acct!.rep_notes).slice(0, 600)}`);
   if (ent.decision_locus) L.push(`DECISION AUTHORITY: ${ent.decision_locus === "corporate" ? "the corporate parent decides major software purchases" : ent.decision_locus === "local" ? "this company decides for itself" : "mixed — depends on the purchase"}${ent.decision_note ? ` — ${String(ent.decision_note).slice(0, 300)}` : ""}. Aim the strategy at where the decision actually lives.`);
   if (ent.profile_json?.summary) L.push(`RESEARCHED PROFILE: ${String(ent.profile_json.summary).slice(0, 700)}`);
+  if (ent.priorities_json?.priorities?.length) {
+    const pl = (ent.priorities_json.priorities as any[]).slice(0, 5).map((p) => `- ${p.theme}: ${p.detail}${p.quote ? ` ("${p.quote}"${p.who ? ` — ${p.who}` : ""})` : ""}`).join("\n");
+    L.push(`LEADERSHIP'S STATED PRIORITIES (their own public words — anchor the plan to these):\n${pl}`);
+  }
 
   if (facts.ok) {
     const f = facts.facts;
