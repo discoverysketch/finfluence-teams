@@ -23,7 +23,7 @@ export default function Lesson({
   const flipRef = useRef<HTMLDivElement>(null);
   const yesRef = useRef<HTMLDivElement>(null);
   const noRef = useRef<HTMLDivElement>(null);
-  const drag = useRef({ sx: 0, dx: 0, on: false, moved: false, busy: false });
+  const drag = useRef({ sx: 0, sy: 0, dx: 0, on: false, moved: false, scroll: false, captured: false, pid: 0, busy: false });
 
   if (cards.length === 0) {
     return <main className="container"><p>No cards in this unit.</p><Link href="/learn">← Back to path</Link></main>;
@@ -64,18 +64,29 @@ export default function Lesson({
   }
   function onDown(e: React.PointerEvent<HTMLDivElement>) {
     if (drag.current.busy) return;
-    drag.current = { sx: e.clientX, dx: 0, on: true, moved: false, busy: false };
-    const el = flipRef.current; if (el) { el.style.transition = "none"; el.setPointerCapture?.(e.pointerId); }
+    // Don't capture the pointer yet — capturing here would steal a vertical
+    // scroll. We only capture once the gesture proves to be a horizontal swipe.
+    drag.current = { sx: e.clientX, sy: e.clientY, dx: 0, on: true, moved: false, scroll: false, captured: false, pid: e.pointerId, busy: false };
   }
   function onMove(e: React.PointerEvent<HTMLDivElement>) {
-    const d = drag.current; if (!d.on) return;
-    d.dx = e.clientX - d.sx; if (Math.abs(d.dx) > 6) d.moved = true;
-    const el = flipRef.current; if (el) el.style.transform = `translate(${d.dx}px, ${Math.abs(d.dx) * 0.04}px) rotate(${d.dx * 0.05}deg)`;
-    if (yesRef.current) yesRef.current.style.opacity = String(d.dx > 0 ? Math.min(d.dx / 90, 1) : 0);
-    if (noRef.current) noRef.current.style.opacity = String(d.dx < 0 ? Math.min(-d.dx / 90, 1) : 0);
+    const d = drag.current; if (!d.on || d.scroll) return;
+    const dx = e.clientX - d.sx, dy = e.clientY - d.sy;
+    if (!d.moved) {
+      // Decide intent on first real movement: vertical => let the page scroll.
+      if (Math.abs(dy) > 8 && Math.abs(dy) > Math.abs(dx)) { d.scroll = true; return; }
+      if (Math.abs(dx) > 8) {
+        d.moved = true;
+        const el = flipRef.current; if (el) { el.style.transition = "none"; el.setPointerCapture?.(d.pid); d.captured = true; }
+      } else return;
+    }
+    d.dx = dx;
+    const el = flipRef.current; if (el) el.style.transform = `translate(${dx}px, ${Math.abs(dx) * 0.04}px) rotate(${dx * 0.05}deg)`;
+    if (yesRef.current) yesRef.current.style.opacity = String(dx > 0 ? Math.min(dx / 90, 1) : 0);
+    if (noRef.current) noRef.current.style.opacity = String(dx < 0 ? Math.min(-dx / 90, 1) : 0);
   }
   function onUp() {
     const d = drag.current; if (!d.on) return; d.on = false;
+    if (d.scroll) return; // was a scroll, not a card gesture
     const el = flipRef.current;
     if (!d.moved) { unlockAudio(); SFX.flip(); setFlipped((f) => !f); reset(el); return; }
     if (d.dx > 90) commit(1);
