@@ -9,6 +9,7 @@ import PrepBrief from "./PrepBrief";
 import DraftOutreach from "@/components/DraftOutreach";
 import CaptureNotes from "./CaptureNotes";
 import WhatChanged from "@/components/WhatChanged";
+import DeepIntel from "@/components/DeepIntel";
 import WinWire from "./WinWire";
 
 export type Persona = { headline: string; background: string; priorities: string[]; quote: string; talk_to_them: string; source: string; confidence?: string };
@@ -639,6 +640,9 @@ export default function Hub({ accountId, userId, entityId, ticker, initialStage,
           )}
         </>
       )}
+
+      {/* ---- Deep intel: hiring, comp metrics, fleet, muni financials ---- */}
+      {entityId && <DeepIntel entityId={entityId} />}
 
       {/* ---- Signals: recent filings + news mentions for THIS account ---- */}
       {sig && (sig.events.length > 0 || sig.news.length > 0) && (

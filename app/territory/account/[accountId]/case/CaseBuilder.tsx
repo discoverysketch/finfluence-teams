@@ -54,6 +54,11 @@ export default function CaseBuilder({ entityId, company, dealValueUsd }: { entit
       const { data } = await supabase.from("pricing_products").select("id, family, name, metric, list_price, as_of").order("ord");
       setPrices((data ?? []) as Price[]);
     })();
+    // Prefer a real researched employee count over the customer proxy.
+    (async () => {
+      const { data } = await supabase.from("entities").select("employees").eq("id", entityId).maybeSingle();
+      if (data?.employees && Number(data.employees) > 0) setEmployees(Number(data.employees));
+    })();
   }, [entityId, supabase]);
 
   // ---- license estimate (public list price × quantities) ----
