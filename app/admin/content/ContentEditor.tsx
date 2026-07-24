@@ -275,19 +275,6 @@ export default function ContentEditor() {
     <div>
       {msg && <div className="card" style={{ borderColor: "var(--red)", color: "var(--red)", marginBottom: 12 }}>{msg}</div>}
 
-      {/* ---------- Oracle list pricing (public) ---------- */}
-      <div className="edsec">💲 Oracle list pricing</div>
-      <div className="card" style={{ background: "#F0F7F7", borderColor: "#C4DEDF" }}>
-        <p style={{ fontSize: 12.5, color: "var(--ink2)", margin: "0 0 8px", lineHeight: 1.5 }}>
-          Load Oracle&apos;s <b>public</b> Fusion Cloud price-list PDF — the utility-relevant SaaS SKUs power the license estimator in each account&apos;s Business Case. Re-run when Oracle updates the list. {priceCount != null && <b>{priceCount} products on file.</b>}
-        </p>
-        <input value={priceUrl} onChange={(e) => setPriceUrl(e.target.value)} style={{ width: "100%", fontSize: 12, marginBottom: 8 }} />
-        <button className="btn" style={{ background: "var(--teal)" }} disabled={priceBusy} onClick={ingestPricing}>
-          {priceBusy ? "Reading the price list… (~30s)" : priceCount ? "↻ Refresh pricing" : "💲 Load pricing"}
-        </button>
-      </div>
-
-
       {/* ---------- Core curriculum: locked reference ---------- */}
       <div className="edsec">Core curriculum · 🔒 built-in</div>
       <p style={{ fontSize: 12, color: "var(--ink2)", margin: "0 0 8px" }}>
@@ -428,6 +415,18 @@ export default function ContentEditor() {
           </div>
         </div>
       )}
+
+      {/* ---------- Oracle list pricing (public) — reference data, kept below the content ---------- */}
+      <div className="edsec" style={{ marginTop: 30 }}>💲 Oracle list pricing</div>
+      <div className="card" style={{ background: "#F0F7F7", borderColor: "#C4DEDF" }}>
+        <p style={{ fontSize: 12.5, color: "var(--ink2)", margin: "0 0 8px", lineHeight: 1.5 }}>
+          Load Oracle&apos;s <b>public</b> Fusion Cloud price-list PDF — the utility-relevant SaaS SKUs power the license estimator in each account&apos;s Business Case. Re-run when Oracle updates the list. {priceCount != null && <b>{priceCount} products on file.</b>}
+        </p>
+        <input value={priceUrl} onChange={(e) => setPriceUrl(e.target.value)} style={{ width: "100%", fontSize: 12, marginBottom: 8 }} />
+        <button className="btn" style={{ background: "var(--teal)" }} disabled={priceBusy} onClick={ingestPricing}>
+          {priceBusy ? "Reading the price list… (~30s)" : priceCount ? "↻ Refresh pricing" : "💲 Load pricing"}
+        </button>
+      </div>
 
       <style>{`
         .edsec{font-size:11px;font-weight:700;color:#8A7E6E;text-transform:uppercase;letter-spacing:.6px;margin:12px 0 8px}
