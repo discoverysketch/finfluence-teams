@@ -36,7 +36,7 @@ export async function researchExecutives(name: string, hqState?: string | null):
     model: "claude-sonnet-5", max_tokens: 9000,
     tools: [
       { type: "web_search_20260209", name: "web_search", max_uses: 2 } as any,
-      { type: "web_fetch_20260209", name: "web_fetch", max_uses: 3 } as any,
+      { type: "web_fetch_20260209", name: "web_fetch", max_uses: 3, max_content_tokens: 30000 } as any,
     ],
     messages: [{
       role: "user",

@@ -2,6 +2,7 @@ import Anthropic from "@anthropic-ai/sdk";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { withRetry, friendlyAiError } from "@/lib/aiRetry";
+import { fetchProxy } from "@/lib/proxy";
 import { NextResponse } from "next/server";
 
 // Deep public-data enrichment on the shared entity. Modes:
@@ -87,16 +88,52 @@ export async function POST(request: Request) {
 
   const { entityId, mode } = await request.json().catch(() => ({}));
   if (!entityId || !SCHEMAS[mode]) return NextResponse.json({ error: "Missing account or mode" }, { status: 400 });
-  const { data: ent } = await supabase.from("entities").select("id, canonical_name, ticker, hq_state").eq("id", entityId).maybeSingle();
+  const { data: ent } = await supabase.from("entities").select("id, canonical_name, ticker, hq_state, cik").eq("id", entityId).maybeSingle();
   if (!ent) return NextResponse.json({ error: "Entity not found" }, { status: 404 });
 
   const client = new Anthropic();
   try {
+    // COMP takes a deterministic path: DEF 14A is a standardized form, so it's
+    // fetched straight from EDGAR and sliced to the incentive-metrics section.
+    // Letting the model web-search for it gave inconsistent results (different
+    // mirrors, different filing years per account) and cost ~$4.26 a lookup
+    // against ~$0.11 here, because the whole proxy landed in context and was
+    // re-billed on every turn of the tool loop.
+    if (mode === "comp") {
+      if (!ent.cik) return NextResponse.json({ error: "No SEC filings for this account — exec-comp metrics come from the DEF 14A proxy." }, { status: 422 });
+      const proxy = await fetchProxy(ent.cik);
+      if (!proxy) return NextResponse.json({ error: "Couldn't find a DEF 14A proxy on EDGAR for this account." }, { status: 502 });
+
+      const res = await withRetry(() => client.messages.create({
+        model: "claude-opus-4-8", max_tokens: 3000,
+        output_config: { format: { type: "json_schema", schema: SCHEMAS.comp } } as any,
+        system:
+          "Extract the executive-compensation PERFORMANCE METRICS that determine incentive payout, from this proxy-statement excerpt. " +
+          "Only metrics that actually drive bonus/incentive payout — never share counts, dividends, director fees or auditor fees. " +
+          "For each: metric, detail (include the weighting when stated), and angle = how an Oracle ERP/EPM seller ties value to a number leadership is paid to hit. " +
+          "employees = total employee count if the excerpt states it, else 0. summary = 2 sentences on how leadership is measured. " +
+          "Use ONLY the excerpt — never invent a metric or figure.",
+        messages: [{ role: "user", content: `Company: ${ent.canonical_name}\nProxy: ${proxy.url} (filed ${proxy.filed})\n\nExcerpt:\n${proxy.section}` }],
+      }));
+      const parsed = JSON.parse(res.content.filter((b) => b.type === "text").map((b) => (b as any).text).join(""));
+      parsed.source = proxy.url;      // always the canonical sec.gov document
+      parsed.filed = proxy.filed;     // so the UI can say which proxy this is
+      const admin = createAdminClient();
+      const upd: Record<string, any> = { comp_json: parsed, comp_at: new Date().toISOString() };
+      if (Number.isInteger(parsed.employees) && parsed.employees > 0) upd.employees = parsed.employees;
+      await admin.from("entities").update(upd).eq("id", entityId);
+      return NextResponse.json({ data: parsed });
+    }
+
     const research = await withRetry(() => client.messages.create({
       model: "claude-sonnet-5", max_tokens: 9000,
       tools: [
-        { type: "web_search_20260209", name: "web_search", max_uses: 5 } as any,
-        { type: "web_fetch_20260209", name: "web_fetch", max_uses: 4 } as any,
+        // COST GUARD. An SEC proxy/10-K is enormous, and in an agentic loop the
+        // fetched content is re-billed on every later turn — one uncapped comp
+        // lookup measured 2.06M input tokens ($4.18). max_content_tokens
+        // truncates each fetch; fewer uses means fewer turns to re-bill.
+        { type: "web_search_20260209", name: "web_search", max_uses: 3 } as any,
+        { type: "web_fetch_20260209", name: "web_fetch", max_uses: 2, max_content_tokens: 24000 } as any,
       ],
       messages: [{ role: "user", content: PROMPTS[mode](ent.canonical_name, ent.hq_state || "") }],
     }));
