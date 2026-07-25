@@ -26,7 +26,10 @@ export default function DeepIntel({ entityId }: { entityId: string }) {
   const [busy, setBusy] = useState<Facet[]>([]);
   const [sweep, setSweep] = useState({ running: false, done: 0, total: 0 });
   const [elapsed, setElapsed] = useState(0);
-  const [open, setOpen] = useState<Facet | null>(null);
+  // Researched topics show their content by default — folding away work
+  // that has already been paid for makes the account look emptier than it
+  // is. Track what the rep has collapsed, not what they have opened.
+  const [collapsed, setCollapsed] = useState<Facet[]>([]);
   // Errors are per-topic: concurrent lookups would otherwise wipe each
   // other's message and a failed topic would fail silently.
   const [errs, setErrs] = useState<Partial<Record<Facet, string>>>({});
@@ -59,7 +62,7 @@ export default function DeepIntel({ entityId }: { entityId: string }) {
     return () => clearInterval(id);
   }, [anyBusy]);
 
-  async function research(mode: Facet, focus = true) {
+  async function research(mode: Facet) {
     setBusy((b) => (b.includes(mode) ? b : [...b, mode]));
     setErrs((e) => ({ ...e, [mode]: undefined }));
     try {
@@ -68,8 +71,7 @@ export default function DeepIntel({ entityId }: { entityId: string }) {
       if (!r.ok || !j?.data) { setErrs((e) => ({ ...e, [mode]: j?.error || "Research failed — try again." })); return false; }
       setData((d) => ({ ...d, [mode]: j.data }));
       setAt((a) => ({ ...a, [mode]: new Date().toISOString() }));
-      // A single run opens that topic; a sweep opens whichever lands first.
-      setOpen((o) => (focus ? mode : o ?? mode));
+      setCollapsed((c) => c.filter((x) => x !== mode)); // new findings are never hidden
       return true;
     } catch {
       setErrs((e) => ({ ...e, [mode]: "Network error — check your connection." }));
@@ -83,7 +85,7 @@ export default function DeepIntel({ entityId }: { entityId: string }) {
     const missing = SWEEPABLE.filter((f) => !data[f]);
     const list = missing.length ? missing : SWEEPABLE; // nothing missing = refresh everything
     setSweep({ running: true, done: 0, total: list.length });
-    await Promise.all(list.map((m) => research(m, false).finally(() => setSweep((s) => ({ ...s, done: s.done + 1 })))));
+    await Promise.all(list.map((m) => research(m).finally(() => setSweep((s) => ({ ...s, done: s.done + 1 })))));
     setSweep((s) => ({ ...s, running: false }));
   }
 
@@ -119,13 +121,13 @@ export default function DeepIntel({ entityId }: { entityId: string }) {
         {facets.map((f, i) => {
           const d = data[f];
           const m = META[f];
-          const isOpen = open === f;
+          const isOpen = !!d && !collapsed.includes(f);
           const running = busy.includes(f);
           const fErr = errs[f];
           return (
             <div key={f} style={{ borderTop: i ? "1px solid #F0EAE0" : "none", padding: "9px 0" }}>
               <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                <button onClick={() => setOpen(isOpen ? null : f)} style={{ flex: 1, textAlign: "left", background: "none", border: "none", cursor: "pointer", padding: 0 }}>
+                <button onClick={() => setCollapsed((c) => (c.includes(f) ? c.filter((x) => x !== f) : [...c, f]))} style={{ flex: 1, textAlign: "left", background: "none", border: "none", cursor: "pointer", padding: 0 }}>
                   <span style={{ fontSize: 13.5, fontWeight: 700 }}>{m.icon} {m.label}</span>
                   {d && f === "hiring" && d.signal && <span style={{ marginLeft: 8, background: d.signal === "hot" ? "#B23A2E" : d.signal === "warm" ? "var(--gold)" : "#8A7E6E", color: "#fff", fontSize: 9.5, fontWeight: 700, borderRadius: 4, padding: "1px 6px" }}>{d.signal.toUpperCase()}</span>}
                   {f === "stack" && !d && <span style={{ marginLeft: 6, fontSize: 9.5, fontWeight: 700, color: "#6B6254", background: "#F0EAE0", borderRadius: 4, padding: "1px 6px" }}>ON DEMAND</span>}
@@ -145,7 +147,7 @@ export default function DeepIntel({ entityId }: { entityId: string }) {
                   {fErr} <button className="di-retry" onClick={() => research(f)} disabled={anyBusy}>Retry</button>
                 </div>
               )}
-              {!d && !isOpen && !running && !fErr && <div style={{ fontSize: 11.5, color: "var(--muted)", marginTop: 2 }}>{m.blurb}</div>}
+              {!d && !running && !fErr && <div style={{ fontSize: 11.5, color: "var(--muted)", marginTop: 2 }}>{m.blurb}</div>}
               {d && !running && (() => {
                 const fresh = researchedAgo(at[f], STALE_DAYS[f]);
                 if (!fresh) return <div style={{ fontSize: 11, color: "var(--muted)", marginTop: 2 }}>Researched · date unknown</div>;
