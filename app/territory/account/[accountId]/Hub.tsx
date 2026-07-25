@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer } from "recharts";
 import { createClient } from "@/lib/supabase/client";
 import { researchedAgo, STALE_DAYS } from "@/lib/researchedAt";
+import { assessTrajectory } from "@/lib/trajectory";
 import { inferReporting } from "@/lib/orgchart";
 import { classifyFiling, SUGGESTED_MOVE } from "@/lib/signalTypes";
 import PrepBrief from "./PrepBrief";
@@ -505,26 +506,39 @@ export default function Hub({ accountId, userId, entityId, ticker, initialStage,
           ))}
         </select>
         {!owner && <button className="mini" onClick={() => saveOwner(userId)}>Claim</button>}
-        <span style={{ fontSize: 12, fontWeight: 700, color: "var(--ink2)", marginLeft: 8 }} title="Optional — rough personal estimate only; keep confidential figures out of the app">Deal $</span>
-        <input inputMode="numeric" value={dealValue} onChange={(e) => setDealValue(e.target.value.replace(/[^0-9.]/g, ""))} onBlur={saveDealValue}
-          placeholder="optional" title="Optional — rough personal estimate only; keep confidential figures out of the app"
-          style={{ width: 110, fontSize: 12.5, padding: "5px 8px", borderRadius: 8, border: "1px solid var(--border)" }} />
       </div>
 
-      {/* ---- Stage ---- */}
-      <div className="secttl">Stage</div>
-      <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-        {STAGES.map(([k, label]) => (
-          <button key={k} onClick={() => saveStage(k)}
-            style={{ border: "1px solid var(--border)", borderRadius: 16, padding: "6px 13px", fontSize: 12.5, fontWeight: 700, cursor: "pointer",
-              background: stage === k ? (k === "closed_lost" ? "var(--charcoal)" : k === "closed_won" ? "var(--green)" : "var(--red)") : "#fff",
-              color: stage === k ? "#fff" : "var(--ink2)" }}>
-            {label}
-          </button>
-        ))}
-      </div>
-
-      {stage === "closed_won" && <WinWire accountId={accountId} />}
+      {/* ---- Where the company stands, read from its filings ---- */}
+      {(() => {
+        const facts: Record<string, number> = {};
+        for (const it of (fin.items ?? []) as { key: string; value: number }[]) facts[it.key] = Number(it.value);
+        for (const [k, v] of Object.entries(fin.ferc?.facts ?? {})) facts[k] = Number(v);
+        if (!fin.items && !fin.ferc) return null;
+        const t = assessTrajectory(facts);
+        return (
+          <>
+            <div className="secttl">Where they stand</div>
+            <div className="card" style={{ padding: "11px 13px" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 9, flexWrap: "wrap" }}>
+                <span style={{ background: t.color, color: "#fff", fontSize: 12, fontWeight: 700, borderRadius: 6, padding: "3px 10px" }}>{t.label}</span>
+                {fin.annualLabel && <span style={{ fontSize: 11, color: "var(--muted)" }}>{fin.annualLabel} filings</span>}
+              </div>
+              <div style={{ fontSize: 13, color: "var(--ink2)", lineHeight: 1.5, marginTop: 6 }}>{t.headline}</div>
+              {t.drivers.length > 0 && (
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(132px, 1fr))", gap: 6, marginTop: 9 }}>
+                  {t.drivers.map((d) => (
+                    <div key={d.label} title={d.note} style={{ border: "1px solid #F0EAE0", borderRadius: 8, padding: "6px 9px" }}>
+                      <div style={{ fontSize: 13.5, fontWeight: 800 }}>{d.value}</div>
+                      <div style={{ fontSize: 10.5, color: "var(--muted)", fontWeight: 600 }}>{d.label}</div>
+                    </div>
+                  ))}
+                </div>
+              )}
+              <div style={{ fontSize: 10.5, color: "var(--muted)", marginTop: 7 }}>Computed from filed figures (SEC/FERC) — not an estimate or a forecast.</div>
+            </div>
+          </>
+        );
+      })()}
 
       {/* ---- Open tasks ---- */}
       {openTasks.length > 0 && (
