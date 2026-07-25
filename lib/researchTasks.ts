@@ -202,7 +202,25 @@ export async function runTask(client: Anthropic, ent: Ent, key: TaskKey, fetchPr
     messages: [{ role: "user", content: `Company: ${ent.canonical_name}\n\nResearch notes:\n${notes.slice(0, cfg.notesCap)}` }],
   });
   usage.push(u(cfg.extractModel, extract.usage));
-  return { data: JSON.parse(textOf(extract)), usage };
+  const parsed = JSON.parse(textOf(extract));
+
+  // The battlecard often finds the same system in two places (a vendor case
+  // study and a conference talk). Two identical rows read as sloppy, so merge
+  // them and keep the strongest evidence — extra corroboration is a reason to
+  // trust it more, not to print it twice.
+  if (key === "stack" && Array.isArray(parsed.systems)) {
+    const RANK = { high: 3, medium: 2, low: 1 } as Record<string, number>;
+    const merged = new Map<string, any>();
+    for (const sy of parsed.systems) {
+      const id = `${String(sy.vendor).toLowerCase().trim()}|${String(sy.area).toLowerCase().trim()}`;
+      const prev = merged.get(id);
+      if (!prev) { merged.set(id, sy); continue; }
+      if ((RANK[sy.confidence] ?? 0) > (RANK[prev.confidence] ?? 0)) merged.set(id, { ...sy, corroborated: true });
+      else merged.set(id, { ...prev, corroborated: true });
+    }
+    parsed.systems = [...merged.values()];
+  }
+  return { data: parsed, usage };
 }
 
 // Per-1M pricing, for the batch runner's live spend counter.
