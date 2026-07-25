@@ -208,7 +208,7 @@ export default function Territory({ listId, userId, emailOf, initial }: { listId
     if (!ids.length && !unmatched.length) { setMsg("Nothing new to add — pick at least one match."); return; }
     setBusy(true); setMsg("");
     if (ids.length) {
-      const { data: created, error } = await supabase.from("accounts").insert(ids.map((entity_id) => ({ list_id: listId, entity_id, owner: userId }))).select("id");
+      const { data: created, error } = await supabase.from("accounts").insert(ids.map((entity_id) => ({ list_id: listId, entity_id, owner: userId, created_by: userId }))).select("id");
       if (error) { setBusy(false); setMsg(error.message); return; }
       if (created?.length) kickPeopleResearch(created.map((r) => r.id));
       router.refresh();

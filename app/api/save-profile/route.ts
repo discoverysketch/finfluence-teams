@@ -33,7 +33,7 @@ export async function POST(request: Request) {
   if (filer) {
     const { data: dupe } = await supabase.from("accounts").select("id").eq("list_id", listId).eq("entity_id", filer.id).maybeSingle();
     if (dupe) return NextResponse.json({ ok: true, entityId: filer.id, accountId: dupe.id, linkedFiler: filer.canonical_name });
-    const { data: acct, error: ae } = await supabase.from("accounts").insert({ list_id: listId, entity_id: filer.id, owner: user.id }).select("id").single();
+    const { data: acct, error: ae } = await supabase.from("accounts").insert({ list_id: listId, entity_id: filer.id, owner: user.id, created_by: user.id }).select("id").single();
     if (ae) return NextResponse.json({ error: ae.message }, { status: 500 });
     return NextResponse.json({ ok: true, entityId: filer.id, accountId: acct?.id ?? null, linkedFiler: filer.canonical_name });
   }
@@ -45,7 +45,7 @@ export async function POST(request: Request) {
   }).select("id").single();
   if (ee || !ent) return NextResponse.json({ error: ee?.message || "Couldn't save profile" }, { status: 500 });
 
-  const { data: acct, error: ae } = await supabase.from("accounts").insert({ list_id: listId, entity_id: ent.id, owner: user.id }).select("id").single();
+  const { data: acct, error: ae } = await supabase.from("accounts").insert({ list_id: listId, entity_id: ent.id, owner: user.id, created_by: user.id }).select("id").single();
   if (ae) return NextResponse.json({ error: ae.message }, { status: 500 });
 
   // accountId lets the client kick off background people research for it.

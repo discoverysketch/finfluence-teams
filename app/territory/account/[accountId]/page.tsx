@@ -17,7 +17,7 @@ export default async function AccountPage({ params }: { params: Promise<{ accoun
 
   // RLS scopes this to the caller's tenant.
   const { data: acct } = await supabase.from("accounts")
-    .select("id, rep_notes, crm_stage, owner, deal_value, entity:entities(id, canonical_name, ticker, data_tier, hq_state, decision_locus, decision_note, decision_source, priorities_json, priorities_at)")
+    .select("id, rep_notes, crm_stage, owner, created_by, created_at, deal_value, entity:entities(id, canonical_name, ticker, data_tier, hq_state, decision_locus, decision_note, decision_source, priorities_json, priorities_at)")
     .eq("id", accountId).maybeSingle();
   if (!acct) {
     return (
@@ -39,6 +39,14 @@ export default async function AccountPage({ params }: { params: Promise<{ accoun
   const ent: any = acct.entity;
   const TIER_COLOR: Record<string, string> = { A: "#1B7A47", B: "#0572CE", C: "#9A6700", D: "#8A7E6E" };
 
+  // Who put this account in the book. Distinct from `owner`, which is
+  // reassignable — this is written once at insert and never changes.
+  const creator = (acct as any).created_by as string | null;
+  const addedBy = creator ? (emailOf[creator]?.split("@")[0] ?? "a teammate") : null;
+  const addedOn = (acct as any).created_at
+    ? new Date((acct as any).created_at).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })
+    : null;
+
   return (
     <Shell active="accounts" isAdmin={isAdmin}>
       <p style={{ fontSize: 13 }}><Link href="/territory">← Accounts</Link></p>
@@ -47,6 +55,11 @@ export default async function AccountPage({ params }: { params: Promise<{ accoun
         {ent?.ticker && <span style={{ fontFamily: "ui-monospace, monospace", color: "var(--muted)", fontWeight: 700 }}>{ent.ticker}</span>}
         {ent?.data_tier && <span style={{ background: TIER_COLOR[ent.data_tier] || "#8A7E6E", color: "#fff", fontSize: 11, fontWeight: 700, borderRadius: 5, padding: "2px 8px" }}>Tier {ent.data_tier}</span>}
       </div>
+      {addedBy && (
+        <div style={{ fontSize: 12, color: "var(--muted)", marginTop: 2 }}>
+          Added by <b style={{ color: "var(--ink2)" }}>{addedBy}</b>{addedOn ? ` · ${addedOn}` : ""}
+        </div>
+      )}
       {ent?.id && <DecisionAuthority entityId={ent.id} initial={{ locus: ent.decision_locus ?? null, note: ent.decision_note ?? null, source: ent.decision_source ?? null }} />}
       <p style={{ display: "flex", gap: 8, flexWrap: "wrap", margin: "10px 0 4px" }}>
         {ent?.id && <Link href={`/territory/plan/${ent.id}`} className="mini-link">📄 Account plan</Link>}

@@ -8,7 +8,7 @@ export default function AddToBook({ listId, entityId, userId }: { listId: string
 
   async function add() {
     setState("busy");
-    const { data, error } = await supabase.from("accounts").insert({ list_id: listId, entity_id: entityId, owner: userId ?? null }).select("id").single();
+    const { data, error } = await supabase.from("accounts").insert({ list_id: listId, entity_id: entityId, owner: userId ?? null, created_by: userId ?? null }).select("id").single();
     // unique index (list_id, entity_id) => duplicate insert errors are fine to treat as added
     setState(error && !error.message.includes("duplicate") ? "err" : "added");
     // Kick background people research; results stage on the account for Hub review.
