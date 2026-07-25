@@ -9,13 +9,14 @@ import { researchedAgo, STALE_DAYS } from "@/lib/researchedAt";
 // Each lookup takes ~1 minute, so the UI has to SHOW that it's working —
 // one button researches every topic, two at a time, with live progress.
 /* eslint-disable @typescript-eslint/no-explicit-any */
-type Facet = "hiring" | "comp" | "fleet" | "muni" | "stack";
+type Facet = "hiring" | "comp" | "fleet" | "muni" | "stack" | "infer";
 const META: Record<Facet, { icon: string; label: string; blurb: string }> = {
   hiring: { icon: "🧑‍💼", label: "Hiring signals", blurb: "Open finance/ERP/systems roles — a live buying signal." },
   comp: { icon: "🎯", label: "What leadership is paid to hit", blurb: "Exec-comp metrics from the proxy — sell to the number their bonus depends on." },
   stack: { icon: "🥊", label: "What they run today", blurb: "Systems in place now, from public tells — plus where you displace them. Run it per account when you need it." },
   fleet: { icon: "⚡", label: "Generation fleet", blurb: "Capacity, fuel mix, notable plants — for asset & capital conversations." },
   muni: { icon: "🏛️", label: "Muni financial snapshot", blurb: "Revenue, debt, customers, rating from EMMA/CAFR — for non-SEC accounts." },
+  infer: { icon: "🔮", label: "Informed read (no filings)", blurb: "This company files nothing public — what's typical for its type, and what to confirm." },
 };
 
 export default function DeepIntel({ entityId }: { entityId: string }) {
@@ -23,6 +24,9 @@ export default function DeepIntel({ entityId }: { entityId: string }) {
   const [data, setData] = useState<Record<string, any>>({});
   const [at, setAt] = useState<Record<string, string | null>>({});
   const [isMuni, setIsMuni] = useState(false);
+  // No CIK = files nothing with the SEC, so the sourced facets come back empty
+  // and the inferred read is the only thing that can help.
+  const [noFilings, setNoFilings] = useState(false);
   const [busy, setBusy] = useState<Facet[]>([]);
   const [sweep, setSweep] = useState({ running: false, done: 0, total: 0 });
   const [elapsed, setElapsed] = useState(0);
@@ -37,21 +41,26 @@ export default function DeepIntel({ entityId }: { entityId: string }) {
   useEffect(() => {
     (async () => {
       const { data: e } = await supabase.from("entities")
-        .select("hiring_json, comp_json, fleet_json, muni_json, stack_json, hiring_at, comp_at, fleet_at, muni_at, stack_at, data_tier, entity_type")
+        .select("hiring_json, comp_json, fleet_json, muni_json, stack_json, inferred_json, hiring_at, comp_at, fleet_at, muni_at, stack_at, inferred_at, data_tier, entity_type, cik")
         .eq("id", entityId).maybeSingle();
       if (e) {
-        setData({ hiring: e.hiring_json, comp: e.comp_json, fleet: e.fleet_json, muni: e.muni_json, stack: e.stack_json });
-        setAt({ hiring: e.hiring_at, comp: e.comp_at, fleet: e.fleet_at, muni: e.muni_at, stack: e.stack_at });
+        setData({ hiring: e.hiring_json, comp: e.comp_json, fleet: e.fleet_json, muni: e.muni_json, stack: e.stack_json, infer: e.inferred_json });
+        setNoFilings(!e.cik);
+        setAt({ hiring: e.hiring_at, comp: e.comp_at, fleet: e.fleet_at, muni: e.muni_at, stack: e.stack_at, infer: e.inferred_at });
         setIsMuni(e.data_tier === "D" || e.data_tier === "C" || ["muni", "coop"].includes(e.entity_type ?? ""));
       }
     })();
   }, [entityId, supabase]);
 
-  const facets: Facet[] = isMuni ? ["stack", "hiring", "comp", "fleet", "muni"] : ["stack", "hiring", "comp", "fleet"];
+  const facets: Facet[] = [
+    ...(noFilings ? ["infer" as Facet] : []),
+    "stack" as Facet, "hiring" as Facet, "comp" as Facet, "fleet" as Facet,
+    ...(isMuni ? ["muni" as Facet] : []),
+  ];
   // The battlecard is deliberately NOT part of "Research all": it's the one
   // facet a rep should ask for on the accounts they're actually working,
   // rather than have it run across the whole book.
-  const SWEEPABLE = facets.filter((f) => f !== "stack");
+  const SWEEPABLE = facets.filter((f) => f !== "stack" && f !== "infer");
   const anyBusy = busy.length > 0;
 
   // A running clock is the honest signal that a slow lookup is still alive.
@@ -176,6 +185,29 @@ export default function DeepIntel({ entityId }: { entityId: string }) {
                     ))}
                     {d.employees ? <div style={{ fontSize: 12, color: "var(--ink2)", marginTop: 4 }}>~{Number(d.employees).toLocaleString()} employees</div> : null}
                     <div style={{ marginTop: 4 }}><Src url={d.source} /></div>
+                  </>)}
+                  {f === "infer" && (<>
+                    <div style={{ background: "#FBF4E4", border: "1.5px dashed #D9B65C", borderRadius: 9, padding: "9px 11px" }}>
+                      <div style={{ fontSize: 9.5, fontWeight: 800, letterSpacing: ".6px", color: "#8A6A12", marginBottom: 4 }}>
+                        INFERRED FROM COMPANY TYPE · NOT FROM FILINGS
+                      </div>
+                      {d.profile && <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 3 }}>{d.profile}</div>}
+                      {(d.basis ?? []).length > 0 && (
+                        <div style={{ fontSize: 11.5, color: "var(--ink2)", marginBottom: 6 }}>
+                          <b>What we actually know:</b> {d.basis.join(" · ")}
+                        </div>
+                      )}
+                      {(d.areas ?? []).map((a: any, j: number) => (
+                        <div key={j} style={{ padding: "5px 0", borderTop: j ? "1px solid #EBDCB4" : "none" }}>
+                          <div style={{ fontSize: 12.5, fontWeight: 700 }}>{a.area}</div>
+                          <div style={{ fontSize: 12.5, color: "var(--ink2)", lineHeight: 1.45 }}>{a.typical}</div>
+                          {a.why && <div style={{ fontSize: 11.5, color: "var(--muted)", marginTop: 1 }}>Why this account: {a.why}</div>}
+                          {a.confirm && <div style={{ fontSize: 12, color: "#8A6A12", marginTop: 2 }}><b>Ask:</b> {a.confirm}</div>}
+                        </div>
+                      ))}
+                      {d.caution && <div style={{ fontSize: 11.5, color: "#B23A2E", marginTop: 6 }}><b>Could be wrong if:</b> {d.caution}</div>}
+                    </div>
+                    <div style={{ fontSize: 10.5, color: "var(--muted)", marginTop: 5 }}>Assumptions from company type — never state these as facts about the account.</div>
                   </>)}
                   {f === "stack" && (<>
                     {d.incumbent && d.incumbent !== "unclear" && (

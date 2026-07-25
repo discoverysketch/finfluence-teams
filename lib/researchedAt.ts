@@ -17,6 +17,7 @@ export const STALE_DAYS = {
   fleet: 400,      // annual EIA-860 inventory
   muni: 400,       // annual CAFR / official statement
   profile: 240,
+  infer: 365,     // a company TYPE rarely changes; the pattern outlives the year
 } as const;
 
 export function researchedAgo(iso: string | null | undefined, staleAfterDays?: number): Freshness | null {

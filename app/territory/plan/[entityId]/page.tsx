@@ -49,7 +49,7 @@ export default async function PlanPage({ params }: { params: Promise<{ entityId:
   if (!user) redirect("/login");
 
   const { data: ent } = await supabase.from("entities")
-    .select("id, canonical_name, ticker, data_tier, hq_state, entity_type, profile_json, priorities_json, priorities_at, decision_locus, decision_note, decision_source, decision_at, hiring_json, comp_json, fleet_json, muni_json, stack_json, hiring_at, comp_at, fleet_at, muni_at, stack_at, employees")
+    .select("id, canonical_name, ticker, data_tier, hq_state, entity_type, profile_json, priorities_json, priorities_at, decision_locus, decision_note, decision_source, decision_at, hiring_json, comp_json, fleet_json, muni_json, stack_json, inferred_json, hiring_at, comp_at, fleet_at, muni_at, stack_at, inferred_at, employees")
     .eq("id", entityId).maybeSingle();
   if (!ent) return <main className="container"><p>Account not found.</p><Link href="/territory">← Accounts</Link></main>;
 
@@ -99,6 +99,7 @@ export default async function PlanPage({ params }: { params: Promise<{ entityId:
   const fleet: any = (ent as any).fleet_json;
   const muni: any = (ent as any).muni_json;
   const stack: any = (ent as any).stack_json;
+  const inferred: any = (ent as any).inferred_json;
   const locus: string | null = (ent as any).decision_locus ?? null;
   const LOCUS: Record<string, [string, string]> = {
     local: ["Decisions are made locally", "#1B7A47"],
@@ -293,6 +294,32 @@ export default async function PlanPage({ params }: { params: Promise<{ entityId:
               <Src url={p.source} />
             </div>
           ))}
+        </>
+      )}
+
+      {/* Inferred read — visually unlike every sourced block on the page */}
+      {!!(inferred?.areas?.length) && (
+        <>
+          <h2 style={{ fontSize: 15 }}>Informed read · no public filings</h2>
+          <div className="pblock" style={{ background: "#FBF4E4", border: "1.5px dashed #D9B65C", borderRadius: 10, padding: "10px 12px", marginBottom: 12 }}>
+            <div style={{ fontSize: 9.5, fontWeight: 800, letterSpacing: ".6px", color: "#8A6A12", marginBottom: 4 }}>
+              INFERRED FROM COMPANY TYPE · NOT FROM FILINGS · CONFIRM BEFORE RELYING ON IT
+            </div>
+            {inferred.profile && <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 3 }}>{inferred.profile}</div>}
+            {(inferred.basis ?? []).length > 0 && (
+              <div style={{ fontSize: 11.5, color: "var(--ink2)", marginBottom: 6 }}><b>What we actually know:</b> {inferred.basis.join(" · ")}</div>
+            )}
+            {(inferred.areas ?? []).map((a: any, i: number) => (
+              <div key={i} style={{ padding: "5px 0", borderTop: i ? "1px solid #EBDCB4" : "none" }}>
+                <div style={{ fontSize: 12.5, fontWeight: 700 }}>{a.area}</div>
+                <div style={{ fontSize: 12.5, color: "var(--ink2)", lineHeight: 1.45 }}>{a.typical}</div>
+                {a.why && <div style={{ fontSize: 11.5, color: "var(--muted)" }}>Why this account: {a.why}</div>}
+                {a.confirm && <div style={{ fontSize: 12, color: "#8A6A12" }}><b>Ask:</b> {a.confirm}</div>}
+              </div>
+            ))}
+            {inferred.caution && <div style={{ fontSize: 11.5, color: "#B23A2E", marginTop: 6 }}><b>Could be wrong if:</b> {inferred.caution}</div>}
+            <div style={{ fontSize: 10.5, color: "var(--muted)", marginTop: 5 }}><When iso={(ent as any).inferred_at} /></div>
+          </div>
         </>
       )}
 

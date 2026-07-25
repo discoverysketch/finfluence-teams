@@ -5,7 +5,7 @@
 import type Anthropic from "@anthropic-ai/sdk";
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
-export type TaskKey = "hiring" | "comp" | "priorities" | "decision" | "stack";
+export type TaskKey = "hiring" | "comp" | "priorities" | "decision" | "stack" | "infer";
 export type Ent = { id: string; canonical_name: string; ticker?: string | null; hq_state?: string | null; cik?: string | null };
 export type TaskResult = { data: any; usage: { model: string; input: number; output: number; searches: number }[] };
 // Injected by the caller so the Next route and the node seed script can each
@@ -80,6 +80,30 @@ export const SCHEMAS: Record<TaskKey, any> = {
       },
     },
     required: ["summary", "incumbent", "systems", "angles"],
+  },
+  // Pattern-level only. No names, no figures, no weightings, no source URLs —
+  // an inferred specific is indistinguishable from a fabricated one.
+  infer: {
+    type: "object", additionalProperties: false,
+    properties: {
+      profile: { type: "string" },
+      basis: { type: "array", items: { type: "string" } },
+      areas: {
+        type: "array",
+        items: {
+          type: "object", additionalProperties: false,
+          properties: {
+            area: { type: "string", enum: ["Compensation & incentives", "Decision authority", "Priorities", "Buying process", "Financial posture"] },
+            typical: { type: "string" },
+            why: { type: "string" },
+            confirm: { type: "string" },
+          },
+          required: ["area", "typical", "why", "confirm"],
+        },
+      },
+      caution: { type: "string" },
+    },
+    required: ["profile", "basis", "areas", "caution"],
   },
   decision: {
     type: "object", additionalProperties: false,
@@ -170,6 +194,25 @@ export async function runTask(client: Anthropic, ent: Ent, key: TaskKey, fetchPr
         "incumbent = the primary ERP/finance vendor if the evidence supports one, else 'unclear'. " +
         "angles = 2-4 honest displacement angles for an Oracle ERP/EPM/Primavera seller, each grounded in something specific in the notes (an ageing release, a fragmented estate, a system nearing end of support, a manual integration). " +
         "Never invent a system, a customer relationship, or a weakness. If the evidence is thin, say so in summary and return fewer systems.",
+    },
+    infer: {
+      tools: TOOLS(2, 1, 20000), maxTokens: 9000, extractModel: "claude-opus-4-8", extractTokens: 3000, notesCap: 14000,
+      prompt:
+        `${ent.canonical_name} files nothing public (no SEC filings), so the usual sources are empty. ` +
+        `FIRST establish only what is publicly knowable about WHAT KIND of company it is: ownership (private equity / infrastructure fund / utility subsidiary / municipal / co-operative), ` +
+        `rough scale, business model (developer, IPP, regulated utility, water authority), and whether it operates through project SPVs, joint ventures or tax-equity partnerships. ` +
+        `Budget: 2 searches + 1 fetch — company site, press releases, trade press. ` +
+        `THEN, from that profile alone, describe what is TYPICAL for companies of that type in: how leadership is compensated and on what measures; where enterprise-software decisions get made; what leadership typically prioritises; how they typically buy; and their typical financial posture. ` +
+        `You are reasoning from company TYPE, not reporting facts about this company. Do NOT state or estimate any specific figure, weighting, percentage, executive name, or system for THIS company — only the pattern for its category, and what would confirm it.`,
+      system:
+        "Produce a PATTERN-level read for a company with no public filings. This is explicitly an inference, and a salesperson will act on it, so the line between pattern and fact must be absolute. " +
+        "profile = one sentence naming the company TYPE (e.g. a private renewables developer operating through project SPVs with tax-equity partners). " +
+        "basis = the publicly-observed facts about the company that put it in that category (ownership, model, structure) — only things actually found. " +
+        "areas = for each: typical (what companies of this type usually do — phrase it as 'typically' or 'at this profile', never as a claim about them), " +
+        "why (what about THIS company puts it in that pattern), confirm (the question a rep should ask to verify it in the meeting). " +
+        "caution = the main way this inference could be wrong for this particular company. " +
+        "NEVER invent: an executive name, a dollar figure, a percentage or weighting, a metric name attributed to them, a system they run, or a source URL. " +
+        "If you cannot place the company confidently, say so in profile and return fewer areas.",
     },
     decision: {
       tools: TOOLS(2, 2), maxTokens: 9000, extractModel: "claude-sonnet-5", extractTokens: 2000, notesCap: 14000,
