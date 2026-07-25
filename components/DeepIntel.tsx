@@ -13,7 +13,7 @@ type Facet = "hiring" | "comp" | "fleet" | "muni" | "stack";
 const META: Record<Facet, { icon: string; label: string; blurb: string }> = {
   hiring: { icon: "🧑‍💼", label: "Hiring signals", blurb: "Open finance/ERP/systems roles — a live buying signal." },
   comp: { icon: "🎯", label: "What leadership is paid to hit", blurb: "Exec-comp metrics from the proxy — sell to the number their bonus depends on." },
-  stack: { icon: "🥊", label: "What they run today", blurb: "Systems in place now, from public tells — plus where you displace them." },
+  stack: { icon: "🥊", label: "What they run today", blurb: "Systems in place now, from public tells — plus where you displace them. Run it per account when you need it." },
   fleet: { icon: "⚡", label: "Generation fleet", blurb: "Capacity, fuel mix, notable plants — for asset & capital conversations." },
   muni: { icon: "🏛️", label: "Muni financial snapshot", blurb: "Revenue, debt, customers, rating from EMMA/CAFR — for non-SEC accounts." },
 };
@@ -45,6 +45,10 @@ export default function DeepIntel({ entityId }: { entityId: string }) {
   }, [entityId, supabase]);
 
   const facets: Facet[] = isMuni ? ["stack", "hiring", "comp", "fleet", "muni"] : ["stack", "hiring", "comp", "fleet"];
+  // The battlecard is deliberately NOT part of "Research all": it's the one
+  // facet a rep should ask for on the accounts they're actually working,
+  // rather than have it run across the whole book.
+  const SWEEPABLE = facets.filter((f) => f !== "stack");
   const anyBusy = busy.length > 0;
 
   // A running clock is the honest signal that a slow lookup is still alive.
@@ -76,14 +80,14 @@ export default function DeepIntel({ entityId }: { entityId: string }) {
   // Research every topic at once — they're independent lookups, so the whole
   // sweep takes about as long as the slowest one, and every row shows progress.
   async function researchAll() {
-    const missing = facets.filter((f) => !data[f]);
-    const list = missing.length ? missing : facets; // nothing missing = refresh everything
+    const missing = SWEEPABLE.filter((f) => !data[f]);
+    const list = missing.length ? missing : SWEEPABLE; // nothing missing = refresh everything
     setSweep({ running: true, done: 0, total: list.length });
     await Promise.all(list.map((m) => research(m, false).finally(() => setSweep((s) => ({ ...s, done: s.done + 1 })))));
     setSweep((s) => ({ ...s, running: false }));
   }
 
-  const missingCount = facets.filter((f) => !data[f]).length;
+  const missingCount = SWEEPABLE.filter((f) => !data[f]).length;
   const Src = ({ url }: { url?: string }) => url ? <a href={url} target="_blank" rel="noreferrer" style={{ fontSize: 11.5, color: "var(--blue)", fontWeight: 700 }}>source ↗</a> : null;
   const mmss = (s: number) => `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
 
@@ -124,6 +128,7 @@ export default function DeepIntel({ entityId }: { entityId: string }) {
                 <button onClick={() => setOpen(isOpen ? null : f)} style={{ flex: 1, textAlign: "left", background: "none", border: "none", cursor: "pointer", padding: 0 }}>
                   <span style={{ fontSize: 13.5, fontWeight: 700 }}>{m.icon} {m.label}</span>
                   {d && f === "hiring" && d.signal && <span style={{ marginLeft: 8, background: d.signal === "hot" ? "#B23A2E" : d.signal === "warm" ? "var(--gold)" : "#8A7E6E", color: "#fff", fontSize: 9.5, fontWeight: 700, borderRadius: 4, padding: "1px 6px" }}>{d.signal.toUpperCase()}</span>}
+                  {f === "stack" && !d && <span style={{ marginLeft: 6, fontSize: 9.5, fontWeight: 700, color: "#6B6254", background: "#F0EAE0", borderRadius: 4, padding: "1px 6px" }}>ON DEMAND</span>}
                   {d && <span style={{ marginLeft: 6, fontSize: 11, color: "var(--muted)" }}>{isOpen ? "▾" : "▸"}</span>}
                 </button>
                 <button className="mini" onClick={() => research(f)} disabled={anyBusy}>
