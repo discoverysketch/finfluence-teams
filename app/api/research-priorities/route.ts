@@ -2,6 +2,7 @@ import Anthropic from "@anthropic-ai/sdk";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { withRetry, friendlyAiError } from "@/lib/aiRetry";
+import { runTask } from "@/lib/researchTasks";
 import { NextResponse } from "next/server";
 
 // "What leadership is saying": management's OWN publicly-stated priorities,
@@ -48,40 +49,12 @@ export async function POST(request: Request) {
 
   const client = new Anthropic();
   try {
-    const research = await withRetry(() => client.messages.create({
-      model: "claude-sonnet-5", max_tokens: 9000,
-      tools: [
-        { type: "web_search_20260209", name: "web_search", max_uses: 3 } as any,
-        { type: "web_fetch_20260209", name: "web_fetch", max_uses: 3, max_content_tokens: 30000 } as any,
-      ],
-      messages: [{
-        role: "user",
-        content:
-          `Research what leadership at ${ent.canonical_name}${ent.ticker ? ` (${ent.ticker})` : ""}${ent.hq_state ? `, a ${ent.hq_state} US utility` : ", a US utility"} is PUBLICLY PRIORITIZING right now. ` +
-          `Sources, in order: (1) their MOST RECENT quarterly EARNINGS CALL — search "${ent.canonical_name} earnings call transcript" and read it for what the CEO/CFO emphasize (capital program, O&M / cost discipline, rate cases, technology/digital modernization, load growth, credit); ` +
-          `(2) their latest 10-K management discussion (MD&A) and strategy; (3) any recent 8-K on a material strategic move. ` +
-          `Budget: ~3 searches + 3 page fetches. For each priority theme capture: a short DIRECT QUOTE from an executive or filing, WHO said it, and the source URL. ` +
-          `Focus on things an enterprise-software seller (finance, capital-project, cost, digital systems) could tie value to. Only report what you actually found with a citation.`,
-      }],
-    }));
-    const notes = research.content.filter((b) => b.type === "text").map((b) => (b as any).text).join("\n").trim();
-    if (!notes) return NextResponse.json({ error: "Research came back empty — try again." }, { status: 502 });
-
-    const extract = await withRetry(() => client.messages.create({
-      model: "claude-opus-4-8", max_tokens: 3500,
-      output_config: { format: { type: "json_schema", schema: SCHEMA } } as any,
-      system:
-        "Structure the leadership priorities from the notes. Use ONLY what's cited in the notes — never invent a quote or figure. " +
-        "summary = 2 sentences on the strategic posture. Each priority: theme (3-6 words), detail (1-2 sentences), quote (a real direct quote from the notes — keep it short and verbatim), who (name + title if known), source (the URL), " +
-        "angle (one line on how an Oracle ERP/EPM/Primavera seller ties value to this priority). as_of = the period/date of the newest source (e.g. 'Q2 2026 earnings call'). Drop any priority lacking a source URL.",
-      messages: [{ role: "user", content: `Company: ${ent.canonical_name}\n\nResearch notes:\n${notes.slice(0, 18000)}` }],
-    }));
-    const text = extract.content.filter((b) => b.type === "text").map((b) => (b as any).text).join("");
-    const parsed = JSON.parse(text);
+    // Shared definition (lib/researchTasks) so the batch sweep and this button
+    // research every account to exactly the same standard.
+    const { data: parsed } = await withRetry(() => runTask(client, ent as any, "priorities"));
     parsed.priorities = (parsed.priorities ?? []).filter((p: any) => /^https?:\/\//.test(p.source)).slice(0, 8);
     if (!parsed.priorities.length) return NextResponse.json({ error: "No citable priorities found — try again." }, { status: 502 });
 
-    // Cache on the shared entity via service role.
     const admin = createAdminClient();
     await admin.from("entities").update({ priorities_json: parsed, priorities_at: new Date().toISOString() }).eq("id", entityId);
     return NextResponse.json({ priorities: parsed, at: new Date().toISOString() });

@@ -2,6 +2,7 @@ import Anthropic from "@anthropic-ai/sdk";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { withRetry, friendlyAiError } from "@/lib/aiRetry";
+import { runTask } from "@/lib/researchTasks";
 import { fetchProxy } from "@/lib/proxy";
 import { NextResponse } from "next/server";
 
@@ -14,26 +15,9 @@ import { NextResponse } from "next/server";
 export const maxDuration = 300;
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
+const MODES = ["hiring", "comp", "fleet", "muni"];
+// fleet + muni only — hiring/comp live in lib/researchTasks.
 const SCHEMAS: Record<string, any> = {
-  hiring: {
-    type: "object", additionalProperties: false,
-    properties: {
-      summary: { type: "string" },
-      roles: { type: "array", items: { type: "object", additionalProperties: false, properties: { title: { type: "string" }, why: { type: "string" }, source: { type: "string" } }, required: ["title", "why", "source"] } },
-      signal: { type: "string", enum: ["hot", "warm", "quiet"] },
-    },
-    required: ["summary", "roles", "signal"],
-  },
-  comp: {
-    type: "object", additionalProperties: false,
-    properties: {
-      summary: { type: "string" },
-      metrics: { type: "array", items: { type: "object", additionalProperties: false, properties: { metric: { type: "string" }, detail: { type: "string" }, angle: { type: "string" } }, required: ["metric", "detail", "angle"] } },
-      employees: { type: "integer" },
-      source: { type: "string" },
-    },
-    required: ["summary", "metrics", "employees", "source"],
-  },
   fleet: {
     type: "object", additionalProperties: false,
     properties: {
@@ -60,14 +44,6 @@ const SCHEMAS: Record<string, any> = {
 };
 
 const PROMPTS: Record<string, (name: string, st: string) => string> = {
-  hiring: (name) =>
-    `Research CURRENT open job postings at ${name} (a US utility) that signal an enterprise-software or finance-systems initiative. ` +
-    `Search their careers page and job boards for roles like: Oracle/SAP/Workday ERP, financial systems analyst/manager, capital-project systems, EPM/planning, procurement systems, IT applications, digital transformation, controller/close roles. ` +
-    `Budget: 2-3 searches + up to 2 fetches. List the relevant open roles with WHY each is a buying signal and the source URL. If nothing relevant is open, say so. signal = hot (multiple systems/ERP roles), warm (some finance-systems roles), quiet (nothing notable).`,
-  comp: (name) =>
-    `Research ${name}'s executive compensation METRICS from its most recent DEF 14A proxy statement (SEC filing). ` +
-    `Search "${name} DEF 14A proxy statement executive compensation" and FETCH the proxy. Find the performance metrics that determine executive bonuses/incentive pay — utilities commonly tie pay to: O&M cost / cost per customer, return on equity (ROE), capital deployment/rate-base growth, EPS, safety, customer satisfaction, reliability. ` +
-    `Also capture the company's total EMPLOYEE COUNT (from the 10-K or proxy). Budget: 2 searches + 2 fetches. For each metric: what it is, and the sales angle (how an ERP/EPM seller ties value to a metric leadership is literally paid to hit). Cite the proxy URL.`,
   fleet: (name) =>
     `Research ${name}'s electricity GENERATION FLEET (US utility). Search EIA data, their 10-K, or company pages. Capture: approximate total generating capacity (MW), the fuel mix (natural gas, coal, nuclear, hydro, wind, solar — approximate % shares), and 2-4 notable/large plants or recent additions/retirements. ` +
     `Budget: 2 searches + 1 fetch. If the utility is transmission/distribution-only with little generation, say so (total_mw 0). Cite a source URL.`,
@@ -87,40 +63,21 @@ export async function POST(request: Request) {
   if (!process.env.ANTHROPIC_API_KEY) return NextResponse.json({ error: "ANTHROPIC_API_KEY is not set on the server." }, { status: 500 });
 
   const { entityId, mode } = await request.json().catch(() => ({}));
-  if (!entityId || !SCHEMAS[mode]) return NextResponse.json({ error: "Missing account or mode" }, { status: 400 });
+  if (!entityId || !MODES.includes(mode)) return NextResponse.json({ error: "Missing account or mode" }, { status: 400 });
   const { data: ent } = await supabase.from("entities").select("id, canonical_name, ticker, hq_state, cik").eq("id", entityId).maybeSingle();
   if (!ent) return NextResponse.json({ error: "Entity not found" }, { status: 404 });
 
   const client = new Anthropic();
   try {
-    // COMP takes a deterministic path: DEF 14A is a standardized form, so it's
-    // fetched straight from EDGAR and sliced to the incentive-metrics section.
-    // Letting the model web-search for it gave inconsistent results (different
-    // mirrors, different filing years per account) and cost ~$4.26 a lookup
-    // against ~$0.11 here, because the whole proxy landed in context and was
-    // re-billed on every turn of the tool loop.
-    if (mode === "comp") {
-      if (!ent.cik) return NextResponse.json({ error: "No SEC filings for this account — exec-comp metrics come from the DEF 14A proxy." }, { status: 422 });
-      const proxy = await fetchProxy(ent.cik);
-      if (!proxy) return NextResponse.json({ error: "Couldn't find a DEF 14A proxy on EDGAR for this account." }, { status: 502 });
-
-      const res = await withRetry(() => client.messages.create({
-        model: "claude-opus-4-8", max_tokens: 3000,
-        output_config: { format: { type: "json_schema", schema: SCHEMAS.comp } } as any,
-        system:
-          "Extract the executive-compensation PERFORMANCE METRICS that determine incentive payout, from this proxy-statement excerpt. " +
-          "Only metrics that actually drive bonus/incentive payout — never share counts, dividends, director fees or auditor fees. " +
-          "For each: metric, detail (include the weighting when stated), and angle = how an Oracle ERP/EPM seller ties value to a number leadership is paid to hit. " +
-          "employees = total employee count if the excerpt states it, else 0. summary = 2 sentences on how leadership is measured. " +
-          "Use ONLY the excerpt — never invent a metric or figure.",
-        messages: [{ role: "user", content: `Company: ${ent.canonical_name}\nProxy: ${proxy.url} (filed ${proxy.filed})\n\nExcerpt:\n${proxy.section}` }],
-      }));
-      const parsed = JSON.parse(res.content.filter((b) => b.type === "text").map((b) => (b as any).text).join(""));
-      parsed.source = proxy.url;      // always the canonical sec.gov document
-      parsed.filed = proxy.filed;     // so the UI can say which proxy this is
+    // comp + hiring come from the shared task definitions (lib/researchTasks)
+    // so the in-app buttons and the batch sweep produce identical data. comp
+    // is deterministic there: DEF 14A straight from EDGAR, no web search.
+    if (mode === "comp" || mode === "hiring") {
+      const { data: parsed } = await withRetry(() => runTask(client, ent as any, mode, fetchProxy));
       const admin = createAdminClient();
-      const upd: Record<string, any> = { comp_json: parsed, comp_at: new Date().toISOString() };
-      if (Number.isInteger(parsed.employees) && parsed.employees > 0) upd.employees = parsed.employees;
+      const [jsonCol, atCol] = COL[mode];
+      const upd: Record<string, any> = { [jsonCol]: parsed, [atCol]: new Date().toISOString() };
+      if (mode === "comp" && Number.isInteger(parsed.employees) && parsed.employees > 0) upd.employees = parsed.employees;
       await admin.from("entities").update(upd).eq("id", entityId);
       return NextResponse.json({ data: parsed });
     }
