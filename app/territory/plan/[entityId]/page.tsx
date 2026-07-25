@@ -48,7 +48,8 @@ export default async function PlanPage({ params }: { params: Promise<{ entityId:
   if (!user) redirect("/login");
 
   const { data: ent } = await supabase.from("entities")
-    .select("id, canonical_name, ticker, data_tier, hq_state, entity_type, profile_json").eq("id", entityId).maybeSingle();
+    .select("id, canonical_name, ticker, data_tier, hq_state, entity_type, profile_json, priorities_json, priorities_at, decision_locus, decision_note, decision_source, hiring_json, comp_json, fleet_json, muni_json, employees")
+    .eq("id", entityId).maybeSingle();
   if (!ent) return <main className="container"><p>Account not found.</p><Link href="/territory">← Accounts</Link></main>;
 
   const target = await ensureEntityFacts(supabase, entityId);
@@ -74,7 +75,7 @@ export default async function PlanPage({ params }: { params: Promise<{ entityId:
   // key people from the CRM (account for this entity in the caller's tenant)
   const { data: acct } = await supabase.from("accounts").select("id").eq("entity_id", entityId).limit(1).maybeSingle();
   const { data: people } = acct
-    ? await supabase.from("contacts").select("id, name, title, role_tag, reports_to").eq("account_id", acct.id).order("created_at").limit(12)
+    ? await supabase.from("contacts").select("id, name, title, role_tag, reports_to, persona_json").eq("account_id", acct.id).order("created_at").limit(12)
     : { data: [] };
   const ROLE_LABEL: Record<string, [string, string]> = {
     economic_buyer: ["Economic buyer", "#9A6700"], champion: ["Champion", "#1B7A47"], exec_sponsor: ["Exec sponsor", "#6A3E8E"],
@@ -88,6 +89,28 @@ export default async function PlanPage({ params }: { params: Promise<{ entityId:
   const pj: any = (ent as any).profile_json;
   const dateStr = new Date().toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" });
   const TIER_COLOR: Record<string, string> = { A: "#1B7A47", B: "#0572CE", C: "#9A6700", D: "#8A7E6E" };
+
+  // Everything gathered by research/search, rendered inline so the printed plan
+  // carries the homework — each claim keeps its source link.
+  const prio: any = (ent as any).priorities_json;
+  const hiring: any = (ent as any).hiring_json;
+  const comp: any = (ent as any).comp_json;
+  const fleet: any = (ent as any).fleet_json;
+  const muni: any = (ent as any).muni_json;
+  const locus: string | null = (ent as any).decision_locus ?? null;
+  const LOCUS: Record<string, [string, string]> = {
+    local: ["Decisions are made locally", "#1B7A47"],
+    corporate: ["Decisions run through the parent", "#B23A2E"],
+    mixed: ["Split — local input, corporate approval", "#9A6700"],
+  };
+  const FUEL_COLOR: Record<string, string> = {
+    Nuclear: "#6A3E8E", Coal: "#5B5245", Gas: "#0572CE", Oil: "#8A7E6E", Hydro: "#006B72",
+    Wind: "#1B7A47", Solar: "#C8902E", Geothermal: "#9A6700", Biomass: "#7A8B4A", Storage: "#B23A2E", Other: "#A9A294",
+  };
+  const Src = ({ url }: { url?: string | null }) =>
+    url && /^https?:\/\//.test(url)
+      ? <a href={url} target="_blank" rel="noreferrer" style={{ fontSize: 10.5, color: "var(--blue)", fontWeight: 700 }}>source ↗</a>
+      : null;
 
   const Sig = ({ label, val }: { label: string; val: string }) => (
     <div style={{ border: "1px solid var(--border)", borderRadius: 8, padding: "8px 10px", textAlign: "center" }}>
@@ -230,6 +253,111 @@ export default async function PlanPage({ params }: { params: Promise<{ entityId:
         </div>
       ) : (target.ok && target.eia) ? null : <p style={{ color: "var(--ink2)" }}>No financial data available for this account.</p>}
 
+      {/* ---- Researched intel: everything the app gathered from public sources ---- */}
+
+      {/* Where decisions get made */}
+      {locus && (
+        <>
+          <h2 style={{ fontSize: 15 }}>Where decisions get made</h2>
+          <div style={{ border: "1px solid #F0EAE0", borderRadius: 9, padding: "9px 12px", marginBottom: 12 }}>
+            <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 2 }}>
+              {LOCUS[locus]?.[0] ?? locus}{" "}
+              <span style={{ fontSize: 11, fontWeight: 700, color: "#fff", background: LOCUS[locus]?.[1] ?? "#8A7E6E", borderRadius: 5, padding: "1px 7px" }}>{locus}</span>
+            </div>
+            {ent.decision_note && <div style={{ fontSize: 12.5, color: "var(--ink2)", lineHeight: 1.5 }}>{ent.decision_note}</div>}
+            <Src url={ent.decision_source} />
+          </div>
+        </>
+      )}
+
+      {/* What leadership is saying — their own words, with citations */}
+      {prio?.priorities?.length > 0 && (
+        <>
+          <h2 style={{ fontSize: 15 }}>What leadership is saying{prio.as_of ? <span style={{ fontSize: 12, color: "var(--muted)", fontWeight: 600 }}> · {prio.as_of}</span> : null}</h2>
+          {prio.summary && <p style={{ fontSize: 13, color: "var(--ink2)", margin: "0 0 8px", lineHeight: 1.5 }}>{prio.summary}</p>}
+          {prio.priorities.slice(0, 6).map((p: any, i: number) => (
+            <div key={i} className="pblock" style={{ borderLeft: "3px solid #006B72", paddingLeft: 10, marginBottom: 9 }}>
+              <div style={{ fontSize: 13, fontWeight: 700 }}>{p.theme}</div>
+              {p.detail && <div style={{ fontSize: 12.5, color: "var(--ink2)", lineHeight: 1.45 }}>{p.detail}</div>}
+              {p.quote && <div style={{ fontSize: 12.5, fontStyle: "italic", color: "var(--ink)", margin: "3px 0" }}>&ldquo;{p.quote}&rdquo;{p.who ? <span style={{ fontStyle: "normal", color: "var(--muted)" }}> — {p.who}</span> : null}</div>}
+              {p.angle && <div style={{ fontSize: 12, color: "#006B72" }}><b>Our angle:</b> {p.angle}</div>}
+              <Src url={p.source} />
+            </div>
+          ))}
+        </>
+      )}
+
+      {/* Deep intel */}
+      {(comp || hiring || fleet || muni) && (
+        <>
+          <h2 style={{ fontSize: 15 }}>Deep intel</h2>
+
+          {!!(comp?.summary || comp?.metrics?.length) && (
+            <div className="pblock" style={{ marginBottom: 10 }}>
+              <div className="plabel">🎯 What leadership is paid to hit</div>
+              {comp.summary && <div style={{ fontSize: 12.5, color: "var(--ink2)", lineHeight: 1.45, marginBottom: 4 }}>{comp.summary}</div>}
+              {(comp.metrics ?? []).slice(0, 6).map((m: any, i: number) => (
+                <div key={i} style={{ padding: "3px 0", borderTop: i ? "1px solid #F7F2E9" : "none" }}>
+                  <span style={{ fontSize: 12.5, fontWeight: 700 }}>{m.metric}</span>
+                  {m.detail && <span style={{ fontSize: 12.5, color: "var(--ink2)" }}> — {m.detail}</span>}
+                  {m.angle && <div style={{ fontSize: 12, color: "#006B72" }}><b>Angle:</b> {m.angle}</div>}
+                </div>
+              ))}
+              {ent.employees ? <div style={{ fontSize: 12, color: "var(--ink2)", marginTop: 3 }}>~{Number(ent.employees).toLocaleString()} employees</div> : null}
+              <Src url={comp.source} />
+            </div>
+          )}
+
+          {!!(hiring?.summary || hiring?.roles?.length) && (
+            <div className="pblock" style={{ marginBottom: 10 }}>
+              <div className="plabel">
+                🧑‍💼 Hiring signals
+                {hiring.signal && <span style={{ marginLeft: 6, fontSize: 9.5, fontWeight: 700, color: "#fff", borderRadius: 4, padding: "1px 6px", background: hiring.signal === "hot" ? "#B23A2E" : hiring.signal === "warm" ? "#C8902E" : "#8A7E6E" }}>{String(hiring.signal).toUpperCase()}</span>}
+              </div>
+              {hiring.summary && <div style={{ fontSize: 12.5, color: "var(--ink2)", lineHeight: 1.45, marginBottom: 4 }}>{hiring.summary}</div>}
+              {(hiring.roles ?? []).slice(0, 6).map((r: any, i: number) => (
+                <div key={i} style={{ fontSize: 12.5, padding: "2px 0 2px 12px", textIndent: -12 }}>
+                  · <b>{r.title}</b>{r.why ? ` — ${r.why}` : ""} <Src url={r.source} />
+                </div>
+              ))}
+            </div>
+          )}
+
+          {fleet?.total_mw != null && (
+            <div className="pblock" style={{ marginBottom: 10 }}>
+              <div className="plabel">⚡ Generation fleet</div>
+              {fleet.total_mw > 0 && <div style={{ fontSize: 13, fontWeight: 700 }}>≈ {Number(fleet.total_mw).toLocaleString()} MW capacity</div>}
+              {fleet.mix?.length > 0 && (
+                <>
+                  <div style={{ display: "flex", height: 8, borderRadius: 4, overflow: "hidden", margin: "4px 0 3px" }}>
+                    {fleet.mix.slice(0, 6).map((x: any) => <div key={x.fuel} style={{ width: `${x.share_pct}%`, background: FUEL_COLOR[x.fuel] ?? "#8A7E6E" }} />)}
+                  </div>
+                  <div style={{ fontSize: 11.5, color: "var(--ink2)" }}>{fleet.mix.map((x: any) => `${x.fuel} ${Math.round(x.share_pct)}%`).join(" · ")}</div>
+                </>
+              )}
+              {(fleet.notable ?? []).slice(0, 4).map((n: string, i: number) => (
+                <div key={i} style={{ fontSize: 12, padding: "1px 0 1px 12px", textIndent: -12, color: "var(--ink2)" }}>· {n}</div>
+              ))}
+              <Src url={fleet.source} />
+            </div>
+          )}
+
+          {muni && (muni.revenue_musd != null || muni.customers != null) && (
+            <div className="pblock" style={{ marginBottom: 10 }}>
+              <div className="plabel">🏛️ Muni financial snapshot</div>
+              {muni.summary && <div style={{ fontSize: 12.5, color: "var(--ink2)", lineHeight: 1.45, marginBottom: 4 }}>{muni.summary}</div>}
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 6 }}>
+                {muni.revenue_musd != null && <Sig label="revenue" val={fmtM(muni.revenue_musd)} />}
+                {muni.debt_musd != null && <Sig label="debt" val={fmtM(muni.debt_musd)} />}
+                {muni.customers != null && <Sig label="customers" val={Number(muni.customers).toLocaleString()} />}
+                {muni.rating && <Sig label="rating" val={String(muni.rating)} />}
+              </div>
+              <Src url={muni.source} />
+            </div>
+          )}
+        </>
+      )}
+
       {/* Peer */}
       {peer && (
         <>
@@ -268,6 +396,32 @@ export default async function PlanPage({ params }: { params: Promise<{ entityId:
             <div style={{ overflowX: "auto", marginBottom: 12 }}>
               <ul className="ocp">{roots.map((r: any) => <Node key={r.id} p={r} />)}</ul>
             </div>
+
+            {/* Researched persona briefs — public background on the people you'll face */}
+            {(people ?? []).some((p: any) => p.persona_json) && (
+              <div style={{ marginBottom: 12 }}>
+                <div className="plabel">🧠 Who they are · researched briefs</div>
+                {(people ?? []).filter((p: any) => p.persona_json).map((p: any) => {
+                  const x = p.persona_json;
+                  return (
+                    <div key={p.id} className="pblock" style={{ borderLeft: "3px solid #6A3E8E", paddingLeft: 10, marginBottom: 9 }}>
+                      <div style={{ fontSize: 13, fontWeight: 700 }}>
+                        {p.name}{p.title ? <span style={{ fontWeight: 600, color: "var(--ink2)" }}> · {p.title}</span> : null}
+                        {x.confidence === "low" && <span style={{ marginLeft: 6, fontSize: 9.5, fontWeight: 700, color: "#7A5B12", background: "#F7F2E9", border: "1px solid #E6CF94", borderRadius: 4, padding: "1px 5px" }}>LOW CONFIDENCE</span>}
+                      </div>
+                      {x.headline && <div style={{ fontSize: 12.5, color: "var(--ink2)" }}>{x.headline}</div>}
+                      {x.background && <div style={{ fontSize: 12.5, lineHeight: 1.45, marginTop: 2 }}>{x.background}</div>}
+                      {(x.priorities ?? []).length > 0 && (
+                        <div style={{ fontSize: 12, color: "var(--ink2)", marginTop: 2 }}><b>Cares about:</b> {x.priorities.slice(0, 4).join(" · ")}</div>
+                      )}
+                      {x.quote && <div style={{ fontSize: 12.5, fontStyle: "italic", margin: "3px 0" }}>&ldquo;{x.quote}&rdquo;</div>}
+                      {x.talk_to_them && <div style={{ fontSize: 12, color: "#6A3E8E" }}><b>How to talk to them:</b> {x.talk_to_them}</div>}
+                      <Src url={x.source} />
+                    </div>
+                  );
+                })}
+              </div>
+            )}
             <style>{`
               .ocp,.ocp ul{list-style:none;margin:0;padding:0}
               .ocp{display:flex;flex-wrap:wrap;gap:0 6px;min-width:min-content}
@@ -303,7 +457,16 @@ export default async function PlanPage({ params }: { params: Promise<{ entityId:
       {/* Plays (client-generated) */}
       <Plays entityId={entityId} peerName={peer?.name ?? null} peerFacts={peer?.facts ?? null} weakConcepts={weak.map((c) => c.label)} />
 
-      <p style={{ fontSize: 11, color: "var(--muted)", marginTop: 20 }}>Figures from SEC EDGAR — verify against filings. Educational tool, not investment advice.</p>
+      <p style={{ fontSize: 11, color: "var(--muted)", marginTop: 20 }}>
+        Financials from SEC EDGAR; operations from EIA/FERC; researched sections from public web sources, each linked above.
+        All public data — verify against the source before relying on it. Educational tool, not investment advice.
+      </p>
+
+      <style>{`
+        .plabel{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:#8A7E6E;margin-bottom:4px}
+        .pblock{break-inside:avoid;page-break-inside:avoid}
+        @media print{h2{break-after:avoid;page-break-after:avoid}}
+      `}</style>
     </main>
   );
 }

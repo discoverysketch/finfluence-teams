@@ -108,20 +108,46 @@ function compute(facts: any, found: { cik: string; title: string }, beforeEnd?: 
   const cfo = pickDuration(["NetCashProvidedByUsedInOperatingActivities", "NetCashProvidedByUsedInOperatingActivitiesContinuingOperations"]);
   const capex = pickDuration(["PaymentsToAcquirePropertyPlantAndEquipment", "PaymentsForCapitalImprovements", "PaymentsToAcquireProductiveAssets"]);
   const assets = pickInstant(["Assets"]);
-  const liab = pickInstant(["Liabilities"]);
-  const equity = pickInstant(["StockholdersEquity", "StockholdersEquityIncludingPortionAttributableToNoncontrollingInterest"]);
-  const cash = pickInstant(["CashAndCashEquivalentsAtCarryingValue", "CashCashEquivalentsRestrictedCashAndRestrictedCashEquivalents"]);
-  const ca = pickInstant(["AssetsCurrent"]);
-  const cl = pickInstant(["LiabilitiesCurrent"]);
-  const ltd = pickInstant(["LongTermDebtNoncurrent", "LongTermDebtAndCapitalLeaseObligations", "LongTermDebt"]);
-  const cd = pickInstant(["LongTermDebtCurrent", "LongTermDebtAndCapitalLeaseObligationsCurrent", "DebtCurrent"]);
-  const stb = pickInstant(["ShortTermBorrowings", "CommercialPaper", "OtherShortTermBorrowings"]);
+  // Filers abandon concepts when accounting standards change (retailers dropped
+  // LongTermDebt* for DebtAndCapitalLeaseObligations after the lease standard).
+  // Without a freshness floor we'd silently serve a years-stale balance-sheet
+  // figure as current — worse than reporting nothing. Anchor on Assets.
+  const bsFloor = assets?.end ? new Date(+new Date(assets.end) - 400 * 86400000).toISOString().slice(0, 10) : null;
+  const pickFresh = (concepts: string[]) => {
+    const r = pickInstant(concepts);
+    return r && (!bsFloor || r.end >= bsFloor) ? r : null;
+  };
+
+  const equity = pickFresh(["StockholdersEquity", "StockholdersEquityIncludingPortionAttributableToNoncontrollingInterest"]);
+  const cash = pickFresh(["CashAndCashEquivalentsAtCarryingValue", "CashCashEquivalentsRestrictedCashAndRestrictedCashEquivalents"]);
+  const ca = pickFresh(["AssetsCurrent"]);
+  const cl = pickFresh(["LiabilitiesCurrent"]);
+  // Many filers report only the current/noncurrent split, or just the
+  // balance-sheet total — both give total liabilities without inventing one.
+  let liab = pickFresh(["Liabilities"]);
+  if (!liab) {
+    const ln = pickFresh(["LiabilitiesNoncurrent"]);
+    if (cl && ln) liab = { val: cl.val + ln.val, end: cl.end };
+    else {
+      const lse = pickFresh(["LiabilitiesAndStockholdersEquity"]);
+      if (lse && equity) liab = { val: lse.val - equity.val, end: lse.end };
+    }
+  }
+  // Combined current+noncurrent debt, reported as one line by some filers. Kept
+  // separate from the components below so it's never added on top of them.
+  const debtAll = pickFresh(["DebtAndCapitalLeaseObligations", "DebtLongtermAndShorttermCombinedAmount"]);
+  const ltd = pickFresh(["LongTermDebtNoncurrent", "LongTermDebtAndCapitalLeaseObligations", "LongTermDebt"]);
+  const cd = pickFresh(["LongTermDebtCurrent", "LongTermDebtAndCapitalLeaseObligationsCurrent", "DebtCurrent"]);
+  const stb = pickFresh(["ShortTermBorrowings", "CommercialPaper", "OtherShortTermBorrowings"]);
 
   if (cogs && rev && (cogs.val <= 0 || cogs.val >= rev.val || cogs.val < rev.val * 0.2)) cogs = null;
 
   let debt: number | undefined;
   const dparts = [ltd, cd, stb].filter(Boolean).map((x: any) => x.val);
   if (dparts.length) debt = dparts.reduce((a, b) => a + b, 0);
+  // The combined line already includes the current portion, so prefer it
+  // outright rather than summing (which would double-count).
+  if (debtAll && (debt == null || debtAll.val > debt)) debt = debtAll.val;
 
   const anchor = ni || rev;
   let period = "Latest period";

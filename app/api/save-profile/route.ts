@@ -22,6 +22,22 @@ export async function POST(request: Request) {
   const { data: list } = await supabase.from("account_lists").select("id").eq("id", listId).eq("tenant_id", me.tenant_id).maybeSingle();
   if (!list) return NextResponse.json({ error: "Account list not found" }, { status: 404 });
 
+  // Don't create a private Tier-D twin of a company that's already in the
+  // shared SEC directory — that entity would carry no CIK, so financials,
+  // filings and comparisons would silently never load for the account.
+  const norm = (s: string) => s.toLowerCase().replace(/[^a-z0-9 ]/g, " ")
+    .replace(/\b(the|inc|llc|lp|ltd|corp|corporation|company|companies|co|and|of)\b/g, " ").replace(/\s+/g, " ").trim();
+  const { data: sameName } = await supabase.from("entities")
+    .select("id, canonical_name, cik, ticker").not("cik", "is", null).ilike("canonical_name", `%${name.split(/[\s,]+/)[0]}%`).limit(50);
+  const filer = (sameName ?? []).find((e: any) => norm(e.canonical_name) === norm(name));
+  if (filer) {
+    const { data: dupe } = await supabase.from("accounts").select("id").eq("list_id", listId).eq("entity_id", filer.id).maybeSingle();
+    if (dupe) return NextResponse.json({ ok: true, entityId: filer.id, accountId: dupe.id, linkedFiler: filer.canonical_name });
+    const { data: acct, error: ae } = await supabase.from("accounts").insert({ list_id: listId, entity_id: filer.id, owner: user.id }).select("id").single();
+    if (ae) return NextResponse.json({ error: ae.message }, { status: 500 });
+    return NextResponse.json({ ok: true, entityId: filer.id, accountId: acct?.id ?? null, linkedFiler: filer.canonical_name });
+  }
+
   const entity_type = TYPES.includes(profile?.entity_type) ? profile.entity_type : "other";
   const { data: ent, error: ee } = await supabase.from("entities").insert({
     canonical_name: name, entity_type, hq_state: profile?.hq_state || null,
