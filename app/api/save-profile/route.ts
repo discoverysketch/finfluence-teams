@@ -41,7 +41,7 @@ export async function POST(request: Request) {
   const entity_type = TYPES.includes(profile?.entity_type) ? profile.entity_type : "other";
   const { data: ent, error: ee } = await supabase.from("entities").insert({
     canonical_name: name, entity_type, hq_state: profile?.hq_state || null,
-    data_tier: "D", created_by_tenant: me.tenant_id, profile_json: profile,
+    data_tier: "D", created_by_tenant: me.tenant_id, profile_json: profile, profile_at: new Date().toISOString(),
   }).select("id").single();
   if (ee || !ent) return NextResponse.json({ error: ee?.message || "Couldn't save profile" }, { status: 500 });
 

@@ -3,6 +3,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer } from "recharts";
 import { createClient } from "@/lib/supabase/client";
+import { researchedAgo, STALE_DAYS } from "@/lib/researchedAt";
 import { inferReporting } from "@/lib/orgchart";
 import { classifyFiling, SUGGESTED_MOVE } from "@/lib/signalTypes";
 import PrepBrief from "./PrepBrief";
@@ -13,7 +14,7 @@ import DeepIntel from "@/components/DeepIntel";
 import WinWire from "./WinWire";
 
 export type Persona = { headline: string; background: string; priorities: string[]; quote: string; talk_to_them: string; source: string; confidence?: string };
-export type Contact = { id: string; account_id: string; name: string; title: string | null; role_tag: string | null; email: string | null; phone: string | null; reports_to: string | null; notes: string | null; persona_json?: Persona | null };
+export type Contact = { id: string; account_id: string; name: string; title: string | null; role_tag: string | null; email: string | null; phone: string | null; reports_to: string | null; notes: string | null; persona_json?: Persona | null; persona_at?: string | null };
 type Priorities = { summary: string; as_of: string; priorities: { theme: string; detail: string; quote: string; who: string; source: string; angle: string }[] };
 export type Activity = { id: string; account_id: string; contact_id: string | null; user_id: string | null; kind: string; body: string; due_at: string | null; done: boolean; created_at: string };
 
@@ -262,8 +263,9 @@ export default function Hub({ accountId, userId, entityId, ticker, initialStage,
       const r = await fetch("/api/research-person", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ contactId }) });
       const j = await r.json().catch(() => null);
       if (!r.ok || !j?.persona) return "err";
-      setContacts((cs) => cs.map((x) => (x.id === contactId ? { ...x, persona_json: j.persona } : x)));
-      setPersonView((pv) => (pv && pv.id === contactId ? { ...pv, persona_json: j.persona } : pv));
+      const nowIso = new Date().toISOString();
+      setContacts((cs) => cs.map((x) => (x.id === contactId ? { ...x, persona_json: j.persona, persona_at: nowIso } : x)));
+      setPersonView((pv) => (pv && pv.id === contactId ? { ...pv, persona_json: j.persona, persona_at: nowIso } : pv));
       return j.persona as Persona;
     } catch { return "err"; }
   }
@@ -814,6 +816,10 @@ export default function Hub({ accountId, userId, entityId, ticker, initialStage,
                   <div style={{ display: "flex", gap: 10, alignItems: "center", marginTop: 6 }}>
                     {p.source && <a href={p.source} target="_blank" rel="noreferrer" style={{ fontSize: 12, color: "var(--blue)", fontWeight: 700 }}>source ↗</a>}
                     <button className="mini" onClick={() => researchPerson(c)} disabled={personaBusy}>{personaBusy ? "…" : "↻ refresh"}</button>
+                    {(() => {
+                      const fr = researchedAgo(c.persona_at, STALE_DAYS.persona);
+                      return <span style={{ fontSize: 11, color: fr?.stale ? "var(--red)" : "var(--muted)", fontWeight: fr?.stale ? 700 : 400 }}>{fr ? `${fr.stale ? "⚠ " : ""}${fr.label}` : "Researched · date unknown"}</span>;
+                    })()}
                   </div>
                   <div style={{ fontSize: 10.5, color: "var(--muted)", marginTop: 6 }}>Public sources · verify before relying on it.</div>
                 </div>

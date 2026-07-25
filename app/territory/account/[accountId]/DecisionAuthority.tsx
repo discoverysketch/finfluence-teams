@@ -1,5 +1,6 @@
 "use client";
 import { useState } from "react";
+import { researchedAgo, STALE_DAYS } from "@/lib/researchedAt";
 
 // "Who makes the decisions?" — web-researched decision locus (local vs
 // corporate vs mixed), reviewed by the rep before saving to the shared
@@ -13,7 +14,7 @@ const LOCUS: Record<string, { label: string; color: string; icon: string }> = {
 
 export default function DecisionAuthority({ entityId, initial }: {
   entityId: string;
-  initial: { locus: string | null; note: string | null; source: string | null };
+  initial: { locus: string | null; note: string | null; source: string | null; at?: string | null };
 }) {
   const [saved, setSaved] = useState(initial);
   const [state, setState] = useState<"idle" | "loading" | "review" | "saving">("idle");
@@ -39,7 +40,7 @@ export default function DecisionAuthority({ entityId, initial }: {
       });
       const j = await r.json().catch(() => null);
       if (!r.ok || !j?.ok) { setErr(j?.error || "Save failed."); setState("review"); return; }
-      setSaved({ locus: draft.locus, note: draft.note, source: draft.source_url || null });
+      setSaved({ locus: draft.locus, note: draft.note, source: draft.source_url || null, at: new Date().toISOString() });
       setDraft(null); setState("idle");
     } catch { setErr("Network error."); setState("review"); }
   }
@@ -76,6 +77,10 @@ export default function DecisionAuthority({ entityId, initial }: {
           <span style={{ background: l.color, color: "#fff", fontSize: 11, fontWeight: 700, borderRadius: 5, padding: "3px 9px", flexShrink: 0 }}>{l.icon} {l.label}</span>
           <span style={{ fontSize: 12, color: "var(--ink2)", flex: 1, minWidth: 180 }}>
             {saved.note}{saved.source && <> · <a href={saved.source} target="_blank" rel="noreferrer" style={{ color: "var(--blue)" }}>source ↗</a></>}
+            {(() => {
+              const fr = researchedAgo(saved.at, STALE_DAYS.decision);
+              return <span style={{ color: fr?.stale ? "var(--red)" : "var(--muted)", fontWeight: fr?.stale ? 700 : 400 }}> · {fr ? `${fr.stale ? "⚠ " : ""}${fr.ago}` : "date unknown"}</span>;
+            })()}
           </span>
           <button className="mini" onClick={research} disabled={state === "loading"}>{state === "loading" ? "…" : "↻"}</button>
         </>

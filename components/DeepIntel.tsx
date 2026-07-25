@@ -1,6 +1,7 @@
 "use client";
 import { useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
+import { researchedAgo, STALE_DAYS } from "@/lib/researchedAt";
 
 // Deep public-data intel on an account: hiring signals, exec-comp metrics,
 // generation fleet, and (for munis) a financial snapshot. Each is web-
@@ -19,6 +20,7 @@ const META: Record<Facet, { icon: string; label: string; blurb: string }> = {
 export default function DeepIntel({ entityId }: { entityId: string }) {
   const supabase = createClient();
   const [data, setData] = useState<Record<string, any>>({});
+  const [at, setAt] = useState<Record<string, string | null>>({});
   const [isMuni, setIsMuni] = useState(false);
   const [busy, setBusy] = useState<Facet[]>([]);
   const [sweep, setSweep] = useState({ running: false, done: 0, total: 0 });
@@ -31,9 +33,11 @@ export default function DeepIntel({ entityId }: { entityId: string }) {
   useEffect(() => {
     (async () => {
       const { data: e } = await supabase.from("entities")
-        .select("hiring_json, comp_json, fleet_json, muni_json, data_tier, entity_type").eq("id", entityId).maybeSingle();
+        .select("hiring_json, comp_json, fleet_json, muni_json, hiring_at, comp_at, fleet_at, muni_at, data_tier, entity_type")
+        .eq("id", entityId).maybeSingle();
       if (e) {
         setData({ hiring: e.hiring_json, comp: e.comp_json, fleet: e.fleet_json, muni: e.muni_json });
+        setAt({ hiring: e.hiring_at, comp: e.comp_at, fleet: e.fleet_at, muni: e.muni_at });
         setIsMuni(e.data_tier === "D" || e.data_tier === "C" || ["muni", "coop"].includes(e.entity_type ?? ""));
       }
     })();
@@ -58,6 +62,7 @@ export default function DeepIntel({ entityId }: { entityId: string }) {
       const j = await r.json().catch(() => null);
       if (!r.ok || !j?.data) { setErrs((e) => ({ ...e, [mode]: j?.error || "Research failed — try again." })); return false; }
       setData((d) => ({ ...d, [mode]: j.data }));
+      setAt((a) => ({ ...a, [mode]: new Date().toISOString() }));
       // A single run opens that topic; a sweep opens whichever lands first.
       setOpen((o) => (focus ? mode : o ?? mode));
       return true;
@@ -135,6 +140,15 @@ export default function DeepIntel({ entityId }: { entityId: string }) {
                 </div>
               )}
               {!d && !isOpen && !running && !fErr && <div style={{ fontSize: 11.5, color: "var(--muted)", marginTop: 2 }}>{m.blurb}</div>}
+              {d && !running && (() => {
+                const fresh = researchedAgo(at[f], STALE_DAYS[f]);
+                if (!fresh) return <div style={{ fontSize: 11, color: "var(--muted)", marginTop: 2 }}>Researched · date unknown</div>;
+                return (
+                  <div style={{ fontSize: 11, marginTop: 2, color: fresh.stale ? "var(--red)" : "var(--muted)", fontWeight: fresh.stale ? 700 : 400 }}>
+                    {fresh.stale ? "⚠ " : ""}{fresh.label}{fresh.stale ? " — worth refreshing" : ""}
+                  </div>
+                );
+              })()}
               {isOpen && d && (
                 <div style={{ marginTop: 8, fontSize: 13, lineHeight: 1.5 }}>
                   {d.summary && <div style={{ marginBottom: 6 }}>{d.summary}</div>}

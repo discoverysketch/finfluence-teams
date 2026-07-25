@@ -44,6 +44,7 @@ export async function POST(request: Request) {
       decision_locus: decision.locus,
       decision_note: String(decision.note || "").slice(0, 500) || null,
       decision_source: String(decision.source_url || "").slice(0, 400) || null,
+      decision_at: new Date().toISOString(),
     }).eq("id", entityId);
     if (error) return NextResponse.json({ error: `${error.message} (run migration 0018?)` }, { status: 500 });
     return NextResponse.json({ ok: true });

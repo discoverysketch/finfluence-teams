@@ -69,7 +69,7 @@ export async function POST(request: Request) {
     }));
     const text = extract.content.filter((b) => b.type === "text").map((b) => (b as any).text).join("");
     const persona = JSON.parse(text);
-    await supabase.from("contacts").update({ persona_json: persona }).eq("id", contactId);
+    await supabase.from("contacts").update({ persona_json: persona, persona_at: new Date().toISOString() }).eq("id", contactId);
     return NextResponse.json({ persona });
   } catch (e) {
     return NextResponse.json({ error: `Research failed — ${friendlyAiError(e)}` }, { status: 502 });

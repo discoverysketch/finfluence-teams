@@ -17,7 +17,7 @@ export default async function AccountPage({ params }: { params: Promise<{ accoun
 
   // RLS scopes this to the caller's tenant.
   const { data: acct } = await supabase.from("accounts")
-    .select("id, rep_notes, crm_stage, owner, created_by, created_at, deal_value, entity:entities(id, canonical_name, ticker, data_tier, hq_state, decision_locus, decision_note, decision_source, priorities_json, priorities_at)")
+    .select("id, rep_notes, crm_stage, owner, created_by, created_at, deal_value, entity:entities(id, canonical_name, ticker, data_tier, hq_state, decision_locus, decision_note, decision_source, decision_at, priorities_json, priorities_at)")
     .eq("id", accountId).maybeSingle();
   if (!acct) {
     return (
@@ -60,7 +60,7 @@ export default async function AccountPage({ params }: { params: Promise<{ accoun
           Added by <b style={{ color: "var(--ink2)" }}>{addedBy}</b>{addedOn ? ` · ${addedOn}` : ""}
         </div>
       )}
-      {ent?.id && <DecisionAuthority entityId={ent.id} initial={{ locus: ent.decision_locus ?? null, note: ent.decision_note ?? null, source: ent.decision_source ?? null }} />}
+      {ent?.id && <DecisionAuthority entityId={ent.id} initial={{ locus: ent.decision_locus ?? null, note: ent.decision_note ?? null, source: ent.decision_source ?? null, at: ent.decision_at ?? null }} />}
       <p style={{ display: "flex", gap: 8, flexWrap: "wrap", margin: "10px 0 4px" }}>
         {ent?.id && <Link href={`/territory/plan/${ent.id}`} className="mini-link">📄 Account plan</Link>}
         {ent?.id && <Link href={`/territory/account/${acct.id}/meeting`} className="mini-link">🎧 Meeting mode</Link>}

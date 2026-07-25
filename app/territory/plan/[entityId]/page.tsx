@@ -5,6 +5,7 @@ import { ensureEntityFacts, type FactMap } from "@/lib/facts";
 import { rankPeers } from "@/lib/lookalike";
 import { buildTree } from "@/lib/orgchart";
 import { conceptScores, type Ev } from "@/lib/acumen";
+import { researchedOn } from "@/lib/researchedAt";
 import { fetchPrices, type PriceSeries } from "@/lib/stock";
 import Plays from "./Plays";
 
@@ -48,7 +49,7 @@ export default async function PlanPage({ params }: { params: Promise<{ entityId:
   if (!user) redirect("/login");
 
   const { data: ent } = await supabase.from("entities")
-    .select("id, canonical_name, ticker, data_tier, hq_state, entity_type, profile_json, priorities_json, priorities_at, decision_locus, decision_note, decision_source, hiring_json, comp_json, fleet_json, muni_json, employees")
+    .select("id, canonical_name, ticker, data_tier, hq_state, entity_type, profile_json, priorities_json, priorities_at, decision_locus, decision_note, decision_source, decision_at, hiring_json, comp_json, fleet_json, muni_json, hiring_at, comp_at, fleet_at, muni_at, employees")
     .eq("id", entityId).maybeSingle();
   if (!ent) return <main className="container"><p>Account not found.</p><Link href="/territory">← Accounts</Link></main>;
 
@@ -75,7 +76,7 @@ export default async function PlanPage({ params }: { params: Promise<{ entityId:
   // key people from the CRM (account for this entity in the caller's tenant)
   const { data: acct } = await supabase.from("accounts").select("id").eq("entity_id", entityId).limit(1).maybeSingle();
   const { data: people } = acct
-    ? await supabase.from("contacts").select("id, name, title, role_tag, reports_to, persona_json").eq("account_id", acct.id).order("created_at").limit(12)
+    ? await supabase.from("contacts").select("id, name, title, role_tag, reports_to, persona_json, persona_at").eq("account_id", acct.id).order("created_at").limit(12)
     : { data: [] };
   const ROLE_LABEL: Record<string, [string, string]> = {
     economic_buyer: ["Economic buyer", "#9A6700"], champion: ["Champion", "#1B7A47"], exec_sponsor: ["Exec sponsor", "#6A3E8E"],
@@ -106,6 +107,12 @@ export default async function PlanPage({ params }: { params: Promise<{ entityId:
   const FUEL_COLOR: Record<string, string> = {
     Nuclear: "#6A3E8E", Coal: "#5B5245", Gas: "#0572CE", Oil: "#8A7E6E", Hydro: "#006B72",
     Wind: "#1B7A47", Solar: "#C8902E", Geothermal: "#9A6700", Biomass: "#7A8B4A", Storage: "#B23A2E", Other: "#A9A294",
+  };
+  // A printed plan gets read days later — every researched block states when it
+  // was pulled, so nobody quotes year-old intel in a meeting believing it's live.
+  const When = ({ iso }: { iso?: string | null }) => {
+    const on = researchedOn(iso);
+    return <span style={{ fontSize: 10.5, color: "var(--muted)", fontWeight: 600 }}>{on ? `researched ${on}` : "research date unknown"}</span>;
   };
   const Src = ({ url }: { url?: string | null }) =>
     url && /^https?:\/\//.test(url)
@@ -265,7 +272,7 @@ export default async function PlanPage({ params }: { params: Promise<{ entityId:
               <span style={{ fontSize: 11, fontWeight: 700, color: "#fff", background: LOCUS[locus]?.[1] ?? "#8A7E6E", borderRadius: 5, padding: "1px 7px" }}>{locus}</span>
             </div>
             {ent.decision_note && <div style={{ fontSize: 12.5, color: "var(--ink2)", lineHeight: 1.5 }}>{ent.decision_note}</div>}
-            <Src url={ent.decision_source} />
+            <Src url={ent.decision_source} /> <When iso={(ent as any).decision_at} />
           </div>
         </>
       )}
@@ -274,6 +281,7 @@ export default async function PlanPage({ params }: { params: Promise<{ entityId:
       {prio?.priorities?.length > 0 && (
         <>
           <h2 style={{ fontSize: 15 }}>What leadership is saying{prio.as_of ? <span style={{ fontSize: 12, color: "var(--muted)", fontWeight: 600 }}> · {prio.as_of}</span> : null}</h2>
+          <div style={{ marginTop: -4, marginBottom: 6 }}><When iso={(ent as any).priorities_at} /></div>
           {prio.summary && <p style={{ fontSize: 13, color: "var(--ink2)", margin: "0 0 8px", lineHeight: 1.5 }}>{prio.summary}</p>}
           {prio.priorities.slice(0, 6).map((p: any, i: number) => (
             <div key={i} className="pblock" style={{ borderLeft: "3px solid #006B72", paddingLeft: 10, marginBottom: 9 }}>
@@ -304,7 +312,7 @@ export default async function PlanPage({ params }: { params: Promise<{ entityId:
                 </div>
               ))}
               {ent.employees ? <div style={{ fontSize: 12, color: "var(--ink2)", marginTop: 3 }}>~{Number(ent.employees).toLocaleString()} employees</div> : null}
-              <Src url={comp.source} />
+              <Src url={comp.source} /> <When iso={(ent as any).comp_at} />
             </div>
           )}
 
@@ -320,6 +328,7 @@ export default async function PlanPage({ params }: { params: Promise<{ entityId:
                   · <b>{r.title}</b>{r.why ? ` — ${r.why}` : ""} <Src url={r.source} />
                 </div>
               ))}
+              <When iso={(ent as any).hiring_at} />
             </div>
           )}
 
@@ -338,7 +347,7 @@ export default async function PlanPage({ params }: { params: Promise<{ entityId:
               {(fleet.notable ?? []).slice(0, 4).map((n: string, i: number) => (
                 <div key={i} style={{ fontSize: 12, padding: "1px 0 1px 12px", textIndent: -12, color: "var(--ink2)" }}>· {n}</div>
               ))}
-              <Src url={fleet.source} />
+              <Src url={fleet.source} /> <When iso={(ent as any).fleet_at} />
             </div>
           )}
 
@@ -352,7 +361,7 @@ export default async function PlanPage({ params }: { params: Promise<{ entityId:
                 {muni.customers != null && <Sig label="customers" val={Number(muni.customers).toLocaleString()} />}
                 {muni.rating && <Sig label="rating" val={String(muni.rating)} />}
               </div>
-              <Src url={muni.source} />
+              <Src url={muni.source} /> <When iso={(ent as any).muni_at} />
             </div>
           )}
         </>
@@ -416,7 +425,7 @@ export default async function PlanPage({ params }: { params: Promise<{ entityId:
                       )}
                       {x.quote && <div style={{ fontSize: 12.5, fontStyle: "italic", margin: "3px 0" }}>&ldquo;{x.quote}&rdquo;</div>}
                       {x.talk_to_them && <div style={{ fontSize: 12, color: "#6A3E8E" }}><b>How to talk to them:</b> {x.talk_to_them}</div>}
-                      <Src url={x.source} />
+                      <Src url={x.source} /> <When iso={(p as any).persona_at} />
                     </div>
                   );
                 })}
