@@ -28,6 +28,12 @@ export function friendlyAiError(e: unknown): string {
   const raw = String((e as any)?.message ?? e);
   if (/overloaded|529/i.test(raw)) return "The AI service is busy right now — try again in a minute.";
   if (/api_error|internal server|"type":"error"/i.test(raw)) return "The AI service hit a temporary error — try again in a minute.";
+  // The account-level spend cap. Distinct from a rate limit: waiting doesn't
+  // help, an admin has to raise it, so say that instead of "try again".
+  if (/usage limit|spend limit|credit balance|billing/i.test(raw)) {
+    const when = raw.match(/regain access on (\d{4}-\d{2}-\d{2})/i)?.[1];
+    return `AccountFluency's AI budget for this period has been used up${when ? ` — it resets on ${when}` : ""}. Ask your admin to raise the limit if you need it sooner.`;
+  }
   if (/rate.?limit|429/i.test(raw)) return "Hit the AI rate limit — wait a moment and try again.";
   return raw.length > 200 ? raw.slice(0, 200) + "…" : raw;
 }

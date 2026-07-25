@@ -128,6 +128,8 @@ const TOOLS = (search: number, fetch: number, contentTokens = 30000) => [
 
 export async function runTask(client: Anthropic, ent: Ent, key: TaskKey, fetchProxy?: FetchProxy): Promise<TaskResult> {
   const usage: TaskResult["usage"] = [];
+  const NL = String.fromCharCode(10);
+  const SEP = NL + NL + "---" + NL + NL;
 
   // COMP is deterministic: DEF 14A is a standardized form, so it's pulled
   // straight from EDGAR and sliced. No web search, so every account is
@@ -155,7 +157,7 @@ export async function runTask(client: Anthropic, ent: Ent, key: TaskKey, fetchPr
     return { data, usage };
   }
 
-  const CFG: Record<Exclude<TaskKey, "comp">, { tools: any[]; maxTokens: number; prompt: string; extractModel: string; extractTokens: number; system: string; notesCap: number }> = {
+  const CFG: Record<Exclude<TaskKey, "comp" | "stack">, { tools: any[]; maxTokens: number; prompt: string; extractModel: string; extractTokens: number; system: string; notesCap: number }> = {
     hiring: {
       tools: TOOLS(3, 2, 24000), maxTokens: 9000, extractModel: "claude-opus-4-8", extractTokens: 3000, notesCap: 16000,
       prompt:
@@ -176,24 +178,6 @@ export async function runTask(client: Anthropic, ent: Ent, key: TaskKey, fetchPr
         "Structure the leadership priorities from the notes. Use ONLY what's cited in the notes — never invent a quote or figure. " +
         "summary = 2 sentences on the strategic posture. Each priority: theme (3-6 words), detail (1-2 sentences), quote (a real direct quote from the notes — keep it short and verbatim), who (name + title if known), source (the URL), " +
         "angle (one line on how an Oracle ERP/EPM/Primavera seller ties value to this priority). as_of = the period/date of the newest source (e.g. 'Q2 2026 earnings call'). Drop any priority lacking a source URL.",
-    },
-    stack: {
-      tools: TOOLS(3, 2, 24000), maxTokens: 9000, extractModel: "claude-opus-4-8", extractTokens: 3000, notesCap: 16000,
-      prompt:
-        `Work out which ENTERPRISE SYSTEMS ${ent.canonical_name} (a US utility/energy company) appears to run TODAY, using PUBLIC evidence only. ` +
-        `The strongest tells, in order: (1) their OWN JOB POSTINGS — search "${ent.canonical_name} jobs SAP", "${ent.canonical_name} jobs Workday", "${ent.canonical_name} Oracle analyst" — postings name the systems a team supports; ` +
-        `(2) vendor PRESS RELEASES and CASE STUDIES naming them as a customer (SAP, Workday, IFS, Maximo/IBM, Infor, Itron, Itineris, Salesforce); ` +
-        `(3) their 10-K or annual report technology/systems discussion; (4) conference talks or user-group presentations by their staff. ` +
-        `Budget: ~3 searches + up to 2 fetches. Cover these areas where you find evidence: ERP/Finance, HCM, Asset Management (EAM), CIS/Billing, Project Controls, Procurement. ` +
-        `For EACH system report the exact evidence and the source URL. This is a competitive assessment a salesperson will rely on, so accuracy matters more than completeness: ` +
-        `if you cannot find real evidence for an area, OMIT it — never guess a vendor from what a utility "typically" runs.`,
-      system:
-        "Build a competitive picture of the systems this company runs, from the notes ONLY. " +
-        "systems = one entry per system you found real evidence for; evidence = the specific public tell (quote the job-posting phrase or press-release line); source = the URL; " +
-        "confidence: high = named in a vendor case study or their own filing, medium = named in their own job posting, low = indirect/inferred. " +
-        "incumbent = the primary ERP/finance vendor if the evidence supports one, else 'unclear'. " +
-        "angles = 2-4 honest displacement angles for an Oracle ERP/EPM/Primavera seller, each grounded in something specific in the notes (an ageing release, a fragmented estate, a system nearing end of support, a manual integration). " +
-        "Never invent a system, a customer relationship, or a weakness. If the evidence is thin, say so in summary and return fewer systems.",
     },
     infer: {
       tools: TOOLS(2, 1, 20000), maxTokens: 9000, extractModel: "claude-opus-4-8", extractTokens: 3000, notesCap: 14000,
@@ -229,7 +213,85 @@ export async function runTask(client: Anthropic, ent: Ent, key: TaskKey, fetchPr
     },
   };
 
-  const cfg = CFG[key as Exclude<TaskKey, "comp">];
+  // STACK fans out: covering six system areas needs more searching than one
+  // call can do inside the 300s function budget (an 8-search single call timed
+  // out at over ten minutes). Two halves run in parallel instead, so wall-clock
+  // is one call's worth and each stays well inside the limit.
+  if (key === "stack") {
+    const half = (label: string, areas: string) =>
+      `Work out which ENTERPRISE SYSTEMS ${ent.canonical_name} (a US utility/energy company) runs TODAY for ${label}, using PUBLIC evidence only.
+
+` +
+      `SEARCH BY AREA, NOT BY VENDOR — never guess a vendor and look for confirmation; ask what fills each slot:
+${areas}
+
+` +
+      `HIGH-VALUE TELLS:
+` +
+      `- THE CAREERS-PORTAL DOMAIN IS NEAR-DEFINITIVE for the HR system: *.oraclecloud.com or fa.*.oraclecloud.com = Oracle Fusion HCM; ` +
+      `*.myworkdayjobs.com = Workday; *.sapsf.com / *.successfactors.com = SAP SuccessFactors; taleo.net = Oracle Taleo.
+` +
+      `- THEIR OWN JOB POSTINGS name the systems a team supports ("Oracle HCM Cloud Developer", "SAP FICO Analyst", "Maximo administrator") — the richest single source.
+` +
+      `- Vendor press releases and customer case studies naming them; their 10-K technology discussion; user-group talks by their staff.
+
+` +
+      `An EXISTING Oracle footprint matters as much as a competitor's — if they already run Oracle anywhere, say so explicitly.
+` +
+      `Report the exact evidence and source URL for each system. If an area has no real evidence, OMIT it — never infer a vendor from what a utility "typically" runs.`;
+
+    const [a, b] = await Promise.all([
+      client.messages.create({
+        model: "claude-sonnet-5", max_tokens: 9000, tools: TOOLS(4, 2, 24000),
+        messages: [{ role: "user", content: half("FINANCE, HR AND PROCUREMENT",
+          `  1. "${ent.canonical_name} HCM system" (also "HR system" / "payroll system")
+` +
+          `  2. "${ent.canonical_name} ERP system" (also "finance system" / "general ledger")
+` +
+          `  3. "${ent.canonical_name} procurement system" (sourcing / supply chain)`) }],
+      }),
+      client.messages.create({
+        model: "claude-sonnet-5", max_tokens: 9000, tools: TOOLS(4, 2, 24000),
+        messages: [{ role: "user", content: half("OPERATIONS",
+          `  1. "${ent.canonical_name} asset management system" (EAM / work management)
+` +
+          `  2. "${ent.canonical_name} customer information system" (CIS / billing)
+` +
+          `  3. "${ent.canonical_name} project controls" (capital project scheduling / cost)`) }],
+      }),
+    ]);
+    usage.push(u("claude-sonnet-5", a.usage), u("claude-sonnet-5", b.usage));
+    const notes = [textOf(a), textOf(b)].filter(Boolean).join(SEP);
+    if (!notes) throw new Error("research came back empty");
+
+    const ex = await client.messages.create({
+      model: "claude-opus-4-8", max_tokens: 3500,
+      output_config: { format: { type: "json_schema", schema: SCHEMAS.stack } } as any,
+      system:
+        "Build a competitive picture of the systems this company runs, from the notes ONLY. " +
+        "systems = one entry per system with real evidence; evidence = the specific public tell (quote the job-posting title, press-release line, or careers-portal domain); source = the URL; " +
+        "confidence: high = vendor case study, their own filing, their own job posting, or their careers-portal domain; medium = trade press or a strong indirect tell; low = inferred. " +
+        "incumbent = the primary ERP/finance vendor if the evidence supports one, else 'unclear'. " +
+        "angles = 2-4 honest angles for an Oracle ERP/EPM/Primavera seller, grounded in something specific in the notes. " +
+        "If they ALREADY run Oracle products, frame the angles as expansion and consolidation (EBS to Fusion, adding EPM or Primavera alongside the existing footprint), NOT displacement — and say so in summary. " +
+        "Never invent a system, a customer relationship, or a weakness.",
+      messages: [{ role: "user", content: `Company: ${ent.canonical_name}` + SEP + `Research notes:` + NL + notes.slice(0, 24000) }],
+    });
+    usage.push(u("claude-opus-4-8", ex.usage));
+    const parsed = JSON.parse(textOf(ex));
+    const RANK: Record<string, number> = { high: 3, medium: 2, low: 1 };
+    const merged = new Map<string, any>();
+    for (const sy of parsed.systems ?? []) {
+      const id = `${String(sy.vendor).toLowerCase().trim()}|${String(sy.area).toLowerCase().trim()}`;
+      const prev = merged.get(id);
+      if (!prev) { merged.set(id, sy); continue; }
+      merged.set(id, (RANK[sy.confidence] ?? 0) > (RANK[prev.confidence] ?? 0) ? { ...sy, corroborated: true } : { ...prev, corroborated: true });
+    }
+    parsed.systems = [...merged.values()];
+    return { data: parsed, usage };
+  }
+
+  const cfg = CFG[key as Exclude<TaskKey, "comp" | "stack">];
   const research = await client.messages.create({
     model: "claude-sonnet-5", max_tokens: cfg.maxTokens, tools: cfg.tools,
     messages: [{ role: "user", content: cfg.prompt }],
@@ -247,22 +309,6 @@ export async function runTask(client: Anthropic, ent: Ent, key: TaskKey, fetchPr
   usage.push(u(cfg.extractModel, extract.usage));
   const parsed = JSON.parse(textOf(extract));
 
-  // The battlecard often finds the same system in two places (a vendor case
-  // study and a conference talk). Two identical rows read as sloppy, so merge
-  // them and keep the strongest evidence — extra corroboration is a reason to
-  // trust it more, not to print it twice.
-  if (key === "stack" && Array.isArray(parsed.systems)) {
-    const RANK = { high: 3, medium: 2, low: 1 } as Record<string, number>;
-    const merged = new Map<string, any>();
-    for (const sy of parsed.systems) {
-      const id = `${String(sy.vendor).toLowerCase().trim()}|${String(sy.area).toLowerCase().trim()}`;
-      const prev = merged.get(id);
-      if (!prev) { merged.set(id, sy); continue; }
-      if ((RANK[sy.confidence] ?? 0) > (RANK[prev.confidence] ?? 0)) merged.set(id, { ...sy, corroborated: true });
-      else merged.set(id, { ...prev, corroborated: true });
-    }
-    parsed.systems = [...merged.values()];
-  }
   return { data: parsed, usage };
 }
 
