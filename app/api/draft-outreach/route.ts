@@ -28,7 +28,7 @@ export async function POST(request: Request) {
   if (!accountId || !trigger?.title) return NextResponse.json({ error: "Missing account or signal" }, { status: 400 });
 
   const { data: acct } = await supabase.from("accounts")
-    .select("id, crm_stage, entity:entities(id, canonical_name, ticker, decision_locus, decision_note)").eq("id", accountId).maybeSingle();
+    .select("id, entity:entities(id, canonical_name, ticker, decision_locus, decision_note)").eq("id", accountId).maybeSingle();
   const ent: any = acct?.entity;
   if (!ent) return NextResponse.json({ error: "Account not found" }, { status: 404 });
 
@@ -44,7 +44,7 @@ export async function POST(request: Request) {
     (order.indexOf(a.role_tag) + 1 || 99) - (order.indexOf(b.role_tag) + 1 || 99))[0] ?? null;
 
   const L: string[] = [];
-  L.push(`COMPANY: ${ent.canonical_name}${ent.ticker ? ` (${ent.ticker})` : ""} · deal stage: ${acct!.crm_stage || "prospect"}`);
+  L.push(`COMPANY: ${ent.canonical_name}${ent.ticker ? ` (${ent.ticker})` : ""}`);
   L.push(`THE SIGNAL (reason for this email): ${trigger.date ? `${trigger.date}: ` : ""}${trigger.title}${trigger.detail ? ` — ${trigger.detail}` : ""}`);
   if (facts.ok) {
     const f = facts.facts;

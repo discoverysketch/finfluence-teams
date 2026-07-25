@@ -19,10 +19,6 @@ export type Contact = { id: string; account_id: string; name: string; title: str
 type Priorities = { summary: string; as_of: string; priorities: { theme: string; detail: string; quote: string; who: string; source: string; angle: string }[] };
 export type Activity = { id: string; account_id: string; contact_id: string | null; user_id: string | null; kind: string; body: string; due_at: string | null; done: boolean; created_at: string };
 
-const STAGES: [string, string][] = [
-  ["prospect", "Prospect"], ["discovery", "Discovery"], ["evaluation", "Evaluation"],
-  ["proposal", "Proposal"], ["negotiation", "Negotiation"], ["closed_won", "Won"], ["closed_lost", "Lost"],
-];
 const ROLES: Record<string, { label: string; color: string }> = {
   economic_buyer: { label: "Economic buyer", color: "#9A6700" },
   champion: { label: "Champion", color: "#1B7A47" },
@@ -151,18 +147,16 @@ function EiaBlock({ eia }: { eia: EiaOps }) {
 type CForm = { id?: string; name: string; title: string; role_tag: string; email: string; phone: string; reports_to: string };
 const emptyC: CForm = { name: "", title: "", role_tag: "", email: "", phone: "", reports_to: "" };
 
-export default function Hub({ accountId, userId, entityId, ticker, initialStage, initialNotes, initialOwner, initialDealValue, initialPriorities, prioritiesAt, initialContacts, initialActivities, emailOf }: {
+export default function Hub({ accountId, userId, entityId, ticker, initialNotes, initialOwner, initialPriorities, prioritiesAt, initialContacts, initialActivities, emailOf }: {
   accountId: string; userId: string; entityId: string | null; ticker: string | null;
-  initialStage: string | null; initialNotes: string | null; initialOwner: string | null; initialDealValue: number | null;
+  initialNotes: string | null; initialOwner: string | null;
   initialPriorities: Priorities | null; prioritiesAt: string | null;
   initialContacts: Contact[]; initialActivities: Activity[]; emailOf: Record<string, string>;
 }) {
   const supabase = createClient();
   const router = useRouter();
   const [fin, setFin] = useState<FinState>({ loading: true });
-  const [stage, setStage] = useState(initialStage || "prospect");
   const [owner, setOwner] = useState<string | null>(initialOwner);
-  const [dealValue, setDealValue] = useState<string>(initialDealValue != null ? String(initialDealValue) : "");
   const [priorities, setPriorities] = useState<Priorities | null>(initialPriorities);
   const [prioAt, setPrioAt] = useState<string | null>(prioritiesAt);
   const [prioBusy, setPrioBusy] = useState(false);
@@ -297,17 +291,6 @@ export default function Hub({ accountId, userId, entityId, ticker, initialStage,
     router.refresh();
   }
 
-  async function saveStage(s: string) {
-    setStage(s);
-    const { error } = await supabase.from("accounts").update({ crm_stage: s }).eq("id", accountId);
-    if (error) setMsg(error.message);
-  }
-  async function saveDealValue() {
-    const v = dealValue.trim() === "" ? null : Number(dealValue.replace(/[^0-9.]/g, ""));
-    if (v != null && !isFinite(v)) return;
-    const { error } = await supabase.from("accounts").update({ deal_value: v }).eq("id", accountId);
-    if (error) setMsg(error.message);
-  }
   async function saveOwner(v: string) {
     const next = v || null;
     setOwner(next);
@@ -881,8 +864,7 @@ export default function Hub({ accountId, userId, entityId, ticker, initialStage,
       {/* ---- Activity ---- */}
       <div className="secttl">Activity</div>
       <CaptureNotes accountId={accountId} userId={userId}
-        onSaved={(rows) => setActs((a) => [...(rows as Activity[]), ...a])}
-        onStage={(s) => saveStage(s)} />
+        onSaved={(rows) => setActs((a) => [...(rows as Activity[]), ...a])} />
       <div className="card" style={{ marginBottom: 10 }}>
         <div style={{ display: "flex", gap: 8, marginBottom: 8, flexWrap: "wrap" }}>
           <select value={aKind} onChange={(e) => setAKind(e.target.value)} style={{ width: "auto" }}>

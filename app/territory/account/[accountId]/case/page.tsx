@@ -15,7 +15,7 @@ export default async function CasePage({ params }: { params: Promise<{ accountId
   const { data: me } = await supabase.from("users").select("role").eq("id", user.id).maybeSingle();
 
   const { data: acct } = await supabase.from("accounts")
-    .select("id, deal_value, entity:entities(id, canonical_name, ticker)")
+    .select("id, entity:entities(id, canonical_name, ticker)")
     .eq("id", accountId).maybeSingle();
   const ent: any = acct?.entity;
   if (!ent) {
@@ -30,7 +30,7 @@ export default async function CasePage({ params }: { params: Promise<{ accountId
     <Shell active="accounts" isAdmin={me?.role === "admin"}>
       <p style={{ fontSize: 13 }} className="noprint"><Link href={`/territory/account/${accountId}`}>← {ent.canonical_name}</Link></p>
       <h1 style={{ marginTop: 0 }}>Business <span style={{ color: "var(--red)" }}>case</span> · {ent.canonical_name}</h1>
-      <CaseBuilder entityId={ent.id} company={ent.canonical_name} dealValueUsd={(acct as any).deal_value ?? null} />
+      <CaseBuilder entityId={ent.id} company={ent.canonical_name} />
       <style>{`@media print { .noprint, nav, header { display: none !important } }`}</style>
     </Shell>
   );

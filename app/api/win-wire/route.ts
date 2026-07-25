@@ -63,7 +63,7 @@ export async function POST(request: Request) {
   if (!accountId) return NextResponse.json({ error: "Missing account" }, { status: 400 });
   if (!process.env.ANTHROPIC_API_KEY) return NextResponse.json({ error: "ANTHROPIC_API_KEY is not set on the server." }, { status: 500 });
   const { data: acct } = await supabase.from("accounts")
-    .select("id, crm_stage, rep_notes, entity:entities(id, canonical_name, ticker, entity_type, hq_state)").eq("id", accountId).maybeSingle();
+    .select("id, rep_notes, entity:entities(id, canonical_name, ticker, entity_type, hq_state)").eq("id", accountId).maybeSingle();
   const ent: any = acct?.entity;
   if (!ent) return NextResponse.json({ error: "Account not found" }, { status: 404 });
 

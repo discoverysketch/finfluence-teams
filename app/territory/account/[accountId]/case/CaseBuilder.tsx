@@ -9,7 +9,7 @@ type Price = { id: string; family: string; name: string; metric: string; list_pr
 const fmtM = (v: number) => (Math.abs(v) >= 1000 ? `$${(v / 1000).toFixed(2)}B` : `$${v >= 10 ? Math.round(v) : v.toFixed(1)}M`);
 const perEmployee = (m: string) => /employee/i.test(m);
 
-export default function CaseBuilder({ entityId, company, dealValueUsd }: { entityId: string; company: string; dealValueUsd: number | null }) {
+export default function CaseBuilder({ entityId, company }: { entityId: string; company: string }) {
   const supabase = createClient();
   const [base, setBase] = useState<{ om: number | null; capex: number | null; revenue: number | null; rateBase: number | null }>({ om: null, capex: null, revenue: null, rateBase: null });
   const [loading, setLoading] = useState(true);
@@ -18,7 +18,7 @@ export default function CaseBuilder({ entityId, company, dealValueUsd }: { entit
   const [capexPct, setCapexPct] = useState(1.0);
   const [closeDays, setCloseDays] = useState(3);
   const [financeFtes, setFinanceFtes] = useState(25);
-  const [investM, setInvestM] = useState<number>(dealValueUsd ? Math.round((dealValueUsd / 1e6) * 10) / 10 : 1.5);
+  const [investM, setInvestM] = useState<number>(1.5);
   const [narr, setNarr] = useState<Narr | null>(null);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
@@ -136,7 +136,6 @@ export default function CaseBuilder({ entityId, company, dealValueUsd }: { entit
           <span style={{ fontSize: 12.5, fontWeight: 700 }}>Indicative investment ($M)</span>
           <input inputMode="decimal" value={investM} onChange={(e) => setInvestM(Number(e.target.value.replace(/[^0-9.]/g, "")) || 0)}
             style={{ width: 90, fontSize: 13, padding: "5px 8px", borderRadius: 8, border: "1px solid var(--border)" }} />
-          {dealValueUsd ? <span style={{ fontSize: 11, color: "var(--muted)" }}>prefilled from Deal $</span> : null}
           {prices.length > 0 && <button className="mini" onClick={() => setShowEst((v) => !v)}>{showEst ? "Hide estimate" : "🧮 Estimate from Oracle list price"}</button>}
         </div>
 

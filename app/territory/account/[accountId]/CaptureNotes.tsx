@@ -3,13 +3,12 @@ import { useEffect, useRef, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 
 // Post-call capture: paste rough notes -> AI structures into a clean log entry
-// + extracted tasks + stage suggestion -> rep reviews -> one tap saves it all.
-type Draft = { kind: "call" | "meeting" | "note"; note: string; tasks: { body: string; due_days: number; keep?: boolean }[]; stage_suggestion: string; stage_reason: string };
-const STAGE_LABEL: Record<string, string> = { prospect: "Prospect", discovery: "Discovery", evaluation: "Evaluation", proposal: "Proposal", negotiation: "Negotiation", closed_won: "Won", closed_lost: "Lost" };
+// + extracted tasks -> rep reviews -> one tap saves it all.
+type Draft = { kind: "call" | "meeting" | "note"; note: string; tasks: { body: string; due_days: number; keep?: boolean }[] };
 
-export default function CaptureNotes({ accountId, userId, onSaved, onStage }: {
+export default function CaptureNotes({ accountId, userId, onSaved }: {
   accountId: string; userId: string;
-  onSaved: (rows: any[]) => void; onStage: (s: string) => void; // eslint-disable-line @typescript-eslint/no-explicit-any
+  onSaved: (rows: any[]) => void; // eslint-disable-line @typescript-eslint/no-explicit-any
 }) {
   const supabase = createClient();
   const [open, setOpen] = useState(false);
@@ -17,7 +16,6 @@ export default function CaptureNotes({ accountId, userId, onSaved, onStage }: {
   const [busy, setBusy] = useState(false);
   const [saving, setSaving] = useState(false);
   const [draft, setDraft] = useState<Draft | null>(null);
-  const [applyStage, setApplyStage] = useState(true);
   const [err, setErr] = useState("");
 
   // Voice dictation (browser SpeechRecognition — Chrome/Edge/Safari). Final
@@ -56,7 +54,6 @@ export default function CaptureNotes({ accountId, userId, onSaved, onStage }: {
       const j = await r.json().catch(() => null);
       if (!r.ok || !j?.draft) { setErr(j?.error || "Couldn't structure the notes."); return; }
       setDraft({ ...j.draft, tasks: (j.draft.tasks ?? []).map((t: any) => ({ ...t, keep: true })) }); // eslint-disable-line @typescript-eslint/no-explicit-any
-      setApplyStage(true);
     } catch { setErr("Network error."); }
     finally { setBusy(false); }
   }
@@ -74,7 +71,6 @@ export default function CaptureNotes({ accountId, userId, onSaved, onStage }: {
     const { data, error } = await supabase.from("activities").insert(rows).select("*");
     setSaving(false);
     if (error) { setErr(error.message); return; }
-    if (draft.stage_suggestion && applyStage) onStage(draft.stage_suggestion);
     onSaved(data ?? []);
     setDraft(null); setRaw(""); setOpen(false);
   }
@@ -133,12 +129,6 @@ export default function CaptureNotes({ accountId, userId, onSaved, onStage }: {
                 </label>
               ))}
             </div>
-          )}
-          {draft.stage_suggestion && (
-            <label style={{ display: "flex", gap: 8, alignItems: "center", background: "#fff", border: "1px solid #E2D8EE", borderRadius: 8, padding: "8px 10px", marginBottom: 8, cursor: "pointer" }}>
-              <input type="checkbox" checked={applyStage} onChange={() => setApplyStage(!applyStage)} style={{ width: 16, height: 16 }} />
-              <span style={{ fontSize: 13 }}>Move stage to <b>{STAGE_LABEL[draft.stage_suggestion] || draft.stage_suggestion}</b>{draft.stage_reason ? <span style={{ color: "var(--ink2)" }}> — {draft.stage_reason}</span> : null}</span>
-            </label>
           )}
           <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
             <button className="btn" disabled={saving} onClick={saveAll}>{saving ? "Saving…" : "Save to activity log"}</button>

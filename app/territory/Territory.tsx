@@ -9,7 +9,7 @@ import { createClient } from "@/lib/supabase/client";
 // research) lives behind one "+ Add accounts" panel. Everything about a single
 // account (financials, plan, people, remove) lives in its Account Hub.
 type Ent = { id: string; canonical_name: string; ticker: string | null; data_tier: string | null; entity_type: string | null; hq_state: string | null };
-export type Account = { id: string; rep_notes: string | null; crm_stage: string | null; owner: string | null; entity: Ent | null };
+export type Account = { id: string; rep_notes: string | null; owner: string | null; entity: Ent | null };
 type Cand = { id: string; canonical_name: string; ticker: string | null; cik: string | null; entity_type: string | null; data_tier: string | null; hq_state: string | null; score: number; matched_alias?: string | null };
 type MatchRow = { name: string; candidates: Cand[]; selectedId: string };
 
@@ -459,7 +459,6 @@ export default function Territory({ listId, userId, emailOf, initial }: { listId
                 {a.entity?.canonical_name || "Unknown"}{a.entity?.ticker ? <span style={{ color: "var(--muted)", fontWeight: 600 }}> · {a.entity.ticker}</span> : null}
               </div>
               <div style={{ fontSize: 12, color: "var(--ink2)", marginTop: 2 }}>
-                {a.crm_stage ? <span style={{ background: "#EEF4FB", color: "var(--blue)", borderRadius: 4, padding: "1px 7px", fontWeight: 700, fontSize: 11, marginRight: 6 }}>{a.crm_stage.replace("_", " ")}</span> : null}
                 {a.owner && a.owner !== userId && emailOf[a.owner] && (
                   <span style={{ background: "#F4EFE6", color: "#8A7E6E", borderRadius: 4, padding: "1px 7px", fontWeight: 700, fontSize: 11, marginRight: 6 }}>{emailOf[a.owner].split("@")[0]}</span>
                 )}

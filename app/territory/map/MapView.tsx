@@ -5,7 +5,7 @@ import Link from "next/link";
 // State tile-grid map (NPR-style): geography without shipping geometry.
 // Squares darken with account count and carry the best data-tier's color as an
 // underline; tap a state for its account list.
-export type MapItem = { accountId: string; name: string; ticker: string | null; tier: string | null; stage: string | null; state: string | null; mine?: boolean };
+export type MapItem = { accountId: string; name: string; ticker: string | null; tier: string | null; state: string | null; mine?: boolean };
 
 const GRID: Record<string, [number, number]> = {
   AK: [0, 0], ME: [0, 10],
@@ -87,7 +87,6 @@ export default function MapView({ items }: { items: MapItem[] }) {
               <div className="card" style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 6, padding: "11px 14px" }}>
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <div style={{ fontWeight: 700, fontSize: 14 }}>{a.name}{a.ticker ? <span style={{ color: "var(--muted)", fontWeight: 600 }}> · {a.ticker}</span> : null}</div>
-                  {a.stage && <div style={{ fontSize: 11.5, color: "var(--blue)", fontWeight: 700, marginTop: 1 }}>{a.stage.replace("_", " ")}</div>}
                 </div>
                 {a.tier && <span style={{ background: TIER_COLOR[a.tier] ?? "#8A7E6E", color: "#fff", fontSize: 10, fontWeight: 700, borderRadius: 4, padding: "2px 6px" }}>Tier {a.tier}</span>}
                 <span style={{ fontSize: 16, color: "#8A7E6E" }}>›</span>

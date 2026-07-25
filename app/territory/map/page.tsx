@@ -43,13 +43,13 @@ export default async function MapPage() {
   const { data: list } = await supabase.from("account_lists")
     .select("id").eq("tenant_id", me.tenant_id).order("created_at").limit(1).maybeSingle();
   const { data: accts } = await supabase.from("accounts")
-    .select("id, crm_stage, owner, entity:entities(id, canonical_name, ticker, cik, data_tier, hq_state)")
+    .select("id, owner, entity:entities(id, canonical_name, ticker, cik, data_tier, hq_state)")
     .eq("list_id", list?.id ?? "00000000-0000-0000-0000-000000000000");
   await backfillStates((accts ?? []) as any[]);
 
   const items: MapItem[] = ((accts ?? []) as any[]).filter((a) => a.entity).map((a) => ({
     accountId: a.id, name: a.entity.canonical_name, ticker: a.entity.ticker,
-    tier: a.entity.data_tier, stage: a.crm_stage, state: a.entity.hq_state || null,
+    tier: a.entity.data_tier, state: a.entity.hq_state || null,
     mine: a.owner === user.id,
   }));
 

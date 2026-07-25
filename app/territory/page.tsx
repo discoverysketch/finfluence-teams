@@ -25,7 +25,7 @@ export default async function TerritoryPage() {
 
   const [{ data: accts }, { data: members }] = await Promise.all([
     supabase.from("accounts")
-      .select("id, rep_notes, crm_stage, owner, entity:entities(id,canonical_name,ticker,data_tier,entity_type,hq_state)")
+      .select("id, rep_notes, owner, entity:entities(id,canonical_name,ticker,data_tier,entity_type,hq_state)")
       .eq("list_id", list?.id ?? "00000000-0000-0000-0000-000000000000"),
     supabase.from("users").select("id, email"),
   ]);

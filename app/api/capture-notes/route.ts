@@ -4,13 +4,12 @@ import { withRetry, friendlyAiError } from "@/lib/aiRetry";
 import { NextResponse } from "next/server";
 
 // Post-call capture: rough pasted notes -> a clean activity entry + extracted
-// next-step tasks + a stage suggestion. Returns a DRAFT for the rep to review;
+// next-step tasks. Returns a DRAFT for the rep to review;
 // nothing is saved until they approve (client inserts via their own RLS-scoped
 // session). Feeds the same activity log the pre-call brief reads — the loop.
 export const maxDuration = 300;
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
-const STAGES = ["prospect", "discovery", "evaluation", "proposal", "negotiation", "closed_won", "closed_lost"];
 const SCHEMA = {
   type: "object", additionalProperties: false,
   properties: {
@@ -24,10 +23,8 @@ const SCHEMA = {
         required: ["body", "due_days"],
       },
     },
-    stage_suggestion: { type: "string", enum: [...STAGES, ""] },
-    stage_reason: { type: "string" },
   },
-  required: ["kind", "note", "tasks", "stage_suggestion", "stage_reason"],
+  required: ["kind", "note", "tasks"],
 };
 
 export async function POST(request: Request) {
@@ -40,7 +37,7 @@ export async function POST(request: Request) {
   if (!accountId || !String(raw || "").trim()) return NextResponse.json({ error: "Missing notes" }, { status: 400 });
 
   const { data: acct } = await supabase.from("accounts")
-    .select("id, crm_stage, entity:entities(canonical_name)").eq("id", accountId).maybeSingle();
+    .select("id, entity:entities(canonical_name)").eq("id", accountId).maybeSingle();
   const ent: any = acct?.entity;
   if (!ent) return NextResponse.json({ error: "Account not found" }, { status: 404 });
   const { data: contacts } = await supabase.from("contacts").select("name, title").eq("account_id", accountId);
@@ -53,11 +50,10 @@ export async function POST(request: Request) {
       thinking: { type: "adaptive" } as any,
       output_config: { format: { type: "json_schema", schema: SCHEMA } } as any,
       system:
-        `A sales rep just typed rough notes after an interaction at ${ent.canonical_name} (current deal stage: ${acct!.crm_stage || "prospect"}). Structure them. Rules:\n` +
+        `A sales rep just typed rough notes after an interaction at ${ent.canonical_name}. Structure them. Rules:\n` +
         "- kind: call/meeting if the notes describe one; note otherwise.\n" +
         "- note: the notes rewritten as a clean, complete record in the rep's voice — keep EVERY fact, name, number, objection, and commitment; fix only structure and clarity. 3-8 sentences. Never add information that isn't in the raw notes.\n" +
         "- tasks: each concrete follow-up or commitment as its own task (imperative, specific, include who/what). due_days = working guess at days from now (7 if unstated). No invented tasks.\n" +
-        "- stage_suggestion: ONLY if the notes clearly indicate the deal moved (e.g. demo scheduled -> evaluation, verbal yes -> negotiation); otherwise empty string. stage_reason: one short sentence, or empty.\n" +
         (contacts?.length ? `Known people at the account: ${contacts.map((c: any) => c.name).join(", ")}. Match name spellings to these when clearly the same person.\n` : ""),
         messages: [{ role: "user", content: `RAW NOTES:\n${String(raw).slice(0, 6000)}` }],
       });

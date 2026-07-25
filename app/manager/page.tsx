@@ -6,9 +6,11 @@ import { CONCEPTS, conceptScores, overallAcumen, tier, heatColor, type Ev } from
 
 type Member = { id: string; email: string; role: string };
 /* eslint-disable @typescript-eslint/no-explicit-any */
-const STAGES: [string, string][] = [
-  ["prospect", "Prospect"], ["discovery", "Discovery"], ["evaluation", "Evaluation"],
-  ["proposal", "Proposal"], ["negotiation", "Negotiation"], ["closed_won", "Won"], ["closed_lost", "Lost"],
+// Research coverage, not a sales pipeline: this is a research tool on public
+// data, so what a manager needs to see is how well the book is understood.
+const FACETS: [string, string][] = [
+  ["comp_json", "Comp levers"], ["priorities_json", "Priorities"], ["decision_locus", "Decision authority"],
+  ["hiring_json", "Hiring signals"], ["stack_json", "Battlecard"], ["fleet_json", "Fleet"],
 ];
 
 export default async function ManagerPage() {
@@ -25,7 +27,7 @@ export default async function ManagerPage() {
     // Seeded (core) cards only — custom concepts are practice-only and don't count.
     supabase.from("progress").select("user_id, cards!inner(is_seeded)").eq("status", "mastered").eq("cards.is_seeded", true),
     supabase.from("score_events").select("user_id,concept_tag,correct"),
-    supabase.from("accounts").select("id, crm_stage, owner, deal_value, entity:entities(canonical_name, ticker)"),
+    supabase.from("accounts").select("id, owner, entity:entities(id, canonical_name, ticker, comp_json, priorities_json, decision_locus, hiring_json, stack_json, fleet_json)"),
     supabase.from("activities").select("account_id, user_id, kind, done, created_at").order("created_at", { ascending: false }).limit(1000),
   ]);
   const members = (memberData ?? []) as Member[];
@@ -41,27 +43,31 @@ export default async function ManagerPage() {
   const teamAcumen = members.length ? Math.round(members.reduce((n, m) => n + acumenOf(m.id), 0) / members.length) : 0;
   const totalMastered = mastered.length;
 
-  // ---- pipeline / stalled / activity (CRM roll-up) ----
+  // ---- research coverage / stalled / activity ----
   const emailOf: Record<string, string> = {};
   for (const m of members) emailOf[m.id] = m.email;
   const short = (id: string | null) => (id && emailOf[id] ? emailOf[id].split("@")[0] : null);
   const accts = (acctData ?? []) as any[];
   const acts = (actData ?? []) as any[];
-  const byStage: Record<string, any[]> = {};
-  for (const a of accts) (byStage[a.crm_stage || "prospect"] ??= []).push(a);
 
-  // Dollars: sum per stage + probability-weighted total (standard stage odds).
-  const STAGE_ODDS: Record<string, number> = { prospect: 0.1, discovery: 0.25, evaluation: 0.4, proposal: 0.6, negotiation: 0.8, closed_won: 1, closed_lost: 0 };
-  const fmtK = (v: number) => (v >= 1e6 ? `$${(v / 1e6).toFixed(1)}M` : v >= 1e3 ? `$${Math.round(v / 1e3)}k` : `$${Math.round(v)}`);
-  const stageSum = (k: string) => (byStage[k] ?? []).reduce((n, a) => n + (Number(a.deal_value) || 0), 0);
-  const weighted = accts.reduce((n, a) => n + (Number(a.deal_value) || 0) * (STAGE_ODDS[a.crm_stage || "prospect"] ?? 0.1), 0);
-  const wonTotal = stageSum("closed_won");
-  const valuedCount = accts.filter((a) => Number(a.deal_value) > 0).length;
+  const covered = (a: any, key: string) => !!a.entity?.[key];
+  const coverage = FACETS.map(([key, label]) => ({
+    key, label,
+    n: accts.filter((a) => covered(a, key)).length,
+    pct: accts.length ? Math.round((accts.filter((a) => covered(a, key)).length / accts.length) * 100) : 0,
+  }));
+  // Thinnest accounts first — where a rep would walk in least prepared.
+  const thin = accts
+    .map((a) => ({ ...a, have: FACETS.filter(([k]) => covered(a, k)).length }))
+    .sort((x, y) => x.have - y.have)
+    .filter((a) => a.have < FACETS.length)
+    .slice(0, 8);
+  const fullyCovered = accts.filter((a) => FACETS.every(([k]) => covered(a, k))).length;
 
   const lastTouch: Record<string, string> = {};
   for (const a of acts) if (!lastTouch[a.account_id]) lastTouch[a.account_id] = a.created_at; // acts are newest-first
   const now = Date.now();
-  const open = accts.filter((a) => !String(a.crm_stage || "").startsWith("closed"));
+  const open = accts;
   // Stalled = had activity, then went quiet. Never-touched accounts are a
   // count, not a list (early on that's most of the book — a list would be noise).
   const stalled = open
@@ -97,28 +103,35 @@ export default async function ManagerPage() {
         <Stat n={String(totalMastered)} l="cards mastered" />
       </div>
 
-      <div className="secttl">Pipeline · {accts.length} accounts{valuedCount > 0 ? ` · ${fmtK(weighted)} weighted · ${fmtK(wonTotal)} won` : ""}</div>
-      <div style={{ display: "flex", gap: 6, overflowX: "auto", paddingBottom: 4 }}>
-        {STAGES.map(([k, label]) => {
-          const rows = byStage[k] ?? [];
-          return (
-            <div key={k} style={{ minWidth: 128, flex: 1, background: "#fff", border: "1px solid var(--border)", borderRadius: 10, padding: "8px 9px" }}>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 6 }}>
-                <span style={{ fontSize: 10.5, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".4px", color: k === "closed_won" ? "var(--green)" : k === "closed_lost" ? "var(--muted)" : "var(--ink2)" }}>{label}</span>
-                <span style={{ fontSize: 13, fontWeight: 800 }}>{rows.length}{stageSum(k) > 0 ? <span style={{ fontSize: 10.5, color: "var(--ink2)", fontWeight: 700 }}> · {fmtK(stageSum(k))}</span> : null}</span>
-              </div>
-              {rows.slice(0, 6).map((a) => (
-                <Link key={a.id} href={`/territory/account/${a.id}`} style={{ color: "inherit", display: "block" }}>
-                  <div style={{ fontSize: 11, fontWeight: 600, padding: "3px 6px", background: "var(--cream2)", borderRadius: 5, marginBottom: 3, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
-                    {a.entity?.ticker || a.entity?.canonical_name || "?"}{short(a.owner) ? <span style={{ color: "var(--muted)" }}> · {short(a.owner)}</span> : null}
-                  </div>
-                </Link>
-              ))}
-              {rows.length > 6 && <div style={{ fontSize: 10.5, color: "var(--muted)" }}>+{rows.length - 6} more</div>}
+      <div className="secttl">Research coverage · {accts.length} accounts · {fullyCovered} fully covered</div>
+      <div className="card" style={{ padding: "10px 13px" }}>
+        {coverage.map((c) => (
+          <div key={c.key} style={{ display: "flex", alignItems: "center", gap: 10, padding: "4px 0" }}>
+            <span style={{ fontSize: 12.5, fontWeight: 600, width: 128, flexShrink: 0 }}>{c.label}</span>
+            <div style={{ flex: 1, height: 7, background: "#EDE7DA", borderRadius: 4, overflow: "hidden" }}>
+              <div style={{ width: `${c.pct}%`, height: "100%", background: c.pct >= 80 ? "var(--green)" : c.pct >= 40 ? "var(--gold)" : "var(--red)", borderRadius: 4 }} />
             </div>
-          );
-        })}
+            <span style={{ fontSize: 12, fontWeight: 700, width: 62, textAlign: "right", flexShrink: 0 }}>{c.n}/{accts.length}</span>
+          </div>
+        ))}
       </div>
+
+      {thin.length > 0 && (
+        <>
+          <div className="secttl">Least researched · a rep would walk in cold</div>
+          {thin.map((a) => (
+            <Link key={a.id} href={`/territory/account/${a.id}`} style={{ color: "inherit", display: "block" }}>
+              <div className="card" style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 6, padding: "10px 12px" }}>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontWeight: 700, fontSize: 13.5, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{a.entity?.canonical_name || "Account"}</div>
+                  <div style={{ fontSize: 11.5, color: "var(--ink2)" }}>{short(a.owner) ?? "unassigned"}</div>
+                </div>
+                <span style={{ fontSize: 12, fontWeight: 800, color: a.have === 0 ? "var(--red)" : "#9A6700", flexShrink: 0 }}>{a.have}/{FACETS.length} researched</span>
+              </div>
+            </Link>
+          ))}
+        </>
+      )}
 
       {stalled.length > 0 && (
         <>
@@ -128,7 +141,7 @@ export default async function ManagerPage() {
               <div className="card" style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 6, padding: "10px 12px" }}>
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <div style={{ fontWeight: 700, fontSize: 13.5, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{a.entity?.canonical_name || "Account"}</div>
-                  <div style={{ fontSize: 11.5, color: "var(--ink2)" }}>{(a.crm_stage || "prospect").replace("_", " ")}{short(a.owner) ? ` · ${short(a.owner)}` : " · unassigned"}</div>
+                  <div style={{ fontSize: 11.5, color: "var(--ink2)" }}>{short(a.owner) ?? "unassigned"}</div>
                 </div>
                 <span style={{ fontSize: 12, fontWeight: 800, color: a.days >= 45 ? "var(--red)" : "#9A6700", flexShrink: 0 }}>
                   {a.days}d quiet
@@ -141,7 +154,7 @@ export default async function ManagerPage() {
 
       {neverTouched > 0 && (
         <p style={{ fontSize: 12, color: "var(--ink2)", margin: "8px 0 0" }}>
-          {neverTouched} open account{neverTouched === 1 ? " has" : "s have"} no activity logged yet.
+          {neverTouched} account{neverTouched === 1 ? " has" : "s have"} no activity logged yet.
         </p>
       )}
 
