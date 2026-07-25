@@ -49,7 +49,7 @@ export default async function PlanPage({ params }: { params: Promise<{ entityId:
   if (!user) redirect("/login");
 
   const { data: ent } = await supabase.from("entities")
-    .select("id, canonical_name, ticker, data_tier, hq_state, entity_type, profile_json, priorities_json, priorities_at, decision_locus, decision_note, decision_source, decision_at, hiring_json, comp_json, fleet_json, muni_json, hiring_at, comp_at, fleet_at, muni_at, employees")
+    .select("id, canonical_name, ticker, data_tier, hq_state, entity_type, profile_json, priorities_json, priorities_at, decision_locus, decision_note, decision_source, decision_at, hiring_json, comp_json, fleet_json, muni_json, stack_json, hiring_at, comp_at, fleet_at, muni_at, stack_at, employees")
     .eq("id", entityId).maybeSingle();
   if (!ent) return <main className="container"><p>Account not found.</p><Link href="/territory">← Accounts</Link></main>;
 
@@ -98,6 +98,7 @@ export default async function PlanPage({ params }: { params: Promise<{ entityId:
   const comp: any = (ent as any).comp_json;
   const fleet: any = (ent as any).fleet_json;
   const muni: any = (ent as any).muni_json;
+  const stack: any = (ent as any).stack_json;
   const locus: string | null = (ent as any).decision_locus ?? null;
   const LOCUS: Record<string, [string, string]> = {
     local: ["Decisions are made locally", "#1B7A47"],
@@ -296,9 +297,31 @@ export default async function PlanPage({ params }: { params: Promise<{ entityId:
       )}
 
       {/* Deep intel */}
-      {(comp || hiring || fleet || muni) && (
+      {(comp || hiring || fleet || muni || stack) && (
         <>
           <h2 style={{ fontSize: 15 }}>Deep intel</h2>
+
+          {!!(stack?.systems?.length || stack?.summary) && (
+            <div className="pblock" style={{ marginBottom: 10 }}>
+              <div className="plabel">🥊 What they run today{stack.incumbent && stack.incumbent !== "unclear" ? ` · ${stack.incumbent}` : ""}</div>
+              {stack.summary && <div style={{ fontSize: 12.5, color: "var(--ink2)", lineHeight: 1.45, marginBottom: 4 }}>{stack.summary}</div>}
+              {(stack.systems ?? []).map((sy: any, i: number) => (
+                <div key={i} style={{ padding: "3px 0", borderTop: i ? "1px solid #F7F2E9" : "none" }}>
+                  <span style={{ fontSize: 12.5, fontWeight: 700 }}>{sy.vendor}{sy.product ? ` ${sy.product}` : ""}</span>
+                  <span style={{ fontSize: 11, color: "var(--muted)" }}> · {sy.area} · {sy.confidence} confidence</span>
+                  <div style={{ fontSize: 12, color: "var(--ink2)" }}>{sy.evidence} <Src url={sy.source} /></div>
+                </div>
+              ))}
+              {(stack.angles ?? []).length > 0 && (
+                <div style={{ marginTop: 5, borderTop: "1px solid #F0EAE0", paddingTop: 4 }}>
+                  {stack.angles.map((a: any, i: number) => (
+                    <div key={i} style={{ fontSize: 12, marginBottom: 2 }}><b style={{ color: "#B23A2E" }}>{a.headline}</b> — {a.detail}</div>
+                  ))}
+                </div>
+              )}
+              <div style={{ fontSize: 10.5, color: "var(--muted)", marginTop: 4 }}>Inferred from public tells — confirm before quoting to a customer. <When iso={(ent as any).stack_at} /></div>
+            </div>
+          )}
 
           {!!(comp?.summary || comp?.metrics?.length) && (
             <div className="pblock" style={{ marginBottom: 10 }}>

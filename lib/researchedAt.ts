@@ -12,6 +12,7 @@ export const STALE_DAYS = {
   priorities: 120, // earnings-call cadence — roughly one quarter plus slack
   persona: 240,    // people move, but not often
   decision: 365,   // org structure is slow-moving
+  stack: 180,      // systems estates change slowly; the tells (postings) less so
   comp: 400,       // annual proxy — only stale once the next one is filed
   fleet: 400,      // annual EIA-860 inventory
   muni: 400,       // annual CAFR / official statement

@@ -9,10 +9,11 @@ import { researchedAgo, STALE_DAYS } from "@/lib/researchedAt";
 // Each lookup takes ~1 minute, so the UI has to SHOW that it's working —
 // one button researches every topic, two at a time, with live progress.
 /* eslint-disable @typescript-eslint/no-explicit-any */
-type Facet = "hiring" | "comp" | "fleet" | "muni";
+type Facet = "hiring" | "comp" | "fleet" | "muni" | "stack";
 const META: Record<Facet, { icon: string; label: string; blurb: string }> = {
   hiring: { icon: "🧑‍💼", label: "Hiring signals", blurb: "Open finance/ERP/systems roles — a live buying signal." },
   comp: { icon: "🎯", label: "What leadership is paid to hit", blurb: "Exec-comp metrics from the proxy — sell to the number their bonus depends on." },
+  stack: { icon: "🥊", label: "What they run today", blurb: "Systems in place now, from public tells — plus where you displace them." },
   fleet: { icon: "⚡", label: "Generation fleet", blurb: "Capacity, fuel mix, notable plants — for asset & capital conversations." },
   muni: { icon: "🏛️", label: "Muni financial snapshot", blurb: "Revenue, debt, customers, rating from EMMA/CAFR — for non-SEC accounts." },
 };
@@ -33,17 +34,17 @@ export default function DeepIntel({ entityId }: { entityId: string }) {
   useEffect(() => {
     (async () => {
       const { data: e } = await supabase.from("entities")
-        .select("hiring_json, comp_json, fleet_json, muni_json, hiring_at, comp_at, fleet_at, muni_at, data_tier, entity_type")
+        .select("hiring_json, comp_json, fleet_json, muni_json, stack_json, hiring_at, comp_at, fleet_at, muni_at, stack_at, data_tier, entity_type")
         .eq("id", entityId).maybeSingle();
       if (e) {
-        setData({ hiring: e.hiring_json, comp: e.comp_json, fleet: e.fleet_json, muni: e.muni_json });
-        setAt({ hiring: e.hiring_at, comp: e.comp_at, fleet: e.fleet_at, muni: e.muni_at });
+        setData({ hiring: e.hiring_json, comp: e.comp_json, fleet: e.fleet_json, muni: e.muni_json, stack: e.stack_json });
+        setAt({ hiring: e.hiring_at, comp: e.comp_at, fleet: e.fleet_at, muni: e.muni_at, stack: e.stack_at });
         setIsMuni(e.data_tier === "D" || e.data_tier === "C" || ["muni", "coop"].includes(e.entity_type ?? ""));
       }
     })();
   }, [entityId, supabase]);
 
-  const facets: Facet[] = isMuni ? ["hiring", "comp", "fleet", "muni"] : ["hiring", "comp", "fleet"];
+  const facets: Facet[] = isMuni ? ["stack", "hiring", "comp", "fleet", "muni"] : ["stack", "hiring", "comp", "fleet"];
   const anyBusy = busy.length > 0;
 
   // A running clock is the honest signal that a slow lookup is still alive.
@@ -168,6 +169,34 @@ export default function DeepIntel({ entityId }: { entityId: string }) {
                     ))}
                     {d.employees ? <div style={{ fontSize: 12, color: "var(--ink2)", marginTop: 4 }}>~{Number(d.employees).toLocaleString()} employees</div> : null}
                     <div style={{ marginTop: 4 }}><Src url={d.source} /></div>
+                  </>)}
+                  {f === "stack" && (<>
+                    {d.incumbent && d.incumbent !== "unclear" && (
+                      <div style={{ fontSize: 12.5, marginBottom: 4 }}>
+                        <b>Primary ERP:</b> <span style={{ background: "#F7F2E9", border: "1px solid #E6CF94", borderRadius: 5, padding: "1px 7px", fontWeight: 700 }}>{d.incumbent}</span>
+                      </div>
+                    )}
+                    {(d.systems ?? []).map((sy: any, j: number) => (
+                      <div key={j} style={{ padding: "4px 0", borderTop: j ? "1px solid #F7F2E9" : "none" }}>
+                        <div style={{ fontSize: 12.5, fontWeight: 700 }}>
+                          {sy.vendor}{sy.product ? ` ${sy.product}` : ""}
+                          <span style={{ marginLeft: 6, fontSize: 9.5, fontWeight: 700, color: "#fff", background: "#8A7E6E", borderRadius: 4, padding: "1px 5px" }}>{sy.area}</span>
+                          <span style={{ marginLeft: 4, fontSize: 9.5, fontWeight: 700, color: sy.confidence === "high" ? "#1B7A47" : sy.confidence === "medium" ? "#9A6700" : "#8A7E6E" }}>{String(sy.confidence).toUpperCase()}</span>
+                        </div>
+                        <div style={{ fontSize: 12, color: "var(--ink2)" }}>{sy.evidence} <Src url={sy.source} /></div>
+                      </div>
+                    ))}
+                    {(d.angles ?? []).length > 0 && (
+                      <div style={{ marginTop: 6, borderTop: "1px solid #F0EAE0", paddingTop: 5 }}>
+                        <div style={{ fontSize: 10.5, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".5px", color: "#B23A2E", marginBottom: 3 }}>Where you win</div>
+                        {d.angles.map((a: any, j: number) => (
+                          <div key={j} style={{ fontSize: 12, marginBottom: 3 }}>
+                            <b>{a.headline}</b> — <span style={{ color: "var(--ink2)" }}>{a.detail}</span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                    <div style={{ fontSize: 10.5, color: "var(--muted)", marginTop: 5 }}>Inferred from public tells — confirm before quoting it to a customer.</div>
                   </>)}
                   {f === "fleet" && (<>
                     {d.total_mw > 0 && <div style={{ fontSize: 13, fontWeight: 700 }}>≈ {Number(d.total_mw).toLocaleString()} MW capacity</div>}

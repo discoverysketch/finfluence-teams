@@ -11,11 +11,12 @@ import { NextResponse } from "next/server";
 //  comp   — exec-compensation metrics from the DEF 14A proxy + employee count
 //  fleet  — generation fleet summary (capacity, fuel mix, notable plants)
 //  muni   — financial snapshot for non-SEC munis (from EMMA / official docs)
+//  stack  — competitive battlecard: systems they appear to run today
 // Web-researched, structured, cached; whole team benefits from one run.
 export const maxDuration = 300;
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
-const MODES = ["hiring", "comp", "fleet", "muni"];
+const MODES = ["hiring", "comp", "fleet", "muni", "stack"];
 // fleet + muni only — hiring/comp live in lib/researchTasks.
 const SCHEMAS: Record<string, any> = {
   fleet: {
@@ -53,7 +54,7 @@ const PROMPTS: Record<string, (name: string, st: string) => string> = {
 };
 
 const COL: Record<string, [string, string]> = {
-  hiring: ["hiring_json", "hiring_at"], comp: ["comp_json", "comp_at"], fleet: ["fleet_json", "fleet_at"], muni: ["muni_json", "muni_at"],
+  hiring: ["hiring_json", "hiring_at"], comp: ["comp_json", "comp_at"], fleet: ["fleet_json", "fleet_at"], muni: ["muni_json", "muni_at"], stack: ["stack_json", "stack_at"],
 };
 
 export async function POST(request: Request) {
@@ -72,7 +73,7 @@ export async function POST(request: Request) {
     // comp + hiring come from the shared task definitions (lib/researchTasks)
     // so the in-app buttons and the batch sweep produce identical data. comp
     // is deterministic there: DEF 14A straight from EDGAR, no web search.
-    if (mode === "comp" || mode === "hiring") {
+    if (mode === "comp" || mode === "hiring" || mode === "stack") {
       const { data: parsed } = await withRetry(() => runTask(client, ent as any, mode, fetchProxy));
       const admin = createAdminClient();
       const [jsonCol, atCol] = COL[mode];

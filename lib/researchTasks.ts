@@ -5,7 +5,7 @@
 import type Anthropic from "@anthropic-ai/sdk";
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
-export type TaskKey = "hiring" | "comp" | "priorities" | "decision";
+export type TaskKey = "hiring" | "comp" | "priorities" | "decision" | "stack";
 export type Ent = { id: string; canonical_name: string; ticker?: string | null; hq_state?: string | null; cik?: string | null };
 export type TaskResult = { data: any; usage: { model: string; input: number; output: number; searches: number }[] };
 // Injected by the caller so the Next route and the node seed script can each
@@ -53,6 +53,33 @@ export const SCHEMAS: Record<TaskKey, any> = {
       as_of: { type: "string" },
     },
     required: ["summary", "priorities", "as_of"],
+  },
+  stack: {
+    type: "object", additionalProperties: false,
+    properties: {
+      summary: { type: "string" },
+      incumbent: { type: "string" },
+      systems: {
+        type: "array",
+        items: {
+          type: "object", additionalProperties: false,
+          properties: {
+            vendor: { type: "string" },
+            product: { type: "string" },
+            area: { type: "string", enum: ["ERP/Finance", "HCM", "Asset Management", "CIS/Billing", "Project Controls", "Procurement", "Other"] },
+            evidence: { type: "string" },
+            source: { type: "string" },
+            confidence: { type: "string", enum: ["high", "medium", "low"] },
+          },
+          required: ["vendor", "product", "area", "evidence", "source", "confidence"],
+        },
+      },
+      angles: {
+        type: "array",
+        items: { type: "object", additionalProperties: false, properties: { headline: { type: "string" }, detail: { type: "string" } }, required: ["headline", "detail"] },
+      },
+    },
+    required: ["summary", "incumbent", "systems", "angles"],
   },
   decision: {
     type: "object", additionalProperties: false,
@@ -125,6 +152,24 @@ export async function runTask(client: Anthropic, ent: Ent, key: TaskKey, fetchPr
         "Structure the leadership priorities from the notes. Use ONLY what's cited in the notes — never invent a quote or figure. " +
         "summary = 2 sentences on the strategic posture. Each priority: theme (3-6 words), detail (1-2 sentences), quote (a real direct quote from the notes — keep it short and verbatim), who (name + title if known), source (the URL), " +
         "angle (one line on how an Oracle ERP/EPM/Primavera seller ties value to this priority). as_of = the period/date of the newest source (e.g. 'Q2 2026 earnings call'). Drop any priority lacking a source URL.",
+    },
+    stack: {
+      tools: TOOLS(3, 2, 24000), maxTokens: 9000, extractModel: "claude-opus-4-8", extractTokens: 3000, notesCap: 16000,
+      prompt:
+        `Work out which ENTERPRISE SYSTEMS ${ent.canonical_name} (a US utility/energy company) appears to run TODAY, using PUBLIC evidence only. ` +
+        `The strongest tells, in order: (1) their OWN JOB POSTINGS — search "${ent.canonical_name} jobs SAP", "${ent.canonical_name} jobs Workday", "${ent.canonical_name} Oracle analyst" — postings name the systems a team supports; ` +
+        `(2) vendor PRESS RELEASES and CASE STUDIES naming them as a customer (SAP, Workday, IFS, Maximo/IBM, Infor, Itron, Itineris, Salesforce); ` +
+        `(3) their 10-K or annual report technology/systems discussion; (4) conference talks or user-group presentations by their staff. ` +
+        `Budget: ~3 searches + up to 2 fetches. Cover these areas where you find evidence: ERP/Finance, HCM, Asset Management (EAM), CIS/Billing, Project Controls, Procurement. ` +
+        `For EACH system report the exact evidence and the source URL. This is a competitive assessment a salesperson will rely on, so accuracy matters more than completeness: ` +
+        `if you cannot find real evidence for an area, OMIT it — never guess a vendor from what a utility "typically" runs.`,
+      system:
+        "Build a competitive picture of the systems this company runs, from the notes ONLY. " +
+        "systems = one entry per system you found real evidence for; evidence = the specific public tell (quote the job-posting phrase or press-release line); source = the URL; " +
+        "confidence: high = named in a vendor case study or their own filing, medium = named in their own job posting, low = indirect/inferred. " +
+        "incumbent = the primary ERP/finance vendor if the evidence supports one, else 'unclear'. " +
+        "angles = 2-4 honest displacement angles for an Oracle ERP/EPM/Primavera seller, each grounded in something specific in the notes (an ageing release, a fragmented estate, a system nearing end of support, a manual integration). " +
+        "Never invent a system, a customer relationship, or a weakness. If the evidence is thin, say so in summary and return fewer systems.",
     },
     decision: {
       tools: TOOLS(2, 2), maxTokens: 9000, extractModel: "claude-sonnet-5", extractTokens: 2000, notesCap: 14000,
