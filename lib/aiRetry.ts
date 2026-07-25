@@ -7,9 +7,18 @@ export async function withRetry<T>(fn: () => Promise<T>, tries = 3): Promise<T> 
   for (let i = 0; i < tries; i++) {
     try { return await fn(); } catch (e: any) {
       last = e;
-      const transient = (typeof e?.status === "number" && e.status >= 500) || /overloaded|api_error|internal server/i.test(String(e?.message ?? e));
+      // 429 is transient too — concurrent callers (the batch sweep runs four at
+      // once) hit the rate limit routinely, and treating it as fatal threw away
+      // work that would have succeeded a few seconds later.
+      const rateLimited = e?.status === 429 || /rate.?limit/i.test(String(e?.message ?? e));
+      const transient = rateLimited || (typeof e?.status === "number" && e.status >= 500) || /overloaded|api_error|internal server/i.test(String(e?.message ?? e));
       if (!transient || i === tries - 1) throw e;
-      await new Promise((r) => setTimeout(r, 3000 * (i + 1)));
+      // Honour Retry-After when the API sends one; back off harder on 429.
+      const hinted = Number(e?.headers?.["retry-after"] ?? e?.error?.retry_after);
+      const waitMs = Number.isFinite(hinted) && hinted > 0
+        ? Math.min(hinted * 1000, 60000)
+        : (rateLimited ? 8000 : 3000) * (i + 1);
+      await new Promise((r) => setTimeout(r, waitMs));
     }
   }
   throw last;

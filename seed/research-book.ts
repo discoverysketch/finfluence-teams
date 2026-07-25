@@ -10,12 +10,21 @@ import Anthropic from "@anthropic-ai/sdk";
 import { createClient } from "@supabase/supabase-js";
 import { runTask, costOf, type TaskKey, type Ent } from "../lib/researchTasks.ts";
 import { fetchProxy } from "../lib/proxy.ts";
+import { withRetry } from "../lib/aiRetry.ts";
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
 const CEILING = Number(process.argv[2]) || 45;
 const DRY = process.argv.includes("--dry");
-const CONCURRENCY = 4;
-const TASKS: TaskKey[] = ["comp", "decision", "hiring", "priorities"];
+// Concurrency 2, not 4: four parallel long requests hit the rate limit often
+// enough that retries were costing more time than the extra workers saved.
+const CONCURRENCY = 2;
+// --tasks=comp,hiring,decision — priorities is excluded by default: it's the
+// priciest facet (~$0.70) and goes stale fastest, so it's opt-in.
+const ALL: TaskKey[] = ["comp", "hiring", "decision", "priorities"];
+const arg = process.argv.find((a) => a.startsWith("--tasks="));
+const TASKS: TaskKey[] = arg
+  ? (arg.split("=")[1].split(",").filter((t) => (ALL as string[]).includes(t)) as TaskKey[])
+  : ["comp", "hiring", "decision"];
 
 const db = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!, { auth: { persistSession: false } });
 const client = new Anthropic();
@@ -70,7 +79,7 @@ async function worker(id: number) {
     if (!job) break;
     const label = `${job.task}/${job.ent.canonical_name.slice(0, 26)}`;
     try {
-      const { data, usage } = await runTask(client, job.ent, job.task, fetchProxy);
+      const { data, usage } = await withRetry(() => runTask(client, job.ent, job.task, fetchProxy), 4);
       // Same guard the priorities route applies: a priority without a source is dropped.
       if (job.task === "priorities") {
         data.priorities = (data.priorities ?? []).filter((p: any) => /^https?:\/\//.test(p.source)).slice(0, 8);
