@@ -1,6 +1,7 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { createClient } from "@/lib/supabase/server";
 import { withRetry, friendlyAiError } from "@/lib/aiRetry";
+import { canResearch } from "@/lib/canResearch";
 import { NextResponse } from "next/server";
 
 // Executive persona brief: public background on a named exec at the account —
@@ -32,6 +33,8 @@ export async function POST(request: Request) {
 
   const { contactId } = await request.json().catch(() => ({}));
   if (!contactId) return NextResponse.json({ error: "Missing person" }, { status: 400 });
+  const gate = await canResearch(supabase, user.id, { contactId });
+  if (!gate.ok) return NextResponse.json({ error: gate.reason }, { status: 403 });
   // RLS scopes this to the caller's tenant; join up to the account's company.
   const { data: c } = await supabase.from("contacts")
     .select("id, name, title, account:accounts(entity:entities(canonical_name))").eq("id", contactId).maybeSingle();

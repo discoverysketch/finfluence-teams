@@ -16,6 +16,7 @@ export default async function AccountPage({ params }: { params: Promise<{ accoun
   if (!user) redirect("/login");
   const { data: me } = await supabase.from("users").select("role").eq("id", user.id).maybeSingle();
   const isAdmin = me?.role === "admin";
+  const isManagerAdmin = me?.role === "admin" || me?.role === "manager";
 
   // RLS scopes this to the caller's tenant.
   const { data: acct } = await supabase.from("accounts")
@@ -92,6 +93,8 @@ export default async function AccountPage({ params }: { params: Promise<{ accoun
         ticker={ent?.ticker ?? null}
         initialNotes={acct.rep_notes}
         initialOwner={(acct as any).owner ?? null}
+        canAssign={isManagerAdmin}
+        canResearch={isManagerAdmin || (acct as any).owner === user.id}
         initialPriorities={ent?.priorities_json ?? null}
         prioritiesAt={ent?.priorities_at ?? null}
         initialContacts={(contacts ?? []) as Contact[]}

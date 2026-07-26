@@ -148,9 +148,9 @@ function EiaBlock({ eia }: { eia: EiaOps }) {
 type CForm = { id?: string; name: string; title: string; role_tag: string; email: string; phone: string; reports_to: string };
 const emptyC: CForm = { name: "", title: "", role_tag: "", email: "", phone: "", reports_to: "" };
 
-export default function Hub({ accountId, userId, entityId, ticker, initialNotes, initialOwner, initialPriorities, prioritiesAt, initialContacts, initialActivities, emailOf }: {
+export default function Hub({ accountId, userId, entityId, ticker, initialNotes, initialOwner, canAssign, canResearch, initialPriorities, prioritiesAt, initialContacts, initialActivities, emailOf }: {
   accountId: string; userId: string; entityId: string | null; ticker: string | null;
-  initialNotes: string | null; initialOwner: string | null;
+  initialNotes: string | null; initialOwner: string | null; canAssign: boolean; canResearch: boolean;
   initialPriorities: Priorities | null; prioritiesAt: string | null;
   initialContacts: Contact[]; initialActivities: Activity[]; emailOf: Record<string, string>;
 }) {
@@ -499,14 +499,22 @@ export default function Hub({ accountId, userId, entityId, ticker, initialNotes,
       {/* ---- Owner ---- */}
       <div style={{ display: "flex", alignItems: "center", gap: 8, margin: "10px 0 0" }}>
         <span style={{ fontSize: 12, fontWeight: 700, color: "var(--ink2)" }}>Owner</span>
-        <select value={owner ?? ""} onChange={(e) => saveOwner(e.target.value)}
-          style={{ fontSize: 12.5, padding: "5px 8px", borderRadius: 8, border: "1px solid var(--border)", maxWidth: 240 }}>
-          <option value="">Team (unassigned)</option>
-          {Object.entries(emailOf).map(([id, email]) => (
-            <option key={id} value={id}>{email}{id === userId ? " (me)" : ""}</option>
-          ))}
-        </select>
-        {!owner && <button className="mini" onClick={() => saveOwner(userId)}>Claim</button>}
+        {canAssign ? (
+          <select value={owner ?? ""} onChange={(e) => saveOwner(e.target.value)}
+            style={{ fontSize: 12.5, padding: "5px 8px", borderRadius: 8, border: "1px solid var(--border)", maxWidth: 240 }}>
+            <option value="">Team (unassigned)</option>
+            {Object.entries(emailOf).map(([id, email]) => (
+              <option key={id} value={id}>{email}{id === userId ? " (me)" : ""}</option>
+            ))}
+          </select>
+        ) : (
+          // Reps see who holds the account but can't reassign it — the DB
+          // enforces this too, so hiding the control isn't the only guard.
+          <span style={{ fontSize: 12.5, fontWeight: 700 }}>
+            {owner ? (emailOf[owner]?.split("@")[0] ?? "a teammate") : "Unassigned"}
+            {owner === userId ? " (you)" : ""}
+          </span>
+        )}
       </div>
 
       {/* ---- Where the company stands, read from its filings ---- */}
@@ -659,7 +667,7 @@ export default function Hub({ accountId, userId, entityId, ticker, initialNotes,
       )}
 
       {/* ---- Deep intel: hiring, comp metrics, fleet, muni financials ---- */}
-      {entityId && <DeepIntel entityId={entityId} />}
+      {entityId && <DeepIntel entityId={entityId} canResearch={canResearch} />}
 
       {/* ---- Signals: recent filings + news mentions for THIS account ---- */}
       {sig && (sig.events.length > 0 || sig.news.length > 0) && (
@@ -755,7 +763,7 @@ export default function Hub({ accountId, userId, entityId, ticker, initialNotes,
               cursor: execs?.loading || autoResearching ? "default" : "pointer", opacity: execs?.loading || autoResearching ? 0.45 : 1 }}>
             🔍 {autoResearching ? "Researching in the background…" : execs?.loading ? "Searching the web… (~1 min)" : "Find executives"}
           </button>
-          {contacts.some((c) => !c.persona_json) && (
+          {canResearch && contacts.some((c) => !c.persona_json) && (
             <button onClick={researchAllPeople} disabled={personaAll.busy}
               style={{ background: "#fff", border: "1.5px dashed #C9BFE0", color: "#6A3E8E", borderRadius: 10, padding: "10px 16px", fontSize: 14, fontWeight: 700, cursor: personaAll.busy ? "default" : "pointer", opacity: personaAll.busy ? 0.55 : 1 }}>
               🧠 {personaAll.busy ? `Researching people… ${personaAll.done}/${personaAll.total}${personaAll.failed ? ` · ${personaAll.failed} failed` : ""}` : `Research all ${contacts.filter((c) => !c.persona_json).length} people`}

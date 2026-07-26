@@ -3,6 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { withRetry, friendlyAiError } from "@/lib/aiRetry";
 import { runTask } from "@/lib/researchTasks";
+import { canResearch } from "@/lib/canResearch";
 import { NextResponse } from "next/server";
 
 // Decision-authority research: does this company make its own enterprise-
@@ -50,6 +51,9 @@ export async function POST(request: Request) {
     if (error) return NextResponse.json({ error: `${error.message} (run migration 0018?)` }, { status: 500 });
     return NextResponse.json({ ok: true });
   }
+
+  const gate = await canResearch(supabase, user.id, { entityId });
+  if (!gate.ok) return NextResponse.json({ error: gate.reason }, { status: 403 });
 
   const client = new Anthropic();
   try {

@@ -19,7 +19,7 @@ const META: Record<Facet, { icon: string; label: string; blurb: string }> = {
   infer: { icon: "🔮", label: "Informed read (no filings)", blurb: "This company files nothing public — what's typical for its type, and what to confirm." },
 };
 
-export default function DeepIntel({ entityId }: { entityId: string }) {
+export default function DeepIntel({ entityId, canResearch = true }: { entityId: string; canResearch?: boolean }) {
   const supabase = createClient();
   const [data, setData] = useState<Record<string, any>>({});
   const [at, setAt] = useState<Record<string, string | null>>({});
@@ -107,7 +107,14 @@ export default function DeepIntel({ entityId }: { entityId: string }) {
       <div className="secttl">🔎 Deep intel</div>
       <div className="card" style={{ padding: "6px 12px" }}>
 
-        {/* ---- one button for every topic, with live progress ---- */}
+        {/* Reading is open to the whole team; running research belongs to the
+            assigned rep, so non-owners get the findings without the buttons. */}
+        {!canResearch && (
+          <div style={{ padding: "8px 0 10px", borderBottom: "1px solid #F0EAE0", fontSize: 11.5, color: "var(--muted)" }}>
+            Viewing the team&apos;s research. Only the assigned rep (or an admin) can run new lookups on this account.
+          </div>
+        )}
+        {canResearch && (
         <div style={{ padding: "8px 0 10px", borderBottom: "1px solid #F0EAE0" }}>
           <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
             <button className="btn" style={{ background: "var(--teal)", padding: "8px 13px", fontSize: 13 }}
@@ -126,6 +133,7 @@ export default function DeepIntel({ entityId }: { entityId: string }) {
             <div className="di-track"><div className="di-fill" style={{ width: `${Math.round((sweep.done / Math.max(1, sweep.total)) * 100)}%` }} /></div>
           )}
         </div>
+        )}
 
         {facets.map((f, i) => {
           const d = data[f];
@@ -142,9 +150,11 @@ export default function DeepIntel({ entityId }: { entityId: string }) {
                   {f === "stack" && !d && <span style={{ marginLeft: 6, fontSize: 9.5, fontWeight: 700, color: "#6B6254", background: "#F0EAE0", borderRadius: 4, padding: "1px 6px" }}>ON DEMAND</span>}
                   {d && <span style={{ marginLeft: 6, fontSize: 11, color: "var(--muted)" }}>{isOpen ? "▾" : "▸"}</span>}
                 </button>
-                <button className="mini" onClick={() => research(f)} disabled={anyBusy}>
-                  {running ? "…" : d ? "↻" : "Research"}
-                </button>
+                {canResearch && (
+                  <button className="mini" onClick={() => research(f)} disabled={anyBusy}>
+                    {running ? "…" : d ? "↻" : "Research"}
+                  </button>
+                )}
               </div>
               {running && (
                 <div className="di-work">

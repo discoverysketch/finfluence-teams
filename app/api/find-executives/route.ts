@@ -1,5 +1,6 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { createClient } from "@/lib/supabase/server";
+import { canResearch } from "@/lib/canResearch";
 import { NextResponse } from "next/server";
 import { researchExecutives } from "@/lib/execResearch";
 
@@ -19,6 +20,8 @@ export async function POST(request: Request) {
 
   const { accountId } = await request.json().catch(() => ({}));
   if (!accountId) return NextResponse.json({ error: "Missing account" }, { status: 400 });
+  const gate = await canResearch(supabase, user.id, { accountId });
+  if (!gate.ok) return NextResponse.json({ error: gate.reason }, { status: 403 });
   // RLS scopes this read — resolves only for accounts in the caller's tenant.
   const { data: acct } = await supabase.from("accounts")
     .select("id, entity:entities(canonical_name, hq_state)").eq("id", accountId).maybeSingle();

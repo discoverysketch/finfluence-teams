@@ -3,6 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { withRetry, friendlyAiError } from "@/lib/aiRetry";
 import { runTask } from "@/lib/researchTasks";
+import { canResearch } from "@/lib/canResearch";
 import { NextResponse } from "next/server";
 
 // "What leadership is saying": management's OWN publicly-stated priorities,
@@ -44,6 +45,9 @@ export async function POST(request: Request) {
 
   const { entityId } = await request.json().catch(() => ({}));
   if (!entityId) return NextResponse.json({ error: "Missing account" }, { status: 400 });
+  const gate = await canResearch(supabase, user.id, { entityId });
+  if (!gate.ok) return NextResponse.json({ error: gate.reason }, { status: 403 });
+
   const { data: ent } = await supabase.from("entities").select("id, canonical_name, ticker, hq_state").eq("id", entityId).maybeSingle();
   if (!ent) return NextResponse.json({ error: "Entity not found" }, { status: 404 });
 
