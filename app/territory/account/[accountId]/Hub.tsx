@@ -160,6 +160,10 @@ export default function Hub({ accountId, userId, entityId, ticker, initialNotes,
   const [owner, setOwner] = useState<string | null>(initialOwner);
   const [priorities, setPriorities] = useState<Priorities | null>(initialPriorities);
   const [prioAt, setPrioAt] = useState<string | null>(prioritiesAt);
+  // Failures used to write to the page-level message at the top of the Hub,
+  // far above this section — the user clicked, it failed, and the explanation
+  // scrolled off-screen, so it read as "nothing happened".
+  const [prioErr, setPrioErr] = useState("");
   const [prioBusy, setPrioBusy] = useState(false);
   const [personView, setPersonView] = useState<Contact | null>(null);
   const [personaBusy, setPersonaBusy] = useState(false);
@@ -237,13 +241,13 @@ export default function Hub({ accountId, userId, entityId, ticker, initialNotes,
 
   async function researchPriorities() {
     if (prioBusy || !entityId) return;
-    setPrioBusy(true); setMsg("");
+    setPrioBusy(true); setPrioErr("");
     try {
       const r = await fetch("/api/research-priorities", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ entityId }) });
       const j = await r.json().catch(() => null);
-      if (!r.ok || !j?.priorities) { setMsg(j?.error || "Couldn't research priorities."); return; }
+      if (!r.ok || !j?.priorities) { setPrioErr(j?.error || "Couldn't research priorities — try again."); return; }
       setPriorities(j.priorities); setPrioAt(j.at);
-    } catch { setMsg("Network error."); }
+    } catch { setPrioErr("Network error — check your connection and try again."); }
     finally { setPrioBusy(false); }
   }
   async function researchPerson(c: Contact) {
@@ -640,13 +644,15 @@ export default function Hub({ accountId, userId, entityId, ticker, initialNotes,
                 Pull management&apos;s own stated priorities from their latest earnings call and 10-K/8-K — quotes, sources, and how to tie value to each. Public sources only.
               </p>
               <button className="btn" onClick={researchPriorities} disabled={prioBusy}>
-                {prioBusy ? "Researching… (~1 min)" : "🔎 Research their priorities"}
+                {prioBusy ? "Researching… (~2 min)" : "🔎 Research their priorities"}
               </button>
+              {prioErr && <div style={{ fontSize: 12.5, color: "var(--red)", fontWeight: 600, marginTop: 8 }}>{prioErr}</div>}
             </div>
           ) : (
             <div className="card" style={{ padding: "13px 14px" }}>
               <div style={{ fontSize: 13.5, lineHeight: 1.5, marginBottom: 4 }}>{priorities.summary}</div>
               <div style={{ fontSize: 11, color: "var(--muted)", marginBottom: 10 }}>As of {priorities.as_of}{prioAt ? ` · pulled ${fmtDate(prioAt)}` : ""}</div>
+              {prioErr && <div style={{ fontSize: 12.5, color: "var(--red)", fontWeight: 600, marginBottom: 8 }}>{prioErr}</div>}
               {priorities.priorities.map((p, i) => (
                 <div key={i} style={{ padding: "9px 0", borderTop: i ? "1px solid #F0EAE0" : "none" }}>
                   <div style={{ fontSize: 13.5, fontWeight: 800 }}>{p.theme}</div>

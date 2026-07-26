@@ -13,7 +13,7 @@
 html, body { margin: 0; padding: 0; }
 body {
   font-family: "Source Sans 3", "Segoe UI", system-ui, sans-serif;
-  color: var(--ink); min-height: 100vh;
+  color: var(--ink); min-height: 100dvh;
   background: var(--cream);
 }
 /* Fixed gradient as an isolated layer, NOT background-attachment:fixed —
@@ -35,8 +35,7 @@ h2 { font-size: 19px; font-weight: 700; letter-spacing: -.01em; }
 /* App header — frosted dark */
 .appbar {
   display: flex; align-items: center; gap: 10px;
-  background: rgba(26, 28, 39, .92);
-  -webkit-backdrop-filter: blur(12px) saturate(1.3); backdrop-filter: blur(12px) saturate(1.3);
+  background: #1B1D26;
   color: #fff; padding: 12px 16px;
   position: sticky; top: 0; z-index: 20;
   border-bottom: 1px solid rgba(255, 255, 255, .07);
@@ -49,15 +48,20 @@ h2 { font-size: 19px; font-weight: 700; letter-spacing: -.01em; }
 .appbar .lvl { background: rgba(255,255,255,.1); border: 1px solid rgba(255,255,255,.08); border-radius: 8px; padding: 4px 10px; font-weight: 700; font-size: 13px; }
 .appbar .lvl b { color: var(--gold); }
 
-/* Bottom nav — frosted dark, active indicator */
+/* Bottom nav — pinned, opaque, active indicator.
+   NO backdrop-filter here, deliberately. A blurred backdrop on a
+   position:fixed bar forces the browser to recomposite everything behind it
+   on every scroll frame, and on mobile the bar flickers or drops out
+   entirely. Compositing hints (translateZ/will-change) did not fix it; only
+   removing the blur does. The background is fully opaque so nothing needs
+   to be sampled from behind the bar at all. */
 .nav {
   position: fixed; left: 0; right: 0; bottom: 0; max-width: 520px; margin: 0 auto;
   display: flex;
-  background: rgba(26, 28, 39, .94);
-  -webkit-backdrop-filter: blur(12px) saturate(1.3); backdrop-filter: blur(12px) saturate(1.3);
+  background: #1B1D26;
   border-top: 1px solid rgba(255,255,255,.07);
-  box-shadow: 0 -8px 24px rgba(20, 15, 5, .10);
-  z-index: 20;
+  box-shadow: 0 -8px 24px rgba(20, 15, 5, .18);
+  z-index: 30;
   padding-bottom: env(safe-area-inset-bottom);
   /* Own compositing layer — keeps the fixed bar pinned and repainting
      cleanly through momentum scroll instead of flickering/vanishing. */

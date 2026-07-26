@@ -11,6 +11,19 @@ export type TaskResult = { data: any; usage: { model: string; input: number; out
 // Injected by the caller so the Next route and the node seed script can each
 // import lib/proxy the way their own module resolver expects.
 export type FetchProxy = (cik: string) => Promise<{ url: string; filed: string; section: string } | null>;
+export type FetchLeadership = (cik: string) => Promise<{
+  earnings: { url: string; filed: string; text: string } | null;
+  mdna: { url: string; filed: string; text: string } | null;
+}>;
+
+// Every research call aborts at 210s. The serverless function dies at 300s,
+// and a request that reaches that point returns an opaque gateway error after
+// the user has already waited five minutes. Failing earlier, with a message,
+// is strictly better. Priorities used to run 914s and could never succeed.
+const DEADLINE_MS = 210_000;
+const NO_BATCH =
+  "Run ONE search at a time and read each result before the next — do NOT batch several queries into a single code block. " +
+  "Batching burns the whole search allowance in one burst and returns nothing. Stop as soon as you have what you need.";
 
 const u = (model: string, usage: any) => ({
   model, input: usage.input_tokens ?? 0, output: usage.output_tokens ?? 0,
@@ -126,7 +139,7 @@ const TOOLS = (search: number, fetch: number, contentTokens = 30000) => [
   { type: "web_fetch_20260209", name: "web_fetch", max_uses: fetch, max_content_tokens: contentTokens } as any,
 ];
 
-export async function runTask(client: Anthropic, ent: Ent, key: TaskKey, fetchProxy?: FetchProxy): Promise<TaskResult> {
+export async function runTask(client: Anthropic, ent: Ent, key: TaskKey, fetchProxy?: FetchProxy, fetchLeadership?: FetchLeadership): Promise<TaskResult> {
   const usage: TaskResult["usage"] = [];
   const NL = String.fromCharCode(10);
   const SEP = NL + NL + "---" + NL + NL;
@@ -149,7 +162,7 @@ export async function runTask(client: Anthropic, ent: Ent, key: TaskKey, fetchPr
         "employees = total employee count if the excerpt states it, else 0. summary = 2 sentences on how leadership is measured. " +
         "Use ONLY the excerpt — never invent a metric or figure.",
       messages: [{ role: "user", content: `Company: ${ent.canonical_name}\nProxy: ${proxy.url} (filed ${proxy.filed})\n\nExcerpt:\n${proxy.section}` }],
-    });
+    }, { timeout: DEADLINE_MS });
     usage.push(u("claude-opus-4-8", res.usage));
     const data = JSON.parse(textOf(res));
     data.source = proxy.url;
@@ -157,22 +170,50 @@ export async function runTask(client: Anthropic, ent: Ent, key: TaskKey, fetchPr
     return { data, usage };
   }
 
+  // PRIORITIES is deterministic too. What leadership is saying lives in known
+  // places: the CEO/CFO quotes are in the 8-K earnings release (Item 2.02) and
+  // the strategy is in 10-K Item 7 MD&A. Searching the open web for it took
+  // 914s and never completed inside the function limit; fetching the two known
+  // documents takes seconds and returns the same quotes every time.
+  if (key === "priorities" && fetchLeadership && ent.cik) {
+    const docs = await fetchLeadership(ent.cik);
+    const parts: string[] = [];
+    if (docs.earnings) parts.push(`EARNINGS RELEASE (8-K Item 2.02, filed ${docs.earnings.filed})` + NL + docs.earnings.url + NL + docs.earnings.text);
+    if (docs.mdna) parts.push(`10-K ITEM 7 MD&A (filed ${docs.mdna.filed})` + NL + docs.mdna.url + NL + docs.mdna.text);
+    if (parts.length) {
+      const res = await client.messages.create({
+        model: "claude-opus-4-8", max_tokens: 3500,
+        output_config: { format: { type: "json_schema", schema: SCHEMAS.priorities } } as any,
+        system:
+          "Extract what LEADERSHIP is publicly prioritising, from these filings ONLY. The earnings release carries direct CEO/CFO quotes; the MD&A carries strategy, capital plans and outlook. " +
+          "summary = 2 sentences on the strategic posture. Each priority: theme (3-6 words), detail (1-2 sentences), quote (a REAL verbatim quote from the text — prefer the executive quotes in the earnings release; empty string if none), " +
+          "who (name + title if stated), source (use the filing URL given above the text it came from), " +
+          "angle (one line on how an Oracle ERP/EPM/Primavera seller ties value to it). as_of = the period the newest document covers. " +
+          "Focus on things an enterprise-software seller could tie value to: capital programme, O&M and cost discipline, rate cases, digital/technology modernisation, load growth, credit. Never invent a quote or figure.",
+        messages: [{ role: "user", content: `Company: ${ent.canonical_name}` + SEP + parts.join(SEP) }],
+      }, { timeout: DEADLINE_MS });
+      usage.push(u("claude-opus-4-8", res.usage));
+      return { data: JSON.parse(textOf(res)), usage };
+    }
+    // No filings found (non-filer) — fall through to the web-search path below.
+  }
+
   const CFG: Record<Exclude<TaskKey, "comp" | "stack">, { tools: any[]; maxTokens: number; prompt: string; extractModel: string; extractTokens: number; system: string; notesCap: number }> = {
     hiring: {
-      tools: TOOLS(3, 2, 24000), maxTokens: 9000, extractModel: "claude-opus-4-8", extractTokens: 3000, notesCap: 16000,
+      tools: TOOLS(3, 1, 18000), maxTokens: 9000, extractModel: "claude-opus-4-8", extractTokens: 3000, notesCap: 16000,
       prompt:
         `Research CURRENT open job postings at ${ent.canonical_name} (a US utility) that signal an enterprise-software or finance-systems initiative. ` +
         `Search their careers page and job boards for roles like: Oracle/SAP/Workday ERP, financial systems analyst/manager, capital-project systems, EPM/planning, procurement systems, IT applications, digital transformation, controller/close roles. ` +
-        `Budget: 2-3 searches + up to 2 fetches. List the relevant open roles with WHY each is a buying signal and the source URL. If nothing relevant is open, say so. signal = hot (multiple systems/ERP roles), warm (some finance-systems roles), quiet (nothing notable).`,
+        `${NO_BATCH} Budget: 3 searches + at most 1 fetch. List the relevant open roles with WHY each is a buying signal and the source URL. If nothing relevant is open, say so. signal = hot (multiple systems/ERP roles), warm (some finance-systems roles), quiet (nothing notable).`,
       system: "Structure the hiring research from the notes. Use ONLY cited facts — never invent numbers, roles, or quotes. Include a source URL. Keep it tight and factual.",
     },
     priorities: {
-      tools: TOOLS(3, 3), maxTokens: 9000, extractModel: "claude-opus-4-8", extractTokens: 3500, notesCap: 18000,
+      tools: TOOLS(4, 1, 18000), maxTokens: 9000, extractModel: "claude-opus-4-8", extractTokens: 3500, notesCap: 18000,
       prompt:
         `Research what leadership at ${ent.canonical_name}${ent.ticker ? ` (${ent.ticker})` : ""}${ent.hq_state ? `, a ${ent.hq_state} US utility` : ", a US utility"} is PUBLICLY PRIORITIZING right now. ` +
         `Sources, in order: (1) their MOST RECENT quarterly EARNINGS CALL — search "${ent.canonical_name} earnings call transcript" and read it for what the CEO/CFO emphasize (capital program, O&M / cost discipline, rate cases, technology/digital modernization, load growth, credit); ` +
         `(2) their latest 10-K management discussion (MD&A) and strategy; (3) any recent 8-K on a material strategic move. ` +
-        `Budget: ~3 searches + 3 page fetches. For each priority theme capture: a short DIRECT QUOTE from an executive or filing, WHO said it, and the source URL. ` +
+        `${NO_BATCH} Budget: 4 searches + at most 1 page fetch — prefer quotes visible in search results over fetching whole transcripts, which is what made this time out. For each priority theme capture: a short DIRECT QUOTE from an executive or filing, WHO said it, and the source URL. ` +
         `Focus on things an enterprise-software seller (finance, capital-project, cost, digital systems) could tie value to. Only report what you actually found with a citation.`,
       system:
         "Structure the leadership priorities from the notes. Use ONLY what's cited in the notes — never invent a quote or figure. " +
@@ -199,12 +240,12 @@ export async function runTask(client: Anthropic, ent: Ent, key: TaskKey, fetchPr
         "If you cannot place the company confidently, say so in profile and return fewer areas.",
     },
     decision: {
-      tools: TOOLS(2, 2), maxTokens: 9000, extractModel: "claude-sonnet-5", extractTokens: 2000, notesCap: 14000,
+      tools: TOOLS(3, 1, 18000), maxTokens: 9000, extractModel: "claude-sonnet-5", extractTokens: 2000, notesCap: 14000,
       prompt:
         `Research where enterprise-software and major procurement DECISIONS are made for ${ent.canonical_name}${ent.hq_state ? ` (${ent.hq_state})` : ""}, a US utility/energy company. ` +
         `Key question: does it operate autonomously (own CFO/CIO sign for major systems), or does a corporate parent centralize IT/procurement/shared services? ` +
         `Evidence to look for: whether it is a subsidiary and of whom; centralized shared-services or procurement organizations at the parent; a single ERP/IT organization across the family; where the CIO/CFO for the family sit. ` +
-        `Budget: up to 2 searches + 2 page fetches. Report what you found with the URL of the best source. If evidence is thin, say so.`,
+        `${NO_BATCH} Budget: up to 3 searches + 1 page fetch. Report what you found with the URL of the best source. If evidence is thin, say so.`,
       system:
         "From the research notes, decide the decision locus for major software purchases at this company: " +
         "'local' (it signs for itself), 'corporate' (a parent decides — name it in `parent`), or 'mixed' (depends / shared). " +
@@ -227,7 +268,7 @@ export async function runTask(client: Anthropic, ent: Ent, key: TaskKey, fetchPr
       model: "claude-sonnet-5", max_tokens: 10000,
       tools: [
         { type: "web_search_20260209", name: "web_search", max_uses: 6 } as any,
-        { type: "web_fetch_20260209", name: "web_fetch", max_uses: 3, max_content_tokens: 24000 } as any,
+        { type: "web_fetch_20260209", name: "web_fetch", max_uses: 2, max_content_tokens: 18000 } as any,
       ],
       messages: [{ role: "user", content:
         `Which ENTERPRISE SYSTEMS does ${ent.canonical_name} (a US utility/energy company) run TODAY? Public evidence only.` + SEP +
@@ -247,7 +288,7 @@ export async function runTask(client: Anthropic, ent: Ent, key: TaskKey, fetchPr
         `- Vendor press releases and customer case studies naming them; their 10-K technology discussion.` + SEP +
         `An EXISTING Oracle footprint matters as much as a competitor's — if they already run Oracle anywhere, say so explicitly.` + NL +
         `Report the exact evidence and source URL for each system found. If an area has no real evidence, OMIT it — never infer a vendor from what a utility "typically" runs.` }],
-    });
+    }, { timeout: DEADLINE_MS });
     usage.push(u("claude-sonnet-5", res.usage));
     const notes = textOf(res);
     if (!notes) throw new Error("research came back empty");
@@ -264,7 +305,7 @@ export async function runTask(client: Anthropic, ent: Ent, key: TaskKey, fetchPr
         "If they ALREADY run Oracle products, frame the angles as expansion and consolidation (EBS to Fusion, adding EPM or Primavera alongside the existing footprint), NOT displacement — and say so in summary. " +
         "Never invent a system, a customer relationship, or a weakness.",
       messages: [{ role: "user", content: `Company: ${ent.canonical_name}` + SEP + `Research notes:` + NL + notes.slice(0, 24000) }],
-    });
+    }, { timeout: DEADLINE_MS });
     usage.push(u("claude-opus-4-8", ex.usage));
     const parsed = JSON.parse(textOf(ex));
     const RANK: Record<string, number> = { high: 3, medium: 2, low: 1 };
@@ -286,7 +327,7 @@ export async function runTask(client: Anthropic, ent: Ent, key: TaskKey, fetchPr
   const research = await client.messages.create({
     model: "claude-sonnet-5", max_tokens: cfg.maxTokens, tools: cfg.tools,
     messages: [{ role: "user", content: cfg.prompt }],
-  });
+  }, { timeout: DEADLINE_MS });
   usage.push(u("claude-sonnet-5", research.usage));
   const notes = textOf(research);
   if (!notes) throw new Error("research came back empty");
@@ -296,7 +337,7 @@ export async function runTask(client: Anthropic, ent: Ent, key: TaskKey, fetchPr
     output_config: { format: { type: "json_schema", schema: SCHEMAS[key] } } as any,
     system: cfg.system,
     messages: [{ role: "user", content: `Company: ${ent.canonical_name}\n\nResearch notes:\n${notes.slice(0, cfg.notesCap)}` }],
-  });
+  }, { timeout: DEADLINE_MS });
   usage.push(u(cfg.extractModel, extract.usage));
   const parsed = JSON.parse(textOf(extract));
 

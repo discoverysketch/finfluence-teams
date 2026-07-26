@@ -108,3 +108,59 @@ export async function fetchProxy(cik: string): Promise<ProxyDoc | null> {
     chars: text.length,
   };
 }
+
+// ---------------------------------------------------------------------------
+// "What leadership is saying" lives in known places too, so it doesn't need a
+// web search either. Executive quotes are in the 8-K earnings release (Item
+// 2.02, filed as an EX-99 exhibit — short, quotable, and always the CEO/CFO
+// on the quarter). Strategy and outlook are in 10-K Item 7 MD&A. Both are
+// addressable from the submissions index, exactly like the proxy.
+export type LeadershipDocs = {
+  earnings: { url: string; filed: string; text: string } | null;
+  mdna: { url: string; filed: string; text: string } | null;
+};
+
+async function primaryDoc(cik: string, form: string, matchItem?: RegExp): Promise<{ url: string; filed: string; html: string } | null> {
+  const pad = String(cik).padStart(10, "0");
+  const r = await fetch(`https://data.sec.gov/submissions/CIK${pad}.json`, { headers: UA });
+  if (!r.ok) return null;
+  const j: any = await r.json();
+  const rec = j?.filings?.recent;
+  if (!rec?.form) return null;
+  for (let i = 0; i < rec.form.length; i++) {
+    if (String(rec.form[i]).toUpperCase() !== form) continue;
+    if (matchItem && !matchItem.test(String(rec.items?.[i] ?? ""))) continue;
+    const acc = String(rec.accessionNumber[i]);
+    const nodash = acc.replace(/-/g, "");
+    const base = `https://www.sec.gov/Archives/edgar/data/${Number(cik)}/${nodash}`;
+    const doc = String(rec.primaryDocument?.[i] ?? "");
+    if (!doc) continue;
+    const res = await fetch(`${base}/${doc}`, { headers: UA });
+    if (!res.ok) continue;
+    return { url: `${base}/${doc}`, filed: String(rec.filingDate?.[i] ?? ""), html: await res.text() };
+  }
+  return null;
+}
+
+// Item 7 runs from the MD&A heading to Item 7A/8. Take the real section, not a
+// fixed prefix — the table of contents mentions the heading first.
+function mdnaSlice(text: string, budget = 45000): string {
+  const starts = [...text.matchAll(/item\s*7[.\s—-]*\s*management'?s?\s+discussion/gi)].map((m) => m.index ?? 0);
+  const start = starts.length ? starts[starts.length - 1] : text.search(/management'?s?\s+discussion\s+and\s+analysis/i);
+  if (start < 0) return text.slice(0, budget);
+  const after = text.slice(start);
+  const end = after.search(/item\s*7A[.\s—-]*\s*quantitative|item\s*8[.\s—-]*\s*financial\s+statements/i);
+  return (end > 2000 ? after.slice(0, end) : after).slice(0, budget);
+}
+
+export async function fetchLeadershipDocs(cik: string): Promise<LeadershipDocs> {
+  // 2.02 = Results of Operations; that 8-K's release carries the quotes.
+  const [er, tenk] = await Promise.all([
+    primaryDoc(cik, "8-K", /2\.02/).catch(() => null),
+    primaryDoc(cik, "10-K").catch(() => null),
+  ]);
+  return {
+    earnings: er ? { url: er.url, filed: er.filed, text: clean(er.html).slice(0, 30000) } : null,
+    mdna: tenk ? { url: tenk.url, filed: tenk.filed, text: mdnaSlice(clean(tenk.html)) } : null,
+  };
+}

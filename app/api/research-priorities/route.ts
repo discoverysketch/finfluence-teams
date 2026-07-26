@@ -3,6 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { withRetry, friendlyAiError } from "@/lib/aiRetry";
 import { runTask } from "@/lib/researchTasks";
+import { fetchProxy, fetchLeadershipDocs } from "@/lib/proxy";
 import { canResearch } from "@/lib/canResearch";
 import { NextResponse } from "next/server";
 
@@ -48,14 +49,14 @@ export async function POST(request: Request) {
   const gate = await canResearch(supabase, user.id, { entityId });
   if (!gate.ok) return NextResponse.json({ error: gate.reason }, { status: 403 });
 
-  const { data: ent } = await supabase.from("entities").select("id, canonical_name, ticker, hq_state").eq("id", entityId).maybeSingle();
+  const { data: ent } = await supabase.from("entities").select("id, canonical_name, ticker, hq_state, cik").eq("id", entityId).maybeSingle();
   if (!ent) return NextResponse.json({ error: "Entity not found" }, { status: 404 });
 
   const client = new Anthropic();
   try {
     // Shared definition (lib/researchTasks) so the batch sweep and this button
     // research every account to exactly the same standard.
-    const { data: parsed } = await withRetry(() => runTask(client, ent as any, "priorities"));
+    const { data: parsed } = await withRetry(() => runTask(client, ent as any, "priorities", fetchProxy, fetchLeadershipDocs));
     parsed.priorities = (parsed.priorities ?? []).filter((p: any) => /^https?:\/\//.test(p.source)).slice(0, 8);
     if (!parsed.priorities.length) return NextResponse.json({ error: "No citable priorities found — try again." }, { status: 502 });
 

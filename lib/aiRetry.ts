@@ -34,6 +34,8 @@ export function friendlyAiError(e: unknown): string {
     const when = raw.match(/regain access on (\d{4}-\d{2}-\d{2})/i)?.[1];
     return `AccountFluency's AI budget for this period has been used up${when ? ` — it resets on ${when}` : ""}. Ask your admin to raise the limit if you need it sooner.`;
   }
+  // We abort research at 210s rather than let it hang into a gateway timeout.
+  if (/timed out|timeout|aborted/i.test(raw)) return "That lookup took too long and was stopped. Try again — if it keeps timing out, the sources for this account are unusually slow.";
   if (/rate.?limit|429/i.test(raw)) return "Hit the AI rate limit — wait a moment and try again.";
   return raw.length > 200 ? raw.slice(0, 200) + "…" : raw;
 }
