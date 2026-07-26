@@ -4,6 +4,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { withRetry, friendlyAiError } from "@/lib/aiRetry";
 import { runTask } from "@/lib/researchTasks";
 import { fetchProxy } from "@/lib/proxy";
+import { resolveAts, buildHiringFromAts } from "@/lib/ats";
 import { canResearch } from "@/lib/canResearch";
 import { NextResponse } from "next/server";
 
@@ -70,7 +71,7 @@ export async function POST(request: Request) {
   const gate = await canResearch(supabase, user.id, { entityId });
   if (!gate.ok) return NextResponse.json({ error: gate.reason }, { status: 403 });
 
-  const { data: ent } = await supabase.from("entities").select("id, canonical_name, ticker, hq_state, cik").eq("id", entityId).maybeSingle();
+  const { data: ent } = await supabase.from("entities").select("id, canonical_name, ticker, hq_state, cik, website, ats_platform, ats_url, hiring_json, stack_json, profile_json, priorities_json").eq("id", entityId).maybeSingle();
   if (!ent) return NextResponse.json({ error: "Entity not found" }, { status: 404 });
 
   const client = new Anthropic();
@@ -78,8 +79,31 @@ export async function POST(request: Request) {
     // comp + hiring come from the shared task definitions (lib/researchTasks)
     // so the in-app buttons and the batch sweep produce identical data. comp
     // is deterministic there: DEF 14A straight from EDGAR, no web search.
+    // HIRING prefers the company's own ATS: free, complete and live, where the
+    // web search it replaces returned "QUIET" for half the book simply because
+    // it never found the careers site. Search remains the fallback for tenants
+    // we cannot resolve (Taleo and iCIMS have no clean public feed).
+    if (mode === "hiring") {
+      try {
+        const hit = await resolveAts(ent as any);
+        if (hit) {
+          const built = await buildHiringFromAts(ent.canonical_name, hit, 40);
+          if (built) {
+            const admin = createAdminClient();
+            await admin.from("entities").update({
+              hiring_json: built.data, hiring_at: new Date().toISOString(),
+              ats_platform: hit.platform, ats_url: hit.url, ats_at: new Date().toISOString(),
+            }).eq("id", entityId);
+            return NextResponse.json({ data: built.data });
+          }
+        }
+      } catch { /* fall through to search */ }
+    }
+
     if (mode === "comp" || mode === "hiring" || mode === "stack" || mode === "infer") {
-      const { data: parsed } = await withRetry(() => runTask(client, ent as any, mode, fetchProxy));
+      // Free evidence the battlecard would otherwise pay to rediscover.
+      const atsVendors = mode === "stack" ? ((ent as any).hiring_json?.vendors ?? []) : undefined;
+      const { data: parsed } = await withRetry(() => runTask(client, ent as any, mode, fetchProxy, undefined, atsVendors));
       const admin = createAdminClient();
 
       // The battlecard ACCUMULATES. Runs legitimately surface different

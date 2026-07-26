@@ -139,7 +139,7 @@ const TOOLS = (search: number, fetch: number, contentTokens = 30000) => [
   { type: "web_fetch_20260209", name: "web_fetch", max_uses: fetch, max_content_tokens: contentTokens } as any,
 ];
 
-export async function runTask(client: Anthropic, ent: Ent, key: TaskKey, fetchProxy?: FetchProxy, fetchLeadership?: FetchLeadership): Promise<TaskResult> {
+export async function runTask(client: Anthropic, ent: Ent, key: TaskKey, fetchProxy?: FetchProxy, fetchLeadership?: FetchLeadership, atsVendors?: { vendor: string; mentions: number; titles: string[] }[]): Promise<TaskResult> {
   const usage: TaskResult["usage"] = [];
   const NL = String.fromCharCode(10);
   const SEP = NL + NL + "---" + NL + NL;
@@ -272,6 +272,10 @@ export async function runTask(client: Anthropic, ent: Ent, key: TaskKey, fetchPr
       ],
       messages: [{ role: "user", content:
         `Which ENTERPRISE SYSTEMS does ${ent.canonical_name} (a US utility/energy company) run TODAY? Public evidence only.` + SEP +
+        (atsVendors?.length
+          ? `ALREADY CONFIRMED from their own job postings — treat these as established and do not re-verify; spend your searches on the areas NOT covered here:` + NL +
+            atsVendors.map((v) => `  - ${v.vendor} (named in ${v.mentions} posting${v.mentions === 1 ? "" : "s"}: ${v.titles.slice(0, 2).join("; ")})`).join(NL) + SEP
+          : "") +
         `RUN ONE SEARCH AT A TIME and read each result before the next — do NOT batch several queries into a single code block. ` +
         `Batching burns the whole search allowance in one burst and returns nothing. Stop as soon as you have covered the areas below or run low on searches.` + SEP +
         `SEARCH BY AREA, NOT BY VENDOR — never guess a vendor and look for confirmation; ask what fills each slot:` + NL +

@@ -183,30 +183,55 @@ export async function discover(website: string): Promise<{ platform: string; a: 
 // Whole-word only, over posting TEXT — never the JSON keys. A naive scan
 // matched "Workday" on all 72 Con Edison postings because the payload has a
 // "WorkDays" field.
-const VENDORS: [RegExp, string][] = [
-  [/\boracle\s+(?:fusion|cloud|ebs|e-business|hcm|erp|epm)\b|\boracle\b/i, "Oracle"],
-  [/\bSAP\b|\bS\/4\s?HANA\b|\bSuccessFactors\b/i, "SAP"],
-  [/\bworkday\b/i, "Workday"],
-  [/\bmaximo\b/i, "IBM Maximo"],
-  [/\bpeoplesoft\b/i, "PeopleSoft"],
-  [/\bhyperion\b/i, "Hyperion"],
-  [/\bprimavera\b|\bP6\b/i, "Primavera"],
-  [/\bsalesforce\b/i, "Salesforce"],
-  [/\bitron\b/i, "Itron"],
-  [/\binformatica\b/i, "Informatica"],
-  [/\bODI\b|oracle data integrator/i, "Oracle Data Integrator"],
-  [/\bIFS\b/i, "IFS"],
-  [/\bInfor\b/i, "Infor"],
+// ------------------------------------------------------------ system scan
+// Some vendor names are ordinary English ("for the duration of the workday")
+// or common acronyms, so those must appear in a SYSTEMS context to count. The
+// naive version reported Workday x39 at Con Edison — every one of them that
+// phrase, at a company we know runs Oracle Fusion HCM.
+const CONTEXT = /(HCM|HRIS|ERP|EPM|financials?|payroll|platform|system|module|tenant|instance|suite|cloud|implementation|administrat|developer|analyst|integration|upgrade|migration)/i;
+
+// [pattern, label, requires systems context nearby]
+const VENDORS: [RegExp, string, boolean][] = [
+  [/\boracle\b/i, "Oracle", true],
+  [/\bSAP\b|\bS\/4\s?HANA\b|\bSuccessFactors\b/i, "SAP", true],
+  // "workday" is too common as plain English for a nearby-context test to be
+  // safe — "duration of the workday" sat next to "no systems experience" and
+  // passed. It must be named as a product.
+  [/\bworkday\s+(hcm|financials?|payroll|adaptive|prism|recruiting|studio|extend|tenant|system|platform|module|implementation|integration|reporting)\b|(experience|proficien\w+|knowledge|administer\w*|configur\w*|implement\w*)\s+(with|in|of|the)?\s*workday\b/i, "Workday", false],
+  [/\bmaximo\b/i, "IBM Maximo", false],
+  [/\bpeoplesoft\b/i, "PeopleSoft", false],
+  [/\bhyperion\b/i, "Hyperion", false],
+  [/\bprimavera\b/i, "Primavera", false],
+  [/\bsalesforce\b/i, "Salesforce", false],
+  [/\bitron\b/i, "Itron", false],
+  [/\binformatica\b/i, "Informatica", false],
+  [/oracle data integrator|\bODI\b/i, "Oracle Data Integrator", false],
+  [/\bIFS\b/i, "IFS", true],
+  [/\bInfor\b/i, "Infor", true],
 ];
-const ROLE_SIGNAL = /\b(ERP|EPM|financial systems?|general ledger|close|consolidation|capital project|procurement systems?|IT applications?|digital transformation|controller)\b/i;
+
+const ROLE_SIGNAL = /\b(ERP|EPM|financial system|general ledger|month-end close|consolidation|capital project|procurement system|IT application|digital transformation|controller|financial analyst)\b/i;
+
+// True only when the term sits near systems language, not merely somewhere in
+// a 7,000-character posting.
+function inSystemsContext(text: string, re: RegExp): boolean {
+  const g = new RegExp(re.source, "gi");
+  let m: RegExpExecArray | null;
+  while ((m = g.exec(text)) !== null) {
+    const window = text.slice(Math.max(0, m.index - 60), m.index + 60);
+    if (CONTEXT.test(window)) return true;
+  }
+  return false;
+}
 
 export function scanPostings(postings: Posting[]) {
   const vendors = new Map<string, { count: number; titles: string[] }>();
   const relevant: Posting[] = [];
   for (const p of postings) {
     const hay = `${p.title} ${p.text ?? ""}`;
-    for (const [re, name] of VENDORS) {
+    for (const [re, name, needsContext] of VENDORS) {
       if (!re.test(hay)) continue;
+      if (needsContext && !inSystemsContext(hay, re)) continue;
       const e = vendors.get(name) ?? { count: 0, titles: [] };
       e.count++;
       if (e.titles.length < 5 && !e.titles.includes(p.title)) e.titles.push(p.title);
@@ -215,4 +240,58 @@ export function scanPostings(postings: Posting[]) {
     if (ROLE_SIGNAL.test(hay)) relevant.push(p);
   }
   return { vendors, relevant };
+}
+
+// ---------------------------------------------------------- shared builder
+// Used by BOTH the in-app hiring button and the batch loader, so an account
+// researched either way ends up identical — the same mistake as letting the
+// sweep carry its own copy of a prompt.
+export type AtsResolution = { platform: string; a: string; b?: string; url: string };
+
+export async function resolveAts(ent: {
+  website?: string | null; ats_platform?: string | null; ats_url?: string | null;
+  hiring_json?: any; stack_json?: any; profile_json?: any; priorities_json?: any;
+}): Promise<AtsResolution | null> {
+  if (ent.ats_url) { const id = identify(ent.ats_url); if (id?.a) return { ...id, a: id.a, url: ent.ats_url }; }
+  const urls = (JSON.stringify([ent.hiring_json, ent.stack_json, ent.profile_json, ent.priorities_json]).match(/https?:\/\/[^"\ ]+/g) ?? []);
+  for (const u of urls) { const id = identify(u); if (id?.a) return { ...id, a: id.a, url: u }; }
+  if (ent.website) return await discover(ent.website);
+  return null;
+}
+
+export async function buildHiringFromAts(companyName: string, hit: AtsResolution, detailCap = 60) {
+  const feed = await fetchFeed(hit.platform, hit.a, hit.b);
+  if (!feed) return null;
+  const postings = feed.postings;
+  if (hit.platform === "oracle" || hit.platform === "workday") {
+    for (const p of postings.slice(0, detailCap)) {
+      p.text = hit.platform === "oracle"
+        ? await oracleDetail(hit.a, hit.b!, p._id ?? "")
+        : await workdayDetail(hit.a, hit.b!, p._path ?? "");
+      await new Promise((r) => setTimeout(r, 80));
+    }
+  }
+  const { vendors, relevant } = scanPostings(postings);
+  const roles = relevant.slice(0, 8).map((p) => ({
+    title: p.title,
+    why: "Open role touching finance, ERP or capital-project systems — a live buying signal.",
+    source: p.url,
+  }));
+  const vendorList = [...vendors.entries()].sort((a, b) => b[1].count - a[1].count);
+  return {
+    data: {
+      summary:
+        `${feed.total} open role${feed.total === 1 ? "" : "s"} on ${companyName}'s own careers site` +
+        (roles.length ? `, ${roles.length} touching finance or systems` : ", none obviously finance/systems related") +
+        (vendorList.length ? `. Postings name: ${vendorList.map(([v, d]) => `${v} (${d.count})`).join(", ")}.` : "."),
+      roles,
+      signal: roles.length >= 3 ? "hot" : roles.length ? "warm" : "quiet",
+      source: feed.url,
+      via: "ats",
+      platform: hit.platform,
+      openings: feed.total,
+      vendors: vendorList.map(([v, d]) => ({ vendor: v, mentions: d.count, titles: d.titles })),
+    },
+    resolution: hit,
+  };
 }

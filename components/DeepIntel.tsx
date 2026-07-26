@@ -179,12 +179,36 @@ export default function DeepIntel({ entityId, canResearch = true }: { entityId: 
               {isOpen && d && (
                 <div style={{ marginTop: 8, fontSize: 13, lineHeight: 1.5 }}>
                   {d.summary && <div style={{ marginBottom: 6 }}>{d.summary}</div>}
-                  {f === "hiring" && (d.roles ?? []).map((r: any, j: number) => (
-                    <div key={j} style={{ padding: "4px 0", borderTop: j ? "1px solid #F7F2E9" : "none" }}>
-                      <div style={{ fontWeight: 700, fontSize: 12.5 }}>{r.title}</div>
-                      <div style={{ fontSize: 12, color: "var(--ink2)" }}>{r.why} <Src url={r.source} /></div>
-                    </div>
-                  ))}
+                  {f === "hiring" && (<>
+                    {/* Systems named in their own postings — the strongest free
+                        evidence of what they run, so it leads. */}
+                    {(d.vendors ?? []).length > 0 && (
+                      <div style={{ marginBottom: 7, paddingBottom: 6, borderBottom: "1px solid #F0EAE0" }}>
+                        <div style={{ fontSize: 10.5, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".5px", color: "var(--muted)", marginBottom: 4 }}>
+                          Systems named in their job postings
+                        </div>
+                        <div style={{ display: "flex", flexWrap: "wrap", gap: 5 }}>
+                          {d.vendors.map((v: any) => (
+                            <span key={v.vendor} title={(v.titles ?? []).join(" · ")}
+                              style={{ fontSize: 11.5, fontWeight: 700, background: "#EEF4FB", color: "var(--blue)", border: "1px solid #CFE0F2", borderRadius: 6, padding: "2px 8px" }}>
+                              {v.vendor} <span style={{ color: "var(--muted)", fontWeight: 600 }}>×{v.mentions}</span>
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                    {(d.roles ?? []).map((r: any, j: number) => (
+                      <div key={j} style={{ padding: "4px 0", borderTop: j ? "1px solid #F7F2E9" : "none" }}>
+                        <div style={{ fontWeight: 700, fontSize: 12.5 }}>{r.title}</div>
+                        <div style={{ fontSize: 12, color: "var(--ink2)" }}>{r.why} <Src url={r.source} /></div>
+                      </div>
+                    ))}
+                    {d.via === "ats" && (
+                      <div style={{ fontSize: 10.5, color: "var(--muted)", marginTop: 5 }}>
+                        Live from their own {d.platform} careers site{d.openings ? ` · ${d.openings} open roles` : ""} — not a web search.
+                      </div>
+                    )}
+                  </>)}
                   {f === "comp" && (<>
                     {(d.metrics ?? []).map((r: any, j: number) => (
                       <div key={j} style={{ padding: "4px 0", borderTop: j ? "1px solid #F7F2E9" : "none" }}>
