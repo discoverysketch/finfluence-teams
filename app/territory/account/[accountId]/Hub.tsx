@@ -5,6 +5,7 @@ import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer } from "rec
 import { createClient } from "@/lib/supabase/client";
 import { researchedAgo, STALE_DAYS } from "@/lib/researchedAt";
 import { assessTrajectory } from "@/lib/trajectory";
+import MetricInfo from "@/components/MetricInfo";
 import { inferReporting } from "@/lib/orgchart";
 import { classifyFiling, SUGGESTED_MOVE } from "@/lib/signalTypes";
 import PrepBrief from "./PrepBrief";
@@ -53,10 +54,10 @@ function FercBlock({ ferc }: { ferc: EiaOps }) {
     .map((k) => ({ y: k.slice(-4), rateBase: f[k] }))
     .sort((a, b) => a.y.localeCompare(b.y));
   const cagr = hist.length >= 3 ? (Math.pow(hist[hist.length - 1].rateBase / hist[0].rateBase, 1 / (hist.length - 1)) - 1) * 100 : null;
-  const Cell = ({ n, l }: { n: string; l: string }) => (
+  const Cell = ({ n, l, m }: { n: string; l: string; m?: string }) => (
     <div style={{ border: "1px solid #F0EAE0", borderRadius: 8, padding: "8px 10px" }}>
       <div style={{ fontSize: 16, fontWeight: 800, letterSpacing: "-.01em" }}>{n}</div>
-      <div style={{ fontSize: 11, color: "var(--ink2)", fontWeight: 600 }}>{l}</div>
+      <div style={{ fontSize: 11, color: "var(--ink2)", fontWeight: 600 }}>{l}{m ? <MetricInfo metric={m} /> : null}</div>
     </div>
   );
   return (
@@ -65,10 +66,10 @@ function FercBlock({ ferc }: { ferc: EiaOps }) {
         🏛️ Regulated financials · FERC Form 1 {ferc.period}{(f.respondents_count ?? 0) > 1 ? ` · across ${f.respondents_count} respondents` : ""}
       </div>
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 6 }}>
-        {f.net_utility_plant != null && <Cell n={fmtM(f.net_utility_plant)} l="net utility plant (rate-base proxy)" />}
-        {f.cwip != null && <Cell n={fmtM(f.cwip)} l="construction work in progress" />}
-        {f.om_expense != null && <Cell n={fmtM(f.om_expense)} l="electric O&M expense" />}
-        {f.electric_revenue != null && <Cell n={fmtM(f.electric_revenue)} l="electric operating revenue" />}
+        {f.net_utility_plant != null && <Cell n={fmtM(f.net_utility_plant)} l="net utility plant" m="net_utility_plant" />}
+        {f.cwip != null && <Cell n={fmtM(f.cwip)} l="CWIP" m="cwip" />}
+        {f.om_expense != null && <Cell n={fmtM(f.om_expense)} l="electric O&M" m="om_expense" />}
+        {f.electric_revenue != null && <Cell n={fmtM(f.electric_revenue)} l="electric revenue" m="electric_revenue" />}
       </div>
       {hist.length >= 3 && (
         <div style={{ marginTop: 10 }}>
@@ -106,10 +107,10 @@ function EiaBlock({ eia }: { eia: EiaOps }) {
     ["Industrial", (f.ind_revenue || 0) / mixTotal, "#006B72"],
   ] : [];
   const rpc = f.customers && f.revenue ? (f.revenue * 1e6) / f.customers : null;
-  const Cell = ({ n, l }: { n: string; l: string }) => (
+  const Cell = ({ n, l, m }: { n: string; l: string; m?: string }) => (
     <div style={{ border: "1px solid #F0EAE0", borderRadius: 8, padding: "8px 10px" }}>
       <div style={{ fontSize: 16, fontWeight: 800, letterSpacing: "-.01em" }}>{n}</div>
-      <div style={{ fontSize: 11, color: "var(--ink2)", fontWeight: 600 }}>{l}</div>
+      <div style={{ fontSize: 11, color: "var(--ink2)", fontWeight: 600 }}>{l}{m ? <MetricInfo metric={m} /> : null}</div>
     </div>
   );
   return (
@@ -118,10 +119,10 @@ function EiaBlock({ eia }: { eia: EiaOps }) {
         ⚡ Utility operations · EIA-861 {eia.period}{(f.utilities_count ?? 0) > 1 ? ` · across ${f.utilities_count} utilities` : ""}
       </div>
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 6 }}>
-        {f.customers != null && <Cell n={fmtCount(f.customers)} l="customers served" />}
-        {f.sales_mwh != null && <Cell n={fmtEnergy(f.sales_mwh)} l="energy delivered" />}
-        {f.revenue != null && <Cell n={fmtM(f.revenue)} l="retail revenue" />}
-        {rpc != null && <Cell n={`$${Math.round(rpc).toLocaleString()}`} l="revenue / customer" />}
+        {f.customers != null && <Cell n={fmtCount(f.customers)} l="customers served" m="customers" />}
+        {f.sales_mwh != null && <Cell n={fmtEnergy(f.sales_mwh)} l="energy delivered" m="sales_mwh" />}
+        {f.revenue != null && <Cell n={fmtM(f.revenue)} l="retail revenue" m="electric_revenue" />}
+        {rpc != null && <Cell n={`$${Math.round(rpc).toLocaleString()}`} l="revenue / customer" m="rev_per_customer" />}
       </div>
       {mix.length > 0 && (
         <div style={{ marginTop: 8 }}>
@@ -568,7 +569,7 @@ export default function Hub({ accountId, userId, entityId, ticker, initialNotes,
               const st = fin.stock;
               const Row = ([k, label]: [string, string]) => (
                 <div key={k} style={{ display: "flex", justifyContent: "space-between", borderBottom: "1px solid #F0EAE0", padding: "3px 0" }}>
-                  <span style={{ fontSize: 12.5, color: "var(--ink2)" }}>{label}</span>
+                  <span style={{ fontSize: 12.5, color: "var(--ink2)" }}>{label}<MetricInfo metric={k.replace(/^fy_/, "")} /></span>
                   <span style={{ fontSize: 13, fontWeight: 700, fontFamily: "ui-monospace, monospace" }}>{fmtM(fmap[k])}</span>
                 </div>
               );

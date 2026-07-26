@@ -4,6 +4,8 @@ import Link from "next/link";
 import Shell from "@/components/Shell";
 import Hub, { type Contact, type Activity } from "./Hub";
 import DecisionAuthority from "./DecisionAuthority";
+import CompanyLogo from "@/components/CompanyLogo";
+import { companyDomain } from "@/lib/logo";
 
 // Account Hub: CRM-lite home for one account — stage, org chart, activity.
 /* eslint-disable @typescript-eslint/no-explicit-any */
@@ -17,7 +19,7 @@ export default async function AccountPage({ params }: { params: Promise<{ accoun
 
   // RLS scopes this to the caller's tenant.
   const { data: acct } = await supabase.from("accounts")
-    .select("id, rep_notes, owner, created_by, created_at, entity:entities(id, canonical_name, ticker, data_tier, hq_state, decision_locus, decision_note, decision_source, decision_at, priorities_json, priorities_at)")
+    .select("id, rep_notes, owner, created_by, created_at, entity:entities(id, canonical_name, ticker, data_tier, hq_state, decision_locus, decision_note, decision_source, decision_at, priorities_json, priorities_at, hiring_json, stack_json, profile_json, website)")
     .eq("id", accountId).maybeSingle();
   if (!acct) {
     return (
@@ -39,6 +41,15 @@ export default async function AccountPage({ params }: { params: Promise<{ accoun
   const ent: any = acct.entity;
   const TIER_COLOR: Record<string, string> = { A: "#1B7A47", B: "#0572CE", C: "#9A6700", D: "#8A7E6E" };
 
+  // The stored website is authoritative; mining URLs left behind by research is
+  // only a fallback for entities that have not been backfilled yet.
+  const site: string | null = ent?.website ?? null;
+  const logoDomain = site
+    ? site.replace(/^https?:\/\//, "").replace(/^www\./, "").split("/")[0]
+    : ent?.canonical_name
+      ? companyDomain(ent.canonical_name, [ent.hiring_json, ent.stack_json, ent.profile_json, ent.priorities_json])
+      : null;
+
   // Who put this account in the book. Distinct from `owner`, which is
   // reassignable — this is written once at insert and never changes.
   const creator = (acct as any).created_by as string | null;
@@ -51,10 +62,16 @@ export default async function AccountPage({ params }: { params: Promise<{ accoun
     <Shell active="accounts" isAdmin={isAdmin}>
       <p style={{ fontSize: 13 }}><Link href="/territory">← Accounts</Link></p>
       <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+        <CompanyLogo name={ent?.canonical_name || "Account"} domain={logoDomain} size={42} />
         <h1 style={{ margin: 0 }}>{ent?.canonical_name || "Account"}</h1>
         {ent?.ticker && <span style={{ fontFamily: "ui-monospace, monospace", color: "var(--muted)", fontWeight: 700 }}>{ent.ticker}</span>}
         {ent?.data_tier && <span style={{ background: TIER_COLOR[ent.data_tier] || "#8A7E6E", color: "#fff", fontSize: 11, fontWeight: 700, borderRadius: 5, padding: "2px 8px" }}>Tier {ent.data_tier}</span>}
       </div>
+      {logoDomain && (
+        <div style={{ fontSize: 12.5, marginTop: 3 }}>
+          <a href={`https://${logoDomain}`} target="_blank" rel="noreferrer" style={{ color: "var(--blue)", fontWeight: 700 }}>{logoDomain} ↗</a>
+        </div>
+      )}
       {addedBy && (
         <div style={{ fontSize: 12, color: "var(--muted)", marginTop: 2 }}>
           Added by <b style={{ color: "var(--ink2)" }}>{addedBy}</b>{addedOn ? ` · ${addedOn}` : ""}
