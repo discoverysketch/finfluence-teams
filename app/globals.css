@@ -56,18 +56,17 @@ h2 { font-size: 19px; font-weight: 700; letter-spacing: -.01em; }
    removing the blur does. The background is fully opaque so nothing needs
    to be sampled from behind the bar at all. */
 .nav {
-  position: fixed; left: 0; right: 0; bottom: 0; max-width: 520px; margin: 0 auto;
-  display: flex;
+  /* Full-width bar, centred links. Constraining the BAR to 520px left it
+     floating as a detached pill in the middle of a desktop screen; the bar
+     should read as anchored to the bottom edge at any width. */
+  position: fixed; left: 0; right: 0; bottom: 0;
   background: #1B1D26;
   border-top: 1px solid rgba(255,255,255,.07);
   box-shadow: 0 -8px 24px rgba(20, 15, 5, .18);
   z-index: 30;
   padding-bottom: env(safe-area-inset-bottom);
-  /* Own compositing layer — keeps the fixed bar pinned and repainting
-     cleanly through momentum scroll instead of flickering/vanishing. */
-  transform: translateZ(0);
-  will-change: transform;
 }
+.navinner { max-width: 520px; margin: 0 auto; display: flex; width: 100%; }
 .nav a {
   flex: 1; position: relative; color: #a9a294; font-weight: 600; font-size: 11px; letter-spacing: .01em;
   padding: 7px 0 9px;

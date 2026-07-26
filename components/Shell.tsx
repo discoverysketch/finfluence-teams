@@ -52,11 +52,13 @@ export default async function Shell({
       </header>
       <main className="container">{children}</main>
       <nav className="nav">
+        <div className="navinner">
         <Link href="/learn" className={cls("path")}><span className="nico"><Map size={20} strokeWidth={1.9} /></span>Path</Link>
         <Link href="/challenge" className={cls("challenge")}><span className="nico"><Target size={20} strokeWidth={1.9} /></span>Challenge</Link>
         <Link href="/territory" className={cls("accounts")}><span className="nico"><Building2 size={20} strokeWidth={1.9} /></span>Accounts</Link>
         {isAdmin && <Link href="/admin/content" className={cls("content")}><span className="nico"><PenLine size={20} strokeWidth={1.9} /></span>Content</Link>}
         <Link href="/" className={cls("home")}><span className="nico"><UserRound size={20} strokeWidth={1.9} /></span>Me</Link>
+        </div>
       </nav>
     </>
   );
