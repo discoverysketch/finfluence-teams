@@ -9,7 +9,7 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { createClient } from "@supabase/supabase-js";
 import { runTask, costOf, type TaskKey, type Ent } from "../lib/researchTasks.ts";
-import { fetchProxy } from "../lib/proxy.ts";
+import { fetchProxy, fetchLeadershipDocs } from "../lib/proxy.ts";
 import { withRetry } from "../lib/aiRetry.ts";
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
@@ -79,7 +79,7 @@ async function worker(id: number) {
     if (!job) break;
     const label = `${job.task}/${job.ent.canonical_name.slice(0, 26)}`;
     try {
-      const { data, usage } = await withRetry(() => runTask(client, job.ent, job.task, fetchProxy), 4);
+      const { data, usage } = await withRetry(() => runTask(client, job.ent, job.task, fetchProxy, fetchLeadershipDocs), 4);
       // Same guard the priorities route applies: a priority without a source is dropped.
       if (job.task === "priorities") {
         data.priorities = (data.priorities ?? []).filter((p: any) => /^https?:\/\//.test(p.source)).slice(0, 8);

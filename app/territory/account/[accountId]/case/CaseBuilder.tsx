@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useState } from "react";
+import { Fragment, useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 
 // Savings levers on the account's REAL figures. All math is deterministic and
@@ -7,7 +7,19 @@ import { createClient } from "@/lib/supabase/client";
 type Narr = { headline: string; rationale: string[]; risks: string; cfo_line: string };
 type Price = { id: string; family: string; name: string; metric: string; list_price: number; as_of: string | null };
 const fmtM = (v: number) => (Math.abs(v) >= 1000 ? `$${(v / 1000).toFixed(2)}B` : `$${v >= 10 ? Math.round(v) : v.toFixed(1)}M`);
-const perEmployee = (m: string) => /employee/i.test(m);
+const perEmployee = (m: string) => /employee|compensated individual/i.test(m);
+// Oracle publishes a metric per SKU — "Hosted Named User/month", "Hosted
+// Employee/month", "Hosted 1,000 Records/month". Show it rather than flatten
+// everything to "user": the metric is what a customer will argue about.
+const unitOf = (m: string) => {
+  const t = String(m || "");
+  if (/named user/i.test(t)) return "named user";
+  if (/compensated individual/i.test(t)) return "comp. individual";
+  if (/employee/i.test(t)) return "employee";
+  if (/1,?000 records/i.test(t)) return "1k records";
+  if (/service customer/i.test(t)) return "svc customer";
+  return t.replace(/\/month$/i, "") || "unit";
+};
 
 export default function CaseBuilder({ entityId, company }: { entityId: string; company: string }) {
   const supabase = createClient();
@@ -26,6 +38,11 @@ export default function CaseBuilder({ entityId, company }: { entityId: string; c
   const [prices, setPrices] = useState<Price[]>([]);
   const [showEst, setShowEst] = useState(false);
   const [qty, setQty] = useState<Record<string, number>>({});
+  // Discount is the rep's own assumption, per SKU, with a default applied to
+  // anything not set individually — enterprise agreements rarely discount
+  // every line the same way.
+  const [disc, setDisc] = useState<Record<string, number>>({});
+  const [defaultDisc, setDefaultDisc] = useState<number>(50);
   const [employees, setEmployees] = useState(1500);
   const [users, setUsers] = useState(150);
 
@@ -62,11 +79,19 @@ export default function CaseBuilder({ entityId, company }: { entityId: string; c
   }, [entityId, supabase]);
 
   // ---- license estimate (public list price × quantities) ----
-  const licenseAnnual = prices.reduce((sum, p) => {
-    const q = qty[p.id]; if (!q) return sum;
-    const units = q === -1 ? (perEmployee(p.metric) ? employees : users) : q; // -1 = "use headcount"
-    return sum + p.list_price * units * 12;
-  }, 0) / 1e6; // $M/yr
+  // One row per selected SKU so quantities and discounts can differ per line.
+  const lines = prices
+    .filter((p) => qty[p.id] !== undefined)
+    .map((p) => {
+      const q = qty[p.id] === -1 ? (perEmployee(p.metric) ? employees : users) : qty[p.id];
+      const d = disc[p.id] ?? defaultDisc;
+      const listYr = (Number(p.list_price) || 0) * q * 12;
+      return { p, q, d, listYr, netYr: listYr * (1 - d / 100) };
+    });
+  const listAnnual = lines.reduce((n, l) => n + l.listYr, 0) / 1e6;
+  const licenseAnnual = lines.reduce((n, l) => n + l.netYr, 0) / 1e6;
+  const blendedDisc = listAnnual > 0 ? (1 - licenseAnnual / listAnnual) * 100 : 0;
+
   const pricedAsOf = prices[0]?.as_of;
 
   // ---- deterministic model ($M/yr) ----
@@ -76,6 +101,7 @@ export default function CaseBuilder({ entityId, company }: { entityId: string; c
   const closeSave = closeDays * 12 * dailyTeamCostM;
   const annual = omSave + capexSave + closeSave;
   const threeYr = annual * 3;
+
   const roi = investM > 0 ? threeYr / investM : 0;
   const paybackMo = annual > 0 ? (investM / annual) * 12 : 0;
 
@@ -145,31 +171,88 @@ export default function CaseBuilder({ entityId, company }: { entityId: string; c
               <label style={{ fontSize: 12, fontWeight: 700 }}>Employees <input inputMode="numeric" value={employees} onChange={(e) => setEmployees(Number(e.target.value.replace(/\D/g, "")) || 0)} style={{ width: 70, marginLeft: 4, fontSize: 12.5, padding: "3px 6px", borderRadius: 6, border: "1px solid var(--border)" }} /></label>
               <label style={{ fontSize: 12, fontWeight: 700 }}>Named users <input inputMode="numeric" value={users} onChange={(e) => setUsers(Number(e.target.value.replace(/\D/g, "")) || 0)} style={{ width: 70, marginLeft: 4, fontSize: 12.5, padding: "3px 6px", borderRadius: 6, border: "1px solid var(--border)" }} /></label>
             </div>
-            <div style={{ maxHeight: 220, overflowY: "auto", border: "1px solid var(--border)", borderRadius: 8 }}>
-              {["ERP", "EPM", "SCM", "HCM", "EnergyWater"].map((fam) => {
-                const items = prices.filter((p) => p.family === fam);
-                if (!items.length) return null;
-                return (
-                  <div key={fam}>
-                    <div style={{ fontSize: 10.5, fontWeight: 700, color: "var(--muted)", textTransform: "uppercase", letterSpacing: ".5px", padding: "6px 10px 2px", background: "#FBF8F1" }}>{fam}</div>
-                    {items.map((p) => {
-                      const on = !!qty[p.id];
-                      return (
-                        <label key={p.id} style={{ display: "flex", alignItems: "center", gap: 8, padding: "5px 10px", fontSize: 12.5, cursor: "pointer", borderTop: "1px solid #F4EFE6" }}>
-                          <input type="checkbox" checked={on} onChange={() => setQty((q) => { const n = { ...q }; if (on) delete n[p.id]; else n[p.id] = -1; return n; })} />
-                          <span style={{ flex: 1, minWidth: 0 }}>{p.name.replace(/ Cloud Service$/, "").slice(0, 46)}</span>
-                          <span style={{ color: "var(--muted)", fontSize: 11 }}>${p.list_price}/{perEmployee(p.metric) ? "emp" : "user"}/mo</span>
-                        </label>
-                      );
-                    })}
-                  </div>
-                );
-              })}
+            <div style={{ display: "flex", gap: 12, flexWrap: "wrap", alignItems: "center", marginBottom: 8 }}>
+              <label style={{ fontSize: 12, fontWeight: 700 }}>Default discount
+                <input inputMode="decimal" value={defaultDisc}
+                  onChange={(e) => setDefaultDisc(Math.min(100, Number(e.target.value.replace(/[^0-9.]/g, "")) || 0))}
+                  style={{ width: 56, marginLeft: 4, fontSize: 12.5, padding: "3px 6px", borderRadius: 6, border: "1px solid var(--border)" }} />%
+              </label>
+              <span style={{ fontSize: 11, color: "var(--muted)" }}>applies to any line you don&apos;t set individually</span>
             </div>
-            <div style={{ display: "flex", alignItems: "center", gap: 10, marginTop: 8 }}>
-              <span style={{ fontSize: 14, fontWeight: 800 }}>≈ {fmtM(licenseAnnual)}/yr list</span>
-              <button className="mini" disabled={licenseAnnual <= 0} onClick={() => setInvestM(Math.round(licenseAnnual * 10) / 10)}>Use as investment →</button>
-              <span style={{ fontSize: 10.5, color: "var(--muted)" }}>Public list price{pricedAsOf ? ` (${pricedAsOf})` : ""} — indicative, not a quote. Enterprise deals are discounted.</span>
+
+            <div style={{ overflowX: "auto", border: "1px solid var(--border)", borderRadius: 8 }}>
+              <table style={{ width: "100%", minWidth: 520, borderCollapse: "collapse", fontSize: 12.5 }}>
+                <thead>
+                  <tr style={{ background: "#FBF8F1" }}>
+                    <th style={{ textAlign: "left", padding: "6px 8px", fontSize: 10.5, textTransform: "uppercase", letterSpacing: ".4px", color: "var(--muted)" }}>Product</th>
+                    <th style={{ textAlign: "left", padding: "6px 6px", fontSize: 10.5, textTransform: "uppercase", letterSpacing: ".4px", color: "var(--muted)" }}>Metric</th>
+                    <th style={{ textAlign: "right", padding: "6px 6px", fontSize: 10.5, textTransform: "uppercase", letterSpacing: ".4px", color: "var(--muted)" }}>List</th>
+                    <th style={{ textAlign: "right", padding: "6px 6px", fontSize: 10.5, textTransform: "uppercase", letterSpacing: ".4px", color: "var(--muted)" }}>Qty</th>
+                    <th style={{ textAlign: "right", padding: "6px 6px", fontSize: 10.5, textTransform: "uppercase", letterSpacing: ".4px", color: "var(--muted)" }}>Disc</th>
+                    <th style={{ textAlign: "right", padding: "6px 8px", fontSize: 10.5, textTransform: "uppercase", letterSpacing: ".4px", color: "var(--muted)" }}>Net / yr</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {["ERP", "EPM", "SCM", "HCM", "EnergyWater"].map((fam) => {
+                    const items = prices.filter((p) => p.family === fam);
+                    if (!items.length) return null;
+                    return (
+                      <Fragment key={fam}>
+                        <tr><td colSpan={6} style={{ fontSize: 10.5, fontWeight: 700, color: "var(--muted)", textTransform: "uppercase", letterSpacing: ".5px", padding: "6px 8px 2px", background: "#FBF8F1" }}>{fam}</td></tr>
+                        {items.map((p) => {
+                          const on = qty[p.id] !== undefined;
+                          const q = !on ? 0 : (qty[p.id] === -1 ? (perEmployee(p.metric) ? employees : users) : qty[p.id]);
+                          const d = disc[p.id] ?? defaultDisc;
+                          const net = (Number(p.list_price) || 0) * q * 12 * (1 - d / 100);
+                          return (
+                            <tr key={p.id} style={{ borderTop: "1px solid #F4EFE6", background: on ? "#FCFAF5" : undefined }}>
+                              <td style={{ padding: "5px 8px" }}>
+                                <label style={{ display: "flex", gap: 7, alignItems: "center", cursor: "pointer" }}>
+                                  <input type="checkbox" checked={on}
+                                    onChange={() => setQty((x) => { const n = { ...x }; if (on) delete n[p.id]; else n[p.id] = -1; return n; })} />
+                                  <span>{p.name.replace(/ Cloud Service$/, "").slice(0, 40)}</span>
+                                </label>
+                              </td>
+                              <td style={{ padding: "5px 6px", color: "var(--muted)", fontSize: 11 }}>{unitOf(p.metric)}</td>
+                              <td style={{ padding: "5px 6px", textAlign: "right", fontFamily: "ui-monospace, monospace" }}>${p.list_price}</td>
+                              <td style={{ padding: "5px 6px", textAlign: "right" }}>
+                                {on ? (
+                                  <input inputMode="numeric" value={qty[p.id] === -1 ? q : qty[p.id]}
+                                    onChange={(e) => setQty((x) => ({ ...x, [p.id]: Number(e.target.value.replace(/\D/g, "")) || 0 }))}
+                                    title="Quantity for this SKU"
+                                    style={{ width: 58, fontSize: 12, padding: "2px 5px", borderRadius: 5, border: "1px solid var(--border)", textAlign: "right" }} />
+                                ) : <span style={{ color: "var(--muted)" }}>—</span>}
+                              </td>
+                              <td style={{ padding: "5px 6px", textAlign: "right" }}>
+                                {on ? (
+                                  <input inputMode="decimal" value={d}
+                                    onChange={(e) => setDisc((x) => ({ ...x, [p.id]: Math.min(100, Number(e.target.value.replace(/[^0-9.]/g, "")) || 0) }))}
+                                    title="Discount % off list for this SKU"
+                                    style={{ width: 48, fontSize: 12, padding: "2px 5px", borderRadius: 5, border: "1px solid var(--border)", textAlign: "right" }} />
+                                ) : <span style={{ color: "var(--muted)" }}>—</span>}
+                              </td>
+                              <td style={{ padding: "5px 8px", textAlign: "right", fontFamily: "ui-monospace, monospace", fontWeight: on ? 700 : 400, color: on ? "var(--ink)" : "var(--muted)" }}>
+                                {on ? (net >= 1e6 ? `$${(net / 1e6).toFixed(2)}M` : `$${Math.round(net).toLocaleString()}`) : "—"}
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </Fragment>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+
+            <div style={{ display: "flex", alignItems: "baseline", gap: 12, flexWrap: "wrap", marginTop: 8 }}>
+              <span style={{ fontSize: 12.5, color: "var(--muted)", textDecoration: "line-through" }}>{fmtM(listAnnual)} list</span>
+              <span style={{ fontSize: 15, fontWeight: 800 }}>{fmtM(licenseAnnual)}/yr net</span>
+              {listAnnual > 0 && <span style={{ fontSize: 11.5, fontWeight: 700, color: "var(--green)" }}>{blendedDisc.toFixed(0)}% blended discount</span>}
+              <button className="mini" disabled={licenseAnnual <= 0} onClick={() => setInvestM(Math.round(licenseAnnual * 100) / 100)}>Use as investment →</button>
+            </div>
+            <div style={{ fontSize: 10.5, color: "var(--muted)", marginTop: 4 }}>
+              List prices are Oracle&apos;s published rates{pricedAsOf ? ` (${pricedAsOf})` : ""}. Discounts are your own assumption —
+              this is a working estimate for the business case, not a quote, and nothing here is sent to the customer.
             </div>
           </div>
         )}
