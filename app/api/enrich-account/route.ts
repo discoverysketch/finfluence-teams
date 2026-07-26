@@ -77,6 +77,27 @@ export async function POST(request: Request) {
     if (mode === "comp" || mode === "hiring" || mode === "stack" || mode === "infer") {
       const { data: parsed } = await withRetry(() => runTask(client, ent as any, mode, fetchProxy));
       const admin = createAdminClient();
+
+      // The battlecard ACCUMULATES. Runs legitimately surface different
+      // subsets of an estate — one found CC&B and Cloud EPM, the next found
+      // HCM, EBS and Maximo — so replacing the card loses confirmed systems.
+      // Union by vendor+area, keeping the higher-confidence entry.
+      if (mode === "stack") {
+        const { data: prior } = await supabase.from("entities").select("stack_json").eq("id", entityId).maybeSingle();
+        const before = (prior?.stack_json as any)?.systems ?? [];
+        if (before.length) {
+          const RANK: Record<string, number> = { high: 3, medium: 2, low: 1 };
+          const merged = new Map<string, any>();
+          for (const sy of [...before, ...(parsed.systems ?? [])]) {
+            const id = `${String(sy.vendor).toLowerCase().trim()}|${String(sy.area).toLowerCase().trim()}`;
+            const prev = merged.get(id);
+            if (!prev) { merged.set(id, sy); continue; }
+            merged.set(id, (RANK[sy.confidence] ?? 0) > (RANK[prev.confidence] ?? 0) ? { ...sy, corroborated: true } : { ...prev, corroborated: true });
+          }
+          parsed.systems = [...merged.values()];
+          parsed.merged_from_runs = true;
+        }
+      }
       const [jsonCol, atCol] = COL[mode];
       const upd: Record<string, any> = { [jsonCol]: parsed, [atCol]: new Date().toISOString() };
       if (mode === "comp" && Number.isInteger(parsed.employees) && parsed.employees > 0) upd.employees = parsed.employees;
