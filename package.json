@@ -19,7 +19,8 @@
     "load-eia860": "node --env-file=.env.local seed/load-eia860.mjs",
     "load-ferc": "node --env-file=.env.local seed/load-ferc.mjs",
     "coverage": "node --env-file=.env.local seed/coverage.mjs",
-    "load-websites": "node --env-file=.env.local seed/load-websites.mjs"
+    "load-websites": "node --env-file=.env.local seed/load-websites.mjs",
+    "load-jobs": "node --env-file=.env.local --experimental-strip-types seed/load-jobs.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.110.0",

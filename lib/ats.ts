@@ -1,0 +1,218 @@
+// Structured job feeds, straight from the company's own applicant-tracking
+// system. Free, complete and live — where the web search that preceded it
+// returned "QUIET" for half the book while those companies had dozens of
+// openings, because it never found the careers site.
+//
+// Job postings are also the single best public evidence of the systems a
+// company runs, so one crawl feeds both the hiring signal and the battlecard.
+/* eslint-disable @typescript-eslint/no-explicit-any */
+
+const UA = { "User-Agent": "Mozilla/5.0 (compatible; AccountFluency/1.0; +mailto:dan.wain1@gmail.com)" };
+
+export type Posting = {
+  title: string; url: string; posted?: string; text?: string;
+  // platform handles used to fetch the description, which is where the system
+  // names live — neither Workday nor Oracle include it in the list payload.
+  _path?: string; _id?: string;
+};
+export type AtsFeed = { platform: string; url: string; postings: Posting[]; total: number };
+
+async function req(url: string, init: RequestInit = {}, ms = 15000): Promise<Response | null> {
+  const c = new AbortController();
+  const t = setTimeout(() => c.abort(), ms);
+  try { return await fetch(url, { ...init, headers: { ...UA, ...(init.headers ?? {}) }, redirect: "follow", signal: c.signal }); }
+  catch { return null; } finally { clearTimeout(t); }
+}
+
+// ---------------------------------------------------------------- detection
+export function identify(url: string): { platform: string; a?: string; b?: string } | null {
+  let m;
+  if ((m = url.match(/([a-z0-9-]+)\.wd(\d+)\.myworkdayjobs\.com(?:\/[a-z-]+)?\/([A-Za-z0-9_-]+)/i)))
+    return { platform: "workday", a: `${m[1]}.wd${m[2]}`, b: m[3] };
+  if ((m = url.match(/([a-z0-9-]+\.fa\.[a-z0-9-]+\.oraclecloud\.com).*?\/sites\/([A-Za-z0-9_]+)/i)))
+    return { platform: "oracle", a: m[1], b: m[2] };
+  if ((m = url.match(/boards\.greenhouse\.io\/([a-z0-9-]+)/i))) return { platform: "greenhouse", a: m[1] };
+  if ((m = url.match(/jobs\.lever\.co\/([a-z0-9-]+)/i))) return { platform: "lever", a: m[1] };
+  if ((m = url.match(/([a-z0-9-]+)\.taleo\.net/i))) return { platform: "taleo", a: m[1] };
+  if ((m = url.match(/([a-z0-9-]+)\.icims\.com/i))) return { platform: "icims", a: m[1] };
+  return null;
+}
+
+// ---------------------------------------------------------------- adapters
+async function workday(tenantHost: string, site: string): Promise<AtsFeed | null> {
+  const base = `https://${tenantHost}.myworkdayjobs.com/wday/cxs/${tenantHost.split(".")[0]}/${site}/jobs`;
+  const out: Posting[] = [];
+  let total = 0;
+  for (let offset = 0; offset < 200; offset += 20) {
+    const r = await req(base, {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ limit: 20, offset, searchText: "" }),
+    });
+    if (!r || !r.ok) break;
+    const j: any = await r.json().catch(() => null);
+    if (!j?.jobPostings?.length) break;
+    total = j.total ?? total;
+    for (const p of j.jobPostings) {
+      out.push({
+        title: String(p.title ?? ""),
+        url: `https://${tenantHost}.myworkdayjobs.com/en-US/${site}${p.externalPath ?? ""}`,
+        posted: String(p.postedOn ?? ""),
+        _path: String(p.externalPath ?? ""),
+      });
+    }
+    if (out.length >= total) break;
+  }
+  return out.length ? { platform: "workday", url: base, postings: out, total: total || out.length } : null;
+}
+
+async function oracle(host: string, site: string): Promise<AtsFeed | null> {
+  const url = `https://${host}/hcmRestApi/resources/latest/recruitingCEJobRequisitions?onlyData=true&expand=requisitionList&finder=findReqs;siteNumber=${site},limit=200,sortBy=POSTING_DATES_DESC`;
+  const r = await req(url, {}, 30000);
+  if (!r?.ok) return null;
+  const j: any = await r.json().catch(() => null);
+  const items = j?.items?.[0];
+  const reqs = items?.requisitionList ?? [];
+  if (!reqs.length) return null;
+  return {
+    platform: "oracle", url,
+    total: items?.TotalJobsCount ?? reqs.length,
+    postings: reqs.map((x: any) => ({
+      title: String(x.Title ?? ""),
+      url: `https://${host}/hcmUI/CandidateExperience/en/sites/${site}/job/${x.Id}`,
+      posted: String(x.PostedDate ?? ""),
+      _id: String(x.Id ?? ""),
+    })),
+  };
+}
+
+async function greenhouse(token: string): Promise<AtsFeed | null> {
+  const url = `https://boards-api.greenhouse.io/v1/boards/${token}/jobs?content=true`;
+  const r = await req(url);
+  if (!r?.ok) return null;
+  const j: any = await r.json().catch(() => null);
+  const jobs = j?.jobs ?? [];
+  if (!jobs.length) return null;
+  return {
+    platform: "greenhouse", url, total: jobs.length,
+    postings: jobs.map((x: any) => ({
+      title: String(x.title ?? ""), url: String(x.absolute_url ?? ""),
+      posted: String(x.updated_at ?? ""), text: String(x.content ?? "").replace(/<[^>]+>/g, " "),
+    })),
+  };
+}
+
+async function lever(token: string): Promise<AtsFeed | null> {
+  const url = `https://api.lever.co/v0/postings/${token}?mode=json`;
+  const r = await req(url);
+  if (!r?.ok) return null;
+  const j: any = await r.json().catch(() => null);
+  if (!Array.isArray(j) || !j.length) return null;
+  return {
+    platform: "lever", url, total: j.length,
+    postings: j.map((x: any) => ({
+      title: String(x.text ?? ""), url: String(x.hostedUrl ?? ""),
+      posted: x.createdAt ? new Date(x.createdAt).toISOString().slice(0, 10) : "",
+      text: [x.descriptionPlain, ...(x.lists ?? []).map((l: any) => String(l.content ?? "").replace(/<[^>]+>/g, " "))].join(" "),
+    })),
+  };
+}
+
+export async function fetchFeed(platform: string, a: string, b?: string): Promise<AtsFeed | null> {
+  if (platform === "workday" && b) return workday(a, b);
+  if (platform === "oracle" && b) return oracle(a, b);
+  if (platform === "greenhouse") return greenhouse(a);
+  if (platform === "lever") return lever(a);
+  return null; // taleo / icims have no clean public JSON — those fall back to search
+}
+
+// Workday's list is titles-only too. The description — where the system names
+// actually are — is one GET deeper, on the same cxs path.
+export async function workdayDetail(tenantHost: string, site: string, externalPath: string): Promise<string> {
+  const tenant = tenantHost.split(".")[0];
+  const u = `https://${tenantHost}.myworkdayjobs.com/wday/cxs/${tenant}/${site}${externalPath}`;
+  const r = await req(u, {}, 20000);
+  if (!r?.ok) return "";
+  const j: any = await r.json().catch(() => null);
+  return String(j?.jobPostingInfo?.jobDescription ?? "").replace(/<[^>]+>/g, " ");
+}
+
+// Oracle's list payload carries no description, so the system names live one
+// fetch deeper. Worth it: that detail text is where Maximo and PeopleSoft were.
+export async function oracleDetail(host: string, site: string, id: string): Promise<string> {
+  const u = `https://${host}/hcmRestApi/resources/latest/recruitingCEJobRequisitionDetails?expand=all&onlyData=true&finder=ById;Id=%22${id}%22,siteNumber=${site}`;
+  const r = await req(u, {}, 20000);
+  if (!r?.ok) return "";
+  const j: any = await r.json().catch(() => null);
+  const it = (j?.items ?? [])[0] ?? {};
+  return [it.ExternalDescriptionStr, it.ExternalQualificationsStr, it.ExternalResponsibilitiesStr]
+    .filter(Boolean).join(" ").replace(/<[^>]+>/g, " ");
+}
+
+// --------------------------------------------------------------- discovery
+// Homepage -> careers link -> follow -> identify. ~25% hit rate on utility
+// sites (many block bots or render nav with JS), so it is one route of
+// several, not the only one.
+export async function discover(website: string): Promise<{ platform: string; a: string; b?: string; url: string } | null> {
+  const home = await req(`https://${website}`, {}, 12000);
+  if (!home) return null;
+  const finalHit = identify(home.url);
+  if (finalHit) return { ...finalHit, a: finalHit.a!, url: home.url };
+  const html = await home.text().catch(() => "");
+  if (!html) return null;
+
+  // Any ATS URL mentioned anywhere on the page is the cheapest win.
+  const inline = html.match(/https?:\/\/[^"'\s]*(?:myworkdayjobs\.com|oraclecloud\.com\/hcmUI[^"'\s]*|boards\.greenhouse\.io|jobs\.lever\.co|taleo\.net|icims\.com)[^"'\s]*/i);
+  if (inline) { const id = identify(inline[0]); if (id?.a) return { ...id, a: id.a, url: inline[0] }; }
+
+  const links = [...html.matchAll(/href=["']([^"']+)["']/gi)].map((m) => m[1])
+    .filter((h) => /career|jobs|join-?us|work-with-us/i.test(h)).slice(0, 4);
+  for (const l of [...links, "/careers", "/jobs"]) {
+    let u: string; try { u = new URL(l, `https://${website}`).href; } catch { continue; }
+    const page = await req(u, {}, 10000);
+    if (!page) continue;
+    const hit = identify(page.url);
+    if (hit?.a) return { ...hit, a: hit.a, url: page.url };
+    const body = await page.text().catch(() => "");
+    const m = body.match(/https?:\/\/[^"'\s]*(?:myworkdayjobs\.com|oraclecloud\.com\/hcmUI[^"'\s]*|boards\.greenhouse\.io|jobs\.lever\.co|taleo\.net)[^"'\s]*/i);
+    if (m) { const id = identify(m[0]); if (id?.a) return { ...id, a: id.a, url: m[0] }; }
+  }
+  return null;
+}
+
+// ------------------------------------------------------------ system scan
+// Whole-word only, over posting TEXT — never the JSON keys. A naive scan
+// matched "Workday" on all 72 Con Edison postings because the payload has a
+// "WorkDays" field.
+const VENDORS: [RegExp, string][] = [
+  [/\boracle\s+(?:fusion|cloud|ebs|e-business|hcm|erp|epm)\b|\boracle\b/i, "Oracle"],
+  [/\bSAP\b|\bS\/4\s?HANA\b|\bSuccessFactors\b/i, "SAP"],
+  [/\bworkday\b/i, "Workday"],
+  [/\bmaximo\b/i, "IBM Maximo"],
+  [/\bpeoplesoft\b/i, "PeopleSoft"],
+  [/\bhyperion\b/i, "Hyperion"],
+  [/\bprimavera\b|\bP6\b/i, "Primavera"],
+  [/\bsalesforce\b/i, "Salesforce"],
+  [/\bitron\b/i, "Itron"],
+  [/\binformatica\b/i, "Informatica"],
+  [/\bODI\b|oracle data integrator/i, "Oracle Data Integrator"],
+  [/\bIFS\b/i, "IFS"],
+  [/\bInfor\b/i, "Infor"],
+];
+const ROLE_SIGNAL = /\b(ERP|EPM|financial systems?|general ledger|close|consolidation|capital project|procurement systems?|IT applications?|digital transformation|controller)\b/i;
+
+export function scanPostings(postings: Posting[]) {
+  const vendors = new Map<string, { count: number; titles: string[] }>();
+  const relevant: Posting[] = [];
+  for (const p of postings) {
+    const hay = `${p.title} ${p.text ?? ""}`;
+    for (const [re, name] of VENDORS) {
+      if (!re.test(hay)) continue;
+      const e = vendors.get(name) ?? { count: 0, titles: [] };
+      e.count++;
+      if (e.titles.length < 5 && !e.titles.includes(p.title)) e.titles.push(p.title);
+      vendors.set(name, e);
+    }
+    if (ROLE_SIGNAL.test(hay)) relevant.push(p);
+  }
+  return { vendors, relevant };
+}
