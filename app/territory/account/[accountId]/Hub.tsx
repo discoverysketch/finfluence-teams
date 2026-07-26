@@ -162,7 +162,7 @@ export default function Hub({ accountId, userId, entityId, ticker, initialNotes,
   const [prioBusy, setPrioBusy] = useState(false);
   const [personView, setPersonView] = useState<Contact | null>(null);
   const [personaBusy, setPersonaBusy] = useState(false);
-  const [personaAll, setPersonaAll] = useState<{ busy: boolean; done: number; total: number }>({ busy: false, done: 0, total: 0 });
+  const [personaAll, setPersonaAll] = useState<{ busy: boolean; done: number; total: number; failed: number }>({ busy: false, done: 0, total: 0, failed: 0 });
   const [notes, setNotes] = useState(initialNotes || "");
   const [notesDirty, setNotesDirty] = useState(false);
   const [contacts, setContacts] = useState<Contact[]>(initialContacts);
@@ -269,18 +269,35 @@ export default function Hub({ accountId, userId, entityId, ticker, initialNotes,
   async function researchAllPeople() {
     const todo = contacts.filter((c) => !c.persona_json).map((c) => c.id);
     if (!todo.length || personaAll.busy) return;
-    setPersonaAll({ busy: true, done: 0, total: todo.length });
+    setPersonaAll({ busy: true, done: 0, total: todo.length, failed: 0 });
     let cursor = 0, done = 0;
+    const failures: string[] = [];
     const worker = async () => {
       for (;;) {
         const i = cursor++;
         if (i >= todo.length) return;
-        await researchOnePerson(todo[i]);
-        done++; setPersonaAll((p) => ({ ...p, done }));
+        // A failure used to be discarded and still counted as done, so the bar
+        // reached 8/8 while seven people had silently failed.
+        const res = await researchOnePerson(todo[i]);
+        if (res === "err") failures.push(todo[i]);
+        done++; setPersonaAll((p) => ({ ...p, done, failed: failures.length }));
       }
     };
     await Promise.all([worker(), worker()]);
-    setPersonaAll({ busy: false, done: 0, total: 0 });
+
+    // Most failures are transient tool/rate limits under concurrency, so give
+    // them one sequential pass before reporting anything as failed.
+    if (failures.length) {
+      const retry = [...failures];
+      failures.length = 0;
+      for (const id of retry) {
+        const res = await researchOnePerson(id);
+        if (res === "err") failures.push(id);
+        setPersonaAll((p) => ({ ...p, failed: failures.length }));
+      }
+    }
+    setPersonaAll({ busy: false, done: 0, total: 0, failed: failures.length });
+    if (failures.length) setMsg(`${failures.length} of ${todo.length} ${failures.length === 1 ? "person" : "people"} couldn't be researched — press the button again to retry just those.`);
   }
 
   async function removeAccount() {
@@ -740,7 +757,7 @@ export default function Hub({ accountId, userId, entityId, ticker, initialNotes,
           {contacts.some((c) => !c.persona_json) && (
             <button onClick={researchAllPeople} disabled={personaAll.busy}
               style={{ background: "#fff", border: "1.5px dashed #C9BFE0", color: "#6A3E8E", borderRadius: 10, padding: "10px 16px", fontSize: 14, fontWeight: 700, cursor: personaAll.busy ? "default" : "pointer", opacity: personaAll.busy ? 0.55 : 1 }}>
-              🧠 {personaAll.busy ? `Researching people… ${personaAll.done}/${personaAll.total}` : `Research all ${contacts.filter((c) => !c.persona_json).length} people`}
+              🧠 {personaAll.busy ? `Researching people… ${personaAll.done}/${personaAll.total}${personaAll.failed ? ` · ${personaAll.failed} failed` : ""}` : `Research all ${contacts.filter((c) => !c.persona_json).length} people`}
             </button>
           )}
         </div>
