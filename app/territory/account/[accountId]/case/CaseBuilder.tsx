@@ -167,6 +167,10 @@ export default function CaseBuilder({ entityId, company }: { entityId: string; c
 
         {showEst && prices.length > 0 && (
           <div style={{ marginTop: 10, borderTop: "1px solid var(--border)", paddingTop: 10 }}>
+            <div style={{ fontSize: 11, color: "var(--muted)", marginBottom: 6 }}>
+              Set a quantity on each SKU you want — they differ by product. These two are only used by the
+              &ldquo;use&rdquo; shortcut on a line.
+            </div>
             <div style={{ display: "flex", gap: 12, flexWrap: "wrap", marginBottom: 8 }}>
               <label style={{ fontSize: 12, fontWeight: 700 }}>Employees <input inputMode="numeric" value={employees} onChange={(e) => setEmployees(Number(e.target.value.replace(/\D/g, "")) || 0)} style={{ width: 70, marginLeft: 4, fontSize: 12.5, padding: "3px 6px", borderRadius: 6, border: "1px solid var(--border)" }} /></label>
               <label style={{ fontSize: 12, fontWeight: 700 }}>Named users <input inputMode="numeric" value={users} onChange={(e) => setUsers(Number(e.target.value.replace(/\D/g, "")) || 0)} style={{ width: 70, marginLeft: 4, fontSize: 12.5, padding: "3px 6px", borderRadius: 6, border: "1px solid var(--border)" }} /></label>
@@ -177,7 +181,12 @@ export default function CaseBuilder({ entityId, company }: { entityId: string; c
                   onChange={(e) => setDefaultDisc(Math.min(100, Number(e.target.value.replace(/[^0-9.]/g, "")) || 0))}
                   style={{ width: 56, marginLeft: 4, fontSize: 12.5, padding: "3px 6px", borderRadius: 6, border: "1px solid var(--border)" }} />%
               </label>
-              <span style={{ fontSize: 11, color: "var(--muted)" }}>applies to any line you don&apos;t set individually</span>
+              <span style={{ fontSize: 11, color: "var(--muted)" }}>flows down to every line you haven&apos;t overridden</span>
+              {Object.keys(disc).length > 0 && (
+                <button className="mini" onClick={() => setDisc({})} title="Clear per-line discounts and use the default everywhere">
+                  Reset {Object.keys(disc).length} override{Object.keys(disc).length === 1 ? "" : "s"}
+                </button>
+              )}
             </div>
 
             <div style={{ overflowX: "auto", border: "1px solid var(--border)", borderRadius: 8 }}>
@@ -209,7 +218,7 @@ export default function CaseBuilder({ entityId, company }: { entityId: string; c
                               <td style={{ padding: "5px 8px" }}>
                                 <label style={{ display: "flex", gap: 7, alignItems: "center", cursor: "pointer" }}>
                                   <input type="checkbox" checked={on}
-                                    onChange={() => setQty((x) => { const n = { ...x }; if (on) delete n[p.id]; else n[p.id] = -1; return n; })} />
+                                    onChange={() => setQty((x) => { const n = { ...x }; if (on) delete n[p.id]; else n[p.id] = 0; return n; })} />
                                   <span>{p.name.replace(/ Cloud Service$/, "").slice(0, 40)}</span>
                                 </label>
                               </td>
@@ -217,18 +226,27 @@ export default function CaseBuilder({ entityId, company }: { entityId: string; c
                               <td style={{ padding: "5px 6px", textAlign: "right", fontFamily: "ui-monospace, monospace" }}>${p.list_price}</td>
                               <td style={{ padding: "5px 6px", textAlign: "right" }}>
                                 {on ? (
-                                  <input inputMode="numeric" value={qty[p.id] === -1 ? q : qty[p.id]}
+                                  <input inputMode="numeric" value={qty[p.id] === -1 ? q : (qty[p.id] || "")} placeholder="0"
                                     onChange={(e) => setQty((x) => ({ ...x, [p.id]: Number(e.target.value.replace(/\D/g, "")) || 0 }))}
                                     title="Quantity for this SKU"
                                     style={{ width: 58, fontSize: 12, padding: "2px 5px", borderRadius: 5, border: "1px solid var(--border)", textAlign: "right" }} />
                                 ) : <span style={{ color: "var(--muted)" }}>—</span>}
+                                {on && !qty[p.id] && (perEmployee(p.metric) ? employees : users) > 0 && (
+                                  <button onClick={() => setQty((x) => ({ ...x, [p.id]: perEmployee(p.metric) ? employees : users }))}
+                                    title={`Fill with ${perEmployee(p.metric) ? "employee count" : "named-user count"}`}
+                                    style={{ display: "block", marginLeft: "auto", marginTop: 2, background: "none", border: "none", padding: 0, cursor: "pointer", fontSize: 10, color: "var(--blue)", fontWeight: 700 }}>
+                                    use {perEmployee(p.metric) ? employees.toLocaleString() : users.toLocaleString()}
+                                  </button>
+                                )}
                               </td>
                               <td style={{ padding: "5px 6px", textAlign: "right" }}>
                                 {on ? (
                                   <input inputMode="decimal" value={d}
                                     onChange={(e) => setDisc((x) => ({ ...x, [p.id]: Math.min(100, Number(e.target.value.replace(/[^0-9.]/g, "")) || 0) }))}
-                                    title="Discount % off list for this SKU"
-                                    style={{ width: 48, fontSize: 12, padding: "2px 5px", borderRadius: 5, border: "1px solid var(--border)", textAlign: "right" }} />
+                                    title={disc[p.id] === undefined ? "Inheriting the default discount — type to override this line" : "Overridden for this line"}
+                                    style={{ width: 48, fontSize: 12, padding: "2px 5px", borderRadius: 5, textAlign: "right",
+                                      border: disc[p.id] === undefined ? "1px dashed var(--border)" : "1px solid var(--blue)",
+                                      color: disc[p.id] === undefined ? "var(--muted)" : "var(--ink)", fontWeight: disc[p.id] === undefined ? 400 : 700 }} />
                                 ) : <span style={{ color: "var(--muted)" }}>—</span>}
                               </td>
                               <td style={{ padding: "5px 8px", textAlign: "right", fontFamily: "ui-monospace, monospace", fontWeight: on ? 700 : 400, color: on ? "var(--ink)" : "var(--muted)" }}>
