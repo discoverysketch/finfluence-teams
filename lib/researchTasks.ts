@@ -218,50 +218,38 @@ export async function runTask(client: Anthropic, ent: Ent, key: TaskKey, fetchPr
   // out at over ten minutes). Two halves run in parallel instead, so wall-clock
   // is one call's worth and each stays well inside the limit.
   if (key === "stack") {
-    const half = (label: string, areas: string) =>
-      `Work out which ENTERPRISE SYSTEMS ${ent.canonical_name} (a US utility/energy company) runs TODAY for ${label}, using PUBLIC evidence only.
-
-` +
-      `SEARCH BY AREA, NOT BY VENDOR — never guess a vendor and look for confirmation; ask what fills each slot:
-${areas}
-
-` +
-      `HIGH-VALUE TELLS:
-` +
-      `- THE CAREERS-PORTAL DOMAIN IS NEAR-DEFINITIVE for the HR system: *.oraclecloud.com or fa.*.oraclecloud.com = Oracle Fusion HCM; ` +
-      `*.myworkdayjobs.com = Workday; *.sapsf.com / *.successfactors.com = SAP SuccessFactors; taleo.net = Oracle Taleo.
-` +
-      `- THEIR OWN JOB POSTINGS name the systems a team supports ("Oracle HCM Cloud Developer", "SAP FICO Analyst", "Maximo administrator") — the richest single source.
-` +
-      `- Vendor press releases and customer case studies naming them; their 10-K technology discussion; user-group talks by their staff.
-
-` +
-      `An EXISTING Oracle footprint matters as much as a competitor's — if they already run Oracle anywhere, say so explicitly.
-` +
-      `Report the exact evidence and source URL for each system. If an area has no real evidence, OMIT it — never infer a vendor from what a utility "typically" runs.`;
-
-    const [a, b] = await Promise.all([
-      client.messages.create({
-        model: "claude-sonnet-5", max_tokens: 9000, tools: TOOLS(4, 2, 24000),
-        messages: [{ role: "user", content: half("FINANCE, HR AND PROCUREMENT",
-          `  1. "${ent.canonical_name} HCM system" (also "HR system" / "payroll system")
-` +
-          `  2. "${ent.canonical_name} ERP system" (also "finance system" / "general ledger")
-` +
-          `  3. "${ent.canonical_name} procurement system" (sourcing / supply chain)`) }],
-      }),
-      client.messages.create({
-        model: "claude-sonnet-5", max_tokens: 9000, tools: TOOLS(4, 2, 24000),
-        messages: [{ role: "user", content: half("OPERATIONS",
-          `  1. "${ent.canonical_name} asset management system" (EAM / work management)
-` +
-          `  2. "${ent.canonical_name} customer information system" (CIS / billing)
-` +
-          `  3. "${ent.canonical_name} project controls" (capital project scheduling / cost)`) }],
-      }),
-    ]);
-    usage.push(u("claude-sonnet-5", a.usage), u("claude-sonnet-5", b.usage));
-    const notes = [textOf(a), textOf(b)].filter(Boolean).join(SEP);
+    // Budget note, learned the hard way: an area-by-area query list makes the
+    // model batch every search into ONE code-execution loop. With a small
+    // max_uses that burns the whole allowance in a burst and returns nothing
+    // ("server tool use limit exceeded"), so the budget has to fit the batch.
+    // Parallel calls don't help — the limit is per turn, not concurrency.
+    const res = await client.messages.create({
+      model: "claude-sonnet-5", max_tokens: 10000,
+      tools: [
+        { type: "web_search_20260209", name: "web_search", max_uses: 6 } as any,
+        { type: "web_fetch_20260209", name: "web_fetch", max_uses: 3, max_content_tokens: 24000 } as any,
+      ],
+      messages: [{ role: "user", content:
+        `Which ENTERPRISE SYSTEMS does ${ent.canonical_name} (a US utility/energy company) run TODAY? Public evidence only.` + SEP +
+        `RUN ONE SEARCH AT A TIME and read each result before the next — do NOT batch several queries into a single code block. ` +
+        `Batching burns the whole search allowance in one burst and returns nothing. Stop as soon as you have covered the areas below or run low on searches.` + SEP +
+        `SEARCH BY AREA, NOT BY VENDOR — never guess a vendor and look for confirmation; ask what fills each slot:` + NL +
+        `  1. "${ent.canonical_name} HCM system" (also "HR system" / "payroll system")` + NL +
+        `  2. "${ent.canonical_name} ERP system" (also "finance system" / "general ledger")` + NL +
+        `  3. "${ent.canonical_name} asset management system" (EAM / work management)` + NL +
+        `  4. "${ent.canonical_name} customer information system" (CIS / billing)` + NL +
+        `  5. "${ent.canonical_name} project controls" (capital project scheduling / cost)` + NL +
+        `  6. "${ent.canonical_name} procurement system" (sourcing / supply chain)` + SEP +
+        `HIGH-VALUE TELLS:` + NL +
+        `- THE CAREERS-PORTAL DOMAIN IS NEAR-DEFINITIVE for the HR system: *.oraclecloud.com or fa.*.oraclecloud.com = Oracle Fusion HCM; ` +
+        `*.myworkdayjobs.com = Workday; *.sapsf.com / *.successfactors.com = SAP SuccessFactors; taleo.net = Oracle Taleo.` + NL +
+        `- THEIR OWN JOB POSTINGS name the systems a team supports ("Oracle HCM Cloud Developer", "SAP FICO Analyst", "Maximo administrator") — the richest single source.` + NL +
+        `- Vendor press releases and customer case studies naming them; their 10-K technology discussion.` + SEP +
+        `An EXISTING Oracle footprint matters as much as a competitor's — if they already run Oracle anywhere, say so explicitly.` + NL +
+        `Report the exact evidence and source URL for each system found. If an area has no real evidence, OMIT it — never infer a vendor from what a utility "typically" runs.` }],
+    });
+    usage.push(u("claude-sonnet-5", res.usage));
+    const notes = textOf(res);
     if (!notes) throw new Error("research came back empty");
 
     const ex = await client.messages.create({
@@ -288,6 +276,9 @@ ${areas}
       merged.set(id, (RANK[sy.confidence] ?? 0) > (RANK[prev.confidence] ?? 0) ? { ...sy, corroborated: true } : { ...prev, corroborated: true });
     }
     parsed.systems = [...merged.values()];
+    // A transient tool failure returns a well-formed card with nothing in it.
+    // Saving that would overwrite good cached research with "no evidence found".
+    if (!parsed.systems.length) throw new Error("no systems found — likely a transient search failure, existing card left untouched");
     return { data: parsed, usage };
   }
 
