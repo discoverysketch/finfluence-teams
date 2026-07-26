@@ -32,7 +32,7 @@ export default async function Shell({
 
   const cls = (t: Tab) => (active === t ? "on" : "");
   return (
-    <>
+    <div className="appshell">
       <header className="appbar">
         <Finn />
         {mode === "professional" ? (
@@ -60,6 +60,6 @@ export default async function Shell({
         <Link href="/" className={cls("home")}><span className="nico"><UserRound size={20} strokeWidth={1.9} /></span>Me</Link>
         </div>
       </nav>
-    </>
+    </div>
   );
 }

@@ -55,11 +55,22 @@ h2 { font-size: 19px; font-weight: 700; letter-spacing: -.01em; }
    entirely. Compositing hints (translateZ/will-change) did not fix it; only
    removing the blur does. The background is fully opaque so nothing needs
    to be sampled from behind the bar at all. */
+/* App shell: header, scrolling content, nav — one viewport-height column.
+   The DOCUMENT never scrolls, only .container does. That matters on mobile:
+   scrolling down collapses the browser's URL bar, which changes the viewport
+   height and makes any position:fixed bar visibly drift while the page
+   re-lays-out (fine scrolling up, floaty scrolling down). With no document
+   scroll there is no URL-bar collapse and nothing for the nav to lag behind. */
+.appshell { display: flex; flex-direction: column; height: 100dvh; overflow: hidden; }
+.appshell > .appbar { flex: none; position: static; }
+.appshell > .container { flex: 1 1 auto; min-height: 0; overflow-y: auto; -webkit-overflow-scrolling: touch; overscroll-behavior: contain; }
+.appshell > .nav { flex: none; }
+/* the 100px tail existed to clear an overlaying fixed bar; the nav is a real
+   row now, so that much dead space at the end of every page is just wasted */
+.appshell > .container { padding-bottom: 24px; }
+
 .nav {
-  /* Full-width bar, centred links. Constraining the BAR to 520px left it
-     floating as a detached pill in the middle of a desktop screen; the bar
-     should read as anchored to the bottom edge at any width. */
-  position: fixed; left: 0; right: 0; bottom: 0;
+  /* Full-width bar, centred links. */
   background: #1B1D26;
   border-top: 1px solid rgba(255,255,255,.07);
   box-shadow: 0 -8px 24px rgba(20, 15, 5, .18);
