@@ -63,7 +63,20 @@ h2 { font-size: 19px; font-weight: 700; letter-spacing: -.01em; }
    scroll there is no URL-bar collapse and nothing for the nav to lag behind. */
 .appshell { display: flex; flex-direction: column; height: 100dvh; overflow: hidden; }
 .appshell > .appbar { flex: none; position: static; }
-.appshell > .container { flex: 1 1 auto; min-height: 0; overflow-y: auto; -webkit-overflow-scrolling: touch; overscroll-behavior: contain; }
+.appshell > .container {
+  flex: 1 1 auto; min-height: 0;
+  overflow-y: auto;
+  /* Explicit, not inherited: the shell clips both axes to stop the document
+     scrolling, so without this anything wider than the phone is simply cut
+     off with no way to reach it. */
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch; overscroll-behavior: contain;
+}
+/* Nothing should need that horizontal scroll in the first place. Long URLs,
+   vendor evidence and quoted filing text are the usual culprits: an unbroken
+   string forces the whole card wider than the screen. */
+.appshell .card, .appshell .card * { min-width: 0; overflow-wrap: anywhere; }
+.appshell img, .appshell svg, .appshell table { max-width: 100%; }
 .appshell > .nav { flex: none; }
 /* the 100px tail existed to clear an overlaying fixed bar; the nav is a real
    row now, so that much dead space at the end of every page is just wasted */
