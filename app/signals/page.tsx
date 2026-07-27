@@ -11,7 +11,12 @@ import WhatChanged from "@/components/WhatChanged";
 /* eslint-disable @typescript-eslint/no-explicit-any */
 const fmtDay = (s: string) => new Date(s + "T12:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric" });
 
-export default async function SignalsPage() {
+export default async function SignalsPage({ searchParams }: { searchParams: Promise<{ scope?: string }> }) {
+  // Scoped server-side rather than hidden client-side, so "Mine" narrows the
+  // queries themselves — the filing and news lookups are capped (50 events,
+  // 400 stories), and filtering after the fact would let a teammate's busy
+  // account push your own signals off the end of the list.
+  const scope = (await searchParams).scope === "mine" ? "mine" : "all";
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) redirect("/login");
@@ -21,10 +26,13 @@ export default async function SignalsPage() {
   const { data: list } = await supabase.from("account_lists")
     .select("id").eq("tenant_id", me?.tenant_id ?? "").order("created_at").limit(1).maybeSingle();
   const { data: accts } = await supabase.from("accounts")
-    .select("id, entity_id").eq("list_id", list?.id ?? "00000000-0000-0000-0000-000000000000");
+    .select("id, entity_id, owner").eq("list_id", list?.id ?? "00000000-0000-0000-0000-000000000000");
+  const inScope = ((accts ?? []) as any[]).filter((a) => scope === "all" || a.owner === user.id);
   const acctOf: Record<string, string> = {};
-  for (const a of (accts ?? []) as any[]) if (a.entity_id) acctOf[a.entity_id] = a.id;
+  for (const a of inScope) if (a.entity_id) acctOf[a.entity_id] = a.id;
   const entityIds = Object.keys(acctOf);
+  const mineCount = ((accts ?? []) as any[]).filter((a) => a.owner === user.id).length;
+  const allCount = ((accts ?? []) as any[]).length;
 
   const since = new Date(Date.now() - 60 * 24 * 3600 * 1000).toISOString().slice(0, 10);
   const [{ data: events }, { data: news }, { data: bookEnts }] = await Promise.all([
@@ -84,7 +92,13 @@ export default async function SignalsPage() {
         What's happening at your accounts — earnings, executive changes, deals, and financings from SEC filings, checked daily.
       </p>
 
-      <div className="sigttl">📁 Your accounts</div>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, margin: "4px 0 8px" }}>
+        <div className="sigttl" style={{ margin: 0 }}>📁 {scope === "mine" ? "My accounts" : "Team book"} · {scope === "mine" ? mineCount : allCount}</div>
+        <div style={{ display: "flex", gap: 4, flexShrink: 0 }}>
+          <Link href="/signals" scroll={false} className="mini" style={{ fontWeight: 700, background: scope === "all" ? "var(--cream2)" : "#fff", textDecoration: "none" }}>All</Link>
+          <Link href="/signals?scope=mine" scroll={false} className="mini" style={{ fontWeight: 700, background: scope === "mine" ? "var(--cream2)" : "#fff", textDecoration: "none" }}>Mine</Link>
+        </div>
+      </div>
       {rateCases.map((n: any) => {
         let domain = "";
         try { domain = new URL(n.source_url).hostname.replace(/^www\./, ""); } catch { /* keep empty */ }
@@ -110,7 +124,7 @@ export default async function SignalsPage() {
       })}
       {(events ?? []).length === 0 && rateCases.length === 0 && (
         <div className="card" style={{ background: "#FAF6EE", borderColor: "#E6CF94", color: "#7A5B12", fontSize: 13.5 }}>
-          Nothing in the last 60 days from your accounts. The watcher checks daily — enable notifications on the <Link href="/">Me page</Link> to get pinged when something lands.
+          Nothing in the last 60 days from {scope === "mine" ? "your accounts" : "the team book"}.{scope === "mine" && allCount > mineCount ? " Try All to see the rest of the team's." : ""} The watcher checks daily — enable notifications on the <Link href="/">Me page</Link> to get pinged when something lands.
         </div>
       )}
 
@@ -182,7 +196,12 @@ export default async function SignalsPage() {
       <p style={{ fontSize: 11, color: "var(--muted)", marginTop: 12 }}>
         Sources: SEC EDGAR filings + daily per-account news harvest + industry web sweep · verify before acting.
       </p>
-      <style>{`.sigttl{font-size:11px;font-weight:700;color:#8A7E6E;text-transform:uppercase;letter-spacing:.6px;margin:18px 0 8px}`}</style>
+      <style>{`
+        .sigttl{font-size:11px;font-weight:700;color:#8A7E6E;text-transform:uppercase;letter-spacing:.6px;margin:18px 0 8px}
+        /* Matches the All/Mine control on the Accounts page — same size, same
+           weight, same selected fill — so the two read as one idea. */
+        .mini{border:1px solid var(--border);background:#fff;border-radius:6px;padding:5px 9px;font-size:12px;font-weight:700;color:var(--ink2);cursor:pointer;text-decoration:none;display:inline-block}
+      `}</style>
     </Shell>
   );
 }
