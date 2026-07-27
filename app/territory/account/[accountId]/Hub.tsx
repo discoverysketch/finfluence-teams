@@ -18,6 +18,13 @@ import WinWire from "./WinWire";
 export type Persona = { headline: string; background: string; priorities: string[]; quote: string; talk_to_them: string; source: string; confidence?: string };
 export type Contact = { id: string; account_id: string; name: string; title: string | null; role_tag: string | null; email: string | null; phone: string | null; reports_to: string | null; notes: string | null; persona_json?: Persona | null; persona_at?: string | null };
 type Priorities = { summary: string; as_of: string; priorities: { theme: string; detail: string; quote: string; who: string; source: string; angle: string }[] };
+// Ranked by how much an Oracle seller can honestly do about it: technology and
+// execution exposures map to ERP/EPM/Primavera, control gaps to close and audit,
+// workforce only tangentially.
+const EXPOSURE_COLOR: Record<string, string> = {
+  technology: "#0572CE", execution: "#9A6700", control: "#8E44AD", workforce: "#1B7A47", other: "#8A7E6E",
+};
+type Risks = { summary: string; as_of: string; risks: { theme: string; detail: string; quote: string; exposure: string; angle: string; source: string }[] };
 export type Activity = { id: string; account_id: string; contact_id: string | null; user_id: string | null; kind: string; body: string; due_at: string | null; done: boolean; created_at: string };
 
 const ROLES: Record<string, { label: string; color: string }> = {
@@ -148,10 +155,11 @@ function EiaBlock({ eia }: { eia: EiaOps }) {
 type CForm = { id?: string; name: string; title: string; role_tag: string; email: string; phone: string; reports_to: string };
 const emptyC: CForm = { name: "", title: "", role_tag: "", email: "", phone: "", reports_to: "" };
 
-export default function Hub({ accountId, userId, entityId, ticker, initialNotes, initialOwner, canAssign, canResearch, initialPriorities, prioritiesAt, initialContacts, initialActivities, emailOf }: {
+export default function Hub({ accountId, userId, entityId, ticker, initialNotes, initialOwner, canAssign, canResearch, initialPriorities, prioritiesAt, initialRisks, risksAt, initialContacts, initialActivities, emailOf }: {
   accountId: string; userId: string; entityId: string | null; ticker: string | null;
   initialNotes: string | null; initialOwner: string | null; canAssign: boolean; canResearch: boolean;
   initialPriorities: Priorities | null; prioritiesAt: string | null;
+  initialRisks: Risks | null; risksAt: string | null;
   initialContacts: Contact[]; initialActivities: Activity[]; emailOf: Record<string, string>;
 }) {
   const supabase = createClient();
@@ -160,6 +168,10 @@ export default function Hub({ accountId, userId, entityId, ticker, initialNotes,
   const [owner, setOwner] = useState<string | null>(initialOwner);
   const [priorities, setPriorities] = useState<Priorities | null>(initialPriorities);
   const [prioAt, setPrioAt] = useState<string | null>(prioritiesAt);
+  const [risks, setRisks] = useState<Risks | null>(initialRisks);
+  const [riskAt, setRiskAt] = useState<string | null>(risksAt);
+  const [riskBusy, setRiskBusy] = useState(false);
+  const [riskErr, setRiskErr] = useState<string | null>(null);
   // Failures used to write to the page-level message at the top of the Hub,
   // far above this section — the user clicked, it failed, and the explanation
   // scrolled off-screen, so it read as "nothing happened".
@@ -249,6 +261,18 @@ export default function Hub({ accountId, userId, entityId, ticker, initialNotes,
       setPriorities(j.priorities); setPrioAt(j.at);
     } catch { setPrioErr("Network error — check your connection and try again."); }
     finally { setPrioBusy(false); }
+  }
+
+  async function researchRisks() {
+    if (riskBusy || !entityId) return;
+    setRiskBusy(true); setRiskErr("");
+    try {
+      const r = await fetch("/api/research-risks", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ entityId }) });
+      const j = await r.json().catch(() => null);
+      if (!r.ok || !j?.risks) { setRiskErr(j?.error || "Couldn't read the risk factors — try again."); return; }
+      setRisks(j.risks); setRiskAt(j.at);
+    } catch { setRiskErr("Network error — check your connection and try again."); }
+    finally { setRiskBusy(false); }
   }
   async function researchPerson(c: Contact) {
     if (personaBusy) return;
@@ -667,6 +691,50 @@ export default function Hub({ accountId, userId, entityId, ticker, initialNotes,
                 </div>
               ))}
               <div style={{ fontSize: 10.5, color: "var(--muted)", marginTop: 8 }}>Their own public words — verify before quoting in writing.</div>
+            </div>
+          )}
+        </>
+      )}
+
+      {/* ---- Where they say they're exposed (10-K Item 1A risk factors) ---- */}
+      {entityId && (
+        <>
+          <div className="secttl" style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
+            <span>⚠️ Where they say they&apos;re exposed</span>
+            {risks && <button className="mini" onClick={researchRisks} disabled={riskBusy}>{riskBusy ? "…" : "↻"}</button>}
+          </div>
+          {!risks ? (
+            <div className="card" style={{ padding: "13px 14px" }}>
+              <p style={{ fontSize: 12.5, color: "var(--ink2)", margin: "0 0 10px" }}>
+                Read Item 1A of their latest 10-K — the risks they are legally obliged to disclose. It is the most candid thing a company publishes about aging systems, integration gaps and control weaknesses. Boilerplate (weather, rates, litigation) is filtered out.
+              </p>
+              <button className="btn" onClick={researchRisks} disabled={riskBusy}>
+                {riskBusy ? "Reading Item 1A… (~30s)" : "🔎 Read their risk factors"}
+              </button>
+              {riskErr && <div style={{ fontSize: 12.5, color: "var(--red)", fontWeight: 600, marginTop: 8 }}>{riskErr}</div>}
+            </div>
+          ) : (
+            <div className="card" style={{ padding: "13px 14px" }}>
+              <div style={{ fontSize: 13.5, lineHeight: 1.5, marginBottom: 4 }}>{risks.summary}</div>
+              <div style={{ fontSize: 11, color: "var(--muted)", marginBottom: 10 }}>10-K Item 1A, FY{risks.as_of}{riskAt ? ` · pulled ${fmtDate(riskAt)}` : ""}</div>
+              {riskErr && <div style={{ fontSize: 12.5, color: "var(--red)", fontWeight: 600, marginBottom: 8 }}>{riskErr}</div>}
+              {risks.risks.map((r, i) => (
+                <div key={i} style={{ padding: "9px 0", borderTop: i ? "1px solid #F0EAE0" : "none" }}>
+                  <div style={{ display: "flex", gap: 7, alignItems: "baseline", flexWrap: "wrap" }}>
+                    <div style={{ fontSize: 13.5, fontWeight: 800 }}>{r.theme}</div>
+                    <span style={{ fontSize: 10, fontWeight: 800, letterSpacing: 0.3, textTransform: "uppercase", borderRadius: 4, padding: "1.5px 6px", color: "#fff", background: EXPOSURE_COLOR[r.exposure] || "#8A7E6E" }}>{r.exposure}</span>
+                  </div>
+                  <div style={{ fontSize: 12.5, color: "var(--ink2)", margin: "2px 0 5px" }}>{r.detail}</div>
+                  {r.quote && (
+                    <div style={{ fontSize: 12.5, fontStyle: "italic", background: "#FBF0EE", borderLeft: "3px solid #C0392B", borderRadius: 6, padding: "6px 9px", margin: "4px 0" }}>
+                      &ldquo;{r.quote}&rdquo;
+                    </div>
+                  )}
+                  <div style={{ fontSize: 12, color: "#006B72", marginTop: 3 }}><b>Your angle:</b> {r.angle}</div>
+                  {r.source && <a href={r.source} target="_blank" rel="noreferrer" style={{ fontSize: 11.5, color: "var(--blue)", fontWeight: 700 }}>Item 1A ↗</a>}
+                </div>
+              ))}
+              <div style={{ fontSize: 10.5, color: "var(--muted)", marginTop: 8 }}>Straight from their own 10-K. Quote it back to them carefully — this is language they chose for regulators, not for you.</div>
             </div>
           )}
         </>

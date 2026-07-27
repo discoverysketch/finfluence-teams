@@ -5,12 +5,13 @@
 import type Anthropic from "@anthropic-ai/sdk";
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
-export type TaskKey = "hiring" | "comp" | "priorities" | "decision" | "stack" | "infer";
+export type TaskKey = "hiring" | "comp" | "priorities" | "decision" | "stack" | "infer" | "risks";
 export type Ent = { id: string; canonical_name: string; ticker?: string | null; hq_state?: string | null; cik?: string | null };
 export type TaskResult = { data: any; usage: { model: string; input: number; output: number; searches: number }[] };
 // Injected by the caller so the Next route and the node seed script can each
 // import lib/proxy the way their own module resolver expects.
 export type FetchProxy = (cik: string) => Promise<{ url: string; filed: string; section: string } | null>;
+export type FetchRisks = (cik: string) => Promise<{ url: string; filed: string; section: string } | null>;
 export type FetchLeadership = (cik: string) => Promise<{
   earnings: { url: string; filed: string; text: string } | null;
   mdna: { url: string; filed: string; text: string } | null;
@@ -32,6 +33,33 @@ const u = (model: string, usage: any) => ({
 const textOf = (m: any) => m.content.filter((b: any) => b.type === "text").map((b: any) => b.text).join("\n").trim();
 
 export const SCHEMAS: Record<TaskKey, any> = {
+  risks: {
+    type: "object", additionalProperties: false,
+    properties: {
+      summary: { type: "string" },
+      risks: {
+        // No maxItems — the API rejects it on output schemas. The prompt asks
+        // for at most 8 and the route slices defensively.
+        type: "array",
+        items: {
+          type: "object", additionalProperties: false,
+          properties: {
+            theme: { type: "string" },
+            detail: { type: "string" },
+            quote: { type: "string" },
+            // What kind of exposure it is, so the UI can rank the ones a
+            // software seller can actually do something about.
+            exposure: { type: "string", enum: ["technology", "execution", "control", "workforce", "other"] },
+            angle: { type: "string" },
+            source: { type: "string" },
+          },
+          required: ["theme", "detail", "quote", "exposure", "angle", "source"],
+        },
+      },
+      as_of: { type: "string" },
+    },
+    required: ["summary", "risks", "as_of"],
+  },
   hiring: {
     type: "object", additionalProperties: false,
     properties: {
@@ -139,7 +167,7 @@ const TOOLS = (search: number, fetch: number, contentTokens = 30000) => [
   { type: "web_fetch_20260209", name: "web_fetch", max_uses: fetch, max_content_tokens: contentTokens } as any,
 ];
 
-export async function runTask(client: Anthropic, ent: Ent, key: TaskKey, fetchProxy?: FetchProxy, fetchLeadership?: FetchLeadership, atsVendors?: { vendor: string; mentions: number; titles: string[] }[]): Promise<TaskResult> {
+export async function runTask(client: Anthropic, ent: Ent, key: TaskKey, fetchProxy?: FetchProxy, fetchLeadership?: FetchLeadership, atsVendors?: { vendor: string; mentions: number; titles: string[] }[], fetchRisks?: FetchRisks): Promise<TaskResult> {
   const usage: TaskResult["usage"] = [];
   const NL = String.fromCharCode(10);
   const SEP = NL + NL + "---" + NL + NL;
@@ -170,6 +198,36 @@ export async function runTask(client: Anthropic, ent: Ent, key: TaskKey, fetchPr
     return { data, usage };
   }
 
+  // RISKS is deterministic — Item 1A of the 10-K is a fixed, addressable
+  // section, so there is nothing to search for. It is also the most candid
+  // page a company publishes: legal exposure forces them to name aging
+  // systems, integration failures, control weaknesses and cyber gaps that
+  // never appear in the investor deck. No web search, one extraction call.
+  if (key === "risks") {
+    if (!fetchRisks || !ent.cik) {
+      throw new Error("Risk factors come from 10-K Item 1A, so this needs an SEC filer. This account has no CIK on file.");
+    }
+    const doc = await fetchRisks(ent.cik);
+    if (!doc) throw new Error("No 10-K Item 1A section found for this filer.");
+    const res = await client.messages.create({
+      model: "claude-opus-4-8", max_tokens: 3500,
+      output_config: { format: { type: "json_schema", schema: SCHEMAS.risks } } as any,
+      system:
+        "Extract the risk factors that an enterprise-software seller (Oracle ERP / EPM / Primavera) could act on, from this 10-K Item 1A text ONLY. " +
+        "Most risk factors are boilerplate — weather, commodity prices, interest rates, litigation. SKIP those. Keep only risks touching: information technology and cyber, " +
+        "aging or legacy systems, ERP/system implementations, data and integration, internal control over financial reporting or material weaknesses, capital-project execution and cost overruns, " +
+        "supply chain, and workforce/talent retention. " +
+        "summary = 2 sentences on where this company says it is exposed. Each risk: theme (3-6 words), detail (1-2 sentences in plain language), " +
+        "quote (a REAL verbatim fragment from the text, under 30 words — never invent one), exposure (technology | execution | control | workforce | other), " +
+        "angle (one line on how an Oracle seller ties a capability to this exposure — be specific and non-glib; if there is no honest angle, say so plainly), " +
+        "source (use the filing URL given above the text). as_of = the fiscal year of the filing. " +
+        "If fewer than 8 qualify, return only those that do. Never invent a quote, figure or system name.",
+      messages: [{ role: "user", content: `Company: ${ent.canonical_name}` + SEP + `10-K ITEM 1A RISK FACTORS (filed ${doc.filed})` + NL + doc.url + NL + doc.section }],
+    }, { timeout: DEADLINE_MS });
+    usage.push(u("claude-opus-4-8", res.usage));
+    return { data: JSON.parse(textOf(res)), usage };
+  }
+
   // PRIORITIES is deterministic too. What leadership is saying lives in known
   // places: the CEO/CFO quotes are in the 8-K earnings release (Item 2.02) and
   // the strategy is in 10-K Item 7 MD&A. Searching the open web for it took
@@ -198,7 +256,7 @@ export async function runTask(client: Anthropic, ent: Ent, key: TaskKey, fetchPr
     // No filings found (non-filer) — fall through to the web-search path below.
   }
 
-  const CFG: Record<Exclude<TaskKey, "comp" | "stack">, { tools: any[]; maxTokens: number; prompt: string; extractModel: string; extractTokens: number; system: string; notesCap: number }> = {
+  const CFG: Record<Exclude<TaskKey, "comp" | "stack" | "risks">, { tools: any[]; maxTokens: number; prompt: string; extractModel: string; extractTokens: number; system: string; notesCap: number }> = {
     hiring: {
       tools: TOOLS(3, 1, 18000), maxTokens: 9000, extractModel: "claude-opus-4-8", extractTokens: 3000, notesCap: 16000,
       prompt:
@@ -327,7 +385,7 @@ export async function runTask(client: Anthropic, ent: Ent, key: TaskKey, fetchPr
     return { data: parsed, usage };
   }
 
-  const cfg = CFG[key as Exclude<TaskKey, "comp" | "stack">];
+  const cfg = CFG[key as Exclude<TaskKey, "comp" | "stack" | "risks">];
   const research = await client.messages.create({
     model: "claude-sonnet-5", max_tokens: cfg.maxTokens, tools: cfg.tools,
     messages: [{ role: "user", content: cfg.prompt }],

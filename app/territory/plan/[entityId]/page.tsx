@@ -49,7 +49,7 @@ export default async function PlanPage({ params }: { params: Promise<{ entityId:
   if (!user) redirect("/login");
 
   const { data: ent } = await supabase.from("entities")
-    .select("id, canonical_name, ticker, data_tier, hq_state, entity_type, profile_json, priorities_json, priorities_at, decision_locus, decision_note, decision_source, decision_at, hiring_json, comp_json, fleet_json, muni_json, stack_json, inferred_json, hiring_at, comp_at, fleet_at, muni_at, stack_at, inferred_at, employees")
+    .select("id, canonical_name, ticker, data_tier, hq_state, entity_type, profile_json, priorities_json, priorities_at, risks_json, risks_at, decision_locus, decision_note, decision_source, decision_at, hiring_json, comp_json, fleet_json, muni_json, stack_json, inferred_json, hiring_at, comp_at, fleet_at, muni_at, stack_at, inferred_at, employees")
     .eq("id", entityId).maybeSingle();
   if (!ent) return <main className="container"><p>Account not found.</p><Link href="/territory">← Accounts</Link></main>;
 
@@ -94,6 +94,7 @@ export default async function PlanPage({ params }: { params: Promise<{ entityId:
   // Everything gathered by research/search, rendered inline so the printed plan
   // carries the homework — each claim keeps its source link.
   const prio: any = (ent as any).priorities_json;
+  const risk: any = (ent as any).risks_json;
   const hiring: any = (ent as any).hiring_json;
   const comp: any = (ent as any).comp_json;
   const fleet: any = (ent as any).fleet_json;
@@ -292,6 +293,24 @@ export default async function PlanPage({ params }: { params: Promise<{ entityId:
               {p.quote && <div style={{ fontSize: 12.5, fontStyle: "italic", color: "var(--ink)", margin: "3px 0" }}>&ldquo;{p.quote}&rdquo;{p.who ? <span style={{ fontStyle: "normal", color: "var(--muted)" }}> — {p.who}</span> : null}</div>}
               {p.angle && <div style={{ fontSize: 12, color: "#006B72" }}><b>Our angle:</b> {p.angle}</div>}
               <Src url={p.source} />
+            </div>
+          ))}
+        </>
+      )}
+
+      {/* Where they say they're exposed — 10-K Item 1A, their own disclosure */}
+      {risk?.risks?.length > 0 && (
+        <>
+          <h2 style={{ fontSize: 15 }}>Where they say they&apos;re exposed{risk.as_of ? <span style={{ fontSize: 12, color: "var(--muted)", fontWeight: 600 }}> · 10-K Item 1A, FY{risk.as_of}</span> : null}</h2>
+          <div style={{ marginTop: -4, marginBottom: 6 }}><When iso={(ent as any).risks_at} /></div>
+          {risk.summary && <p style={{ fontSize: 13, color: "var(--ink2)", margin: "0 0 8px", lineHeight: 1.5 }}>{risk.summary}</p>}
+          {risk.risks.slice(0, 6).map((r: any, i: number) => (
+            <div key={i} className="pblock" style={{ borderLeft: "3px solid #C0392B", paddingLeft: 10, marginBottom: 9 }}>
+              <div style={{ fontSize: 13, fontWeight: 700 }}>{r.theme}{r.exposure ? <span style={{ fontSize: 11, color: "var(--muted)", fontWeight: 600 }}> · {r.exposure}</span> : null}</div>
+              {r.detail && <div style={{ fontSize: 12.5, color: "var(--ink2)", lineHeight: 1.45 }}>{r.detail}</div>}
+              {r.quote && <div style={{ fontSize: 12.5, fontStyle: "italic", color: "var(--ink)", margin: "3px 0" }}>&ldquo;{r.quote}&rdquo;</div>}
+              {r.angle && <div style={{ fontSize: 12, color: "#006B72" }}><b>Our angle:</b> {r.angle}</div>}
+              <Src url={r.source} />
             </div>
           ))}
         </>

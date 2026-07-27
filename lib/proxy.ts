@@ -164,3 +164,56 @@ export async function fetchLeadershipDocs(cik: string): Promise<LeadershipDocs> 
     mdna: tenk ? { url: tenk.url, filed: tenk.filed, text: mdnaSlice(clean(tenk.html)) } : null,
   };
 }
+
+// ---------------------------------------------------------------------------
+// Item 1A Risk Factors — the most candid page in a 10-K. Utilities name aging
+// systems, cyber exposure, ERP implementation risk and integration failures
+// here, because they are legally obliged to disclose what could hurt them.
+// Same addressable-section approach as the proxy CD&A and Item 7 MD&A.
+export type RiskDoc = { url: string; filed: string; section: string };
+
+export async function fetchRiskFactors(cik: string): Promise<RiskDoc | null> {
+  const doc = await primaryDoc(cik, "10-K");
+  if (!doc) return null;
+  const text = clean(doc.html);
+
+  // Take the LAST "Item 1A" heading: the first is the table of contents.
+  const starts = [...text.matchAll(/item\s*1A[.\s:—-]*\s*risk\s+factors/gi)].map((m) => m.index ?? 0);
+  if (!starts.length) return null;
+  const start = starts[starts.length - 1];
+  const after = text.slice(start);
+  const end = after.search(/item\s*1B[.\s:—-]*\s*unresolved|item\s*2[.\s:—-]*\s*properties/i);
+  const body = (end > 2000 ? after.slice(0, end) : after).slice(0, 120000);
+
+  // Risk factors run long and most are boilerplate (weather, commodity prices,
+  // pandemics). Keep the windows that mention technology, systems and
+  // execution — the parts a software seller can act on.
+  const TERMS = [
+    "information technology", "cybersecurity", "cyber attack", "systems", "software",
+    "enterprise resource", "erp", "implementation", "integration", "legacy",
+    "data breach", "outage", "modernization", "digital", "automation", "internal control",
+    "material weakness", "supply chain", "workforce", "attract and retain",
+  ];
+  const lower = body.toLowerCase();
+  const hits: number[] = [];
+  for (const t of TERMS) {
+    let i = lower.indexOf(t);
+    while (i !== -1 && hits.length < 400) { hits.push(i); i = lower.indexOf(t, i + t.length); }
+  }
+  if (!hits.length) return { url: doc.url, filed: doc.filed, section: body.slice(0, 30000) };
+  hits.sort((a, b) => a - b);
+  const W = 2200;
+  const windows: [number, number][] = [];
+  for (const h of hits) {
+    const s = Math.max(0, h - W / 3), e = Math.min(body.length, h + W);
+    const last = windows[windows.length - 1];
+    if (last && s <= last[1]) last[1] = Math.max(last[1], e);
+    else windows.push([s, e]);
+  }
+  let out = "";
+  for (const [s, e] of windows) {
+    if (out.length >= 34000) break;
+    out += (out ? "\n…\n" : "") + body.slice(s, Math.min(e, s + (34000 - out.length)));
+  }
+  return { url: doc.url, filed: doc.filed, section: out };
+}

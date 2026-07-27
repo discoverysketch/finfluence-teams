@@ -20,7 +20,7 @@ export default async function AccountPage({ params }: { params: Promise<{ accoun
 
   // RLS scopes this to the caller's tenant.
   const { data: acct } = await supabase.from("accounts")
-    .select("id, rep_notes, owner, created_by, created_at, entity:entities(id, canonical_name, ticker, data_tier, hq_state, decision_locus, decision_note, decision_source, decision_at, priorities_json, priorities_at, hiring_json, stack_json, profile_json, website)")
+    .select("id, rep_notes, owner, created_by, created_at, entity:entities(id, canonical_name, ticker, data_tier, hq_state, decision_locus, decision_note, decision_source, decision_at, priorities_json, priorities_at, risks_json, risks_at, hiring_json, stack_json, profile_json, website)")
     .eq("id", accountId).maybeSingle();
   if (!acct) {
     return (
@@ -97,6 +97,8 @@ export default async function AccountPage({ params }: { params: Promise<{ accoun
         canResearch={isManagerAdmin || (acct as any).owner === user.id}
         initialPriorities={ent?.priorities_json ?? null}
         prioritiesAt={ent?.priorities_at ?? null}
+        initialRisks={ent?.risks_json ?? null}
+        risksAt={ent?.risks_at ?? null}
         initialContacts={(contacts ?? []) as Contact[]}
         initialActivities={(activities ?? []) as Activity[]}
         emailOf={emailOf}
