@@ -5,14 +5,12 @@ import Shell from "@/components/Shell";
 import Hub, { type Contact, type Activity } from "./Hub";
 import DecisionAuthority from "./DecisionAuthority";
 import CompanyLogo from "@/components/CompanyLogo";
-import OverflowDebug from "@/components/OverflowDebug";
 import { companyDomain } from "@/lib/logo";
 
 // Account Hub: CRM-lite home for one account — stage, org chart, activity.
 /* eslint-disable @typescript-eslint/no-explicit-any */
-export default async function AccountPage({ params, searchParams }: { params: Promise<{ accountId: string }>; searchParams: Promise<{ debug?: string }> }) {
+export default async function AccountPage({ params }: { params: Promise<{ accountId: string }> }) {
   const { accountId } = await params;
-  const { debug } = await searchParams;
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) redirect("/login");
@@ -88,7 +86,6 @@ export default async function AccountPage({ params, searchParams }: { params: Pr
         {ent?.id && <Link href={`/territory/cfo`} className="mini-link">💼 CFO Simulator</Link>}
         {ent?.id && <Link href={`/territory/duel`} className="mini-link">⚔️ Peer Duel</Link>}
       </p>
-      {debug === "overflow" && <OverflowDebug />}
       <Hub
         accountId={acct.id}
         userId={user.id}
