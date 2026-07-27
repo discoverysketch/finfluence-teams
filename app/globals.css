@@ -216,3 +216,21 @@ input[type="range"] { box-shadow: none; border: none; background: transparent; p
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation-duration: .01ms !important; transition-duration: .01ms !important; }
 }
+
+/* Account-hub message banner. Fixed above the bottom nav so an error is
+   visible wherever the rep is scrolled — the actions that raise it are spread
+   down a long page. */
+.hub-msg {
+  position: fixed; left: 12px; right: 12px;
+  bottom: calc(70px + env(safe-area-inset-bottom));
+  z-index: 40; display: flex; gap: 10px; align-items: flex-start;
+  max-width: 496px; margin: 0 auto;
+  background: #FBF0EE; border: 1px solid #C0392B; border-radius: 10px;
+  padding: 10px 12px; font-size: 12.5px; font-weight: 600; color: #8E2A20;
+  box-shadow: 0 6px 20px rgba(0,0,0,.16);
+}
+.hub-msg span { flex: 1 1 auto; min-width: 0; overflow-wrap: anywhere; }
+.hub-msg button {
+  flex: none; background: none; border: none; cursor: pointer;
+  color: #8E2A20; font-size: 14px; font-weight: 700; line-height: 1; padding: 0 2px;
+}

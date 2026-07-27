@@ -1,5 +1,6 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { createClient } from "@/lib/supabase/server";
+import { friendlyAiError } from "@/lib/aiRetry";
 import { NextResponse } from "next/server";
 
 // Proof-point harvester: web-researches REAL utility/energy/water customer
@@ -78,7 +79,6 @@ export async function POST(request: Request) {
     if (!cards.length) return NextResponse.json({ error: "No sourceable stories survived — try a different topic." }, { status: 502 });
     return NextResponse.json({ cards });
   } catch (e) {
-    const msg = e instanceof Anthropic.APIError ? `${e.status}: ${e.message}` : (e as Error).message;
-    return NextResponse.json({ error: `Research failed — ${msg}` }, { status: 502 });
+    return NextResponse.json({ error: `Research failed — ${friendlyAiError(e)}` }, { status: 502 });
   }
 }

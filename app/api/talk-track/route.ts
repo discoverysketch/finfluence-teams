@@ -1,5 +1,6 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { createClient } from "@/lib/supabase/server";
+import { friendlyAiError } from "@/lib/aiRetry";
 import { NextResponse } from "next/server";
 
 // One-paragraph CFO talk track for a Peer Duel. Grounded in the two companies'
@@ -30,7 +31,6 @@ export async function POST(request: Request) {
     const text = res.content.filter((b) => b.type === "text").map((b) => (b as any).text).join("").trim();
     return NextResponse.json({ text });
   } catch (e) {
-    const msg = e instanceof Anthropic.APIError ? `${e.status}: ${e.message}` : (e as Error).message;
-    return NextResponse.json({ error: `Talk track failed — ${msg}` }, { status: 502 });
+    return NextResponse.json({ error: `Talk track failed — ${friendlyAiError(e)}` }, { status: 502 });
   }
 }

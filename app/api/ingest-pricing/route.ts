@@ -1,6 +1,7 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { friendlyAiError } from "@/lib/aiRetry";
 import { NextResponse } from "next/server";
 
 // Ingest Oracle's public Fusion price-list PDF into pricing_products. Admin
@@ -79,7 +80,6 @@ export async function POST(request: Request) {
     if (error) return NextResponse.json({ error: `${error.message} (run migration 0021?)` }, { status: 500 });
     return NextResponse.json({ ok: true, count: rows.length, asOf: parsed.asOf });
   } catch (e) {
-    const msg = e instanceof Anthropic.APIError ? `${e.status}: ${e.message}` : (e as Error).message;
-    return NextResponse.json({ error: `Ingest failed — ${msg}` }, { status: 502 });
+    return NextResponse.json({ error: `Ingest failed — ${friendlyAiError(e)}` }, { status: 502 });
   }
 }

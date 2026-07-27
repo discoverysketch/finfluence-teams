@@ -1,6 +1,7 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { createClient } from "@/lib/supabase/server";
 import { canResearch } from "@/lib/canResearch";
+import { friendlyAiError } from "@/lib/aiRetry";
 import { NextResponse } from "next/server";
 import { researchExecutives } from "@/lib/execResearch";
 
@@ -33,7 +34,9 @@ export async function POST(request: Request) {
     if (!executives.length) return NextResponse.json({ error: "No citable leadership info found — this one may need manual entry." }, { status: 502 });
     return NextResponse.json({ executives });
   } catch (e) {
-    const msg = e instanceof Anthropic.APIError ? `${e.status}: ${e.message}` : (e as Error).message;
-    return NextResponse.json({ error: `Executive search failed — ${msg}` }, { status: 502 });
+    // Was `${e.status}: ${e.message}`, which put a wall of raw JSON in front of
+    // the rep — the spend-cap error rendered as the whole API envelope. Use the
+    // same mapping every other research route uses.
+    return NextResponse.json({ error: `Executive search failed — ${friendlyAiError(e)}` }, { status: 502 });
   }
 }

@@ -1,5 +1,6 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { createClient } from "@/lib/supabase/server";
+import { friendlyAiError } from "@/lib/aiRetry";
 import { NextResponse } from "next/server";
 
 // Tier D: Claude web-researches a sourced profile for a private / non-SEC company.
@@ -66,8 +67,7 @@ export async function POST(request: Request) {
         if (!profile.canonical_name) profile.canonical_name = q;
         send({ stage: "done", profile });
       } catch (e) {
-        const msg = e instanceof Anthropic.APIError ? `${e.status}: ${e.message}` : (e as Error).message;
-        send({ stage: "error", error: `Research failed — ${msg}` });
+        send({ stage: "error", error: `Research failed — ${friendlyAiError(e)}` });
       } finally {
         controller.close();
       }

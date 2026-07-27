@@ -538,7 +538,17 @@ export default function Hub({ accountId, userId, entityId, ticker, initialNotes,
 
   return (
     <div>
-      {msg && <div className="card" style={{ borderColor: "var(--red)", color: "var(--red)", margin: "10px 0" }}>{msg}</div>}
+      {/* Floating, not inline. This banner used to render here at the top of the
+          hub while the buttons that set it — find executives, research a person
+          — sit hundreds of lines further down. On a phone the failure was
+          posted somewhere the rep could not see, so a lookup that failed after
+          a minute of waiting looked exactly like a lookup that did nothing. */}
+      {msg && (
+        <div className="hub-msg" role="alert">
+          <span>{msg}</span>
+          <button onClick={() => setMsg("")} aria-label="Dismiss">✕</button>
+        </div>
+      )}
 
       <PrepBrief accountId={accountId} />
 

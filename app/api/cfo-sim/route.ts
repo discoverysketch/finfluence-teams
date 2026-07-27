@@ -2,6 +2,7 @@ import Anthropic from "@anthropic-ai/sdk";
 import { createClient } from "@/lib/supabase/server";
 import { ensureEntityFacts } from "@/lib/facts";
 import { loadKnowledge } from "@/lib/knowledge";
+import { friendlyAiError } from "@/lib/aiRetry";
 import { NextResponse } from "next/server";
 
 // CFO Simulator (SPEC §6c): Claude role-plays the CFO of the rep's actual account,
@@ -77,8 +78,7 @@ export async function POST(request: Request) {
       const text = res.content.filter((b) => b.type === "text").map((b) => (b as any).text).join("");
       return NextResponse.json({ coach: JSON.parse(text) });
     } catch (e) {
-      const msg = e instanceof Anthropic.APIError ? `${e.status}: ${e.message}` : (e as Error).message;
-      return NextResponse.json({ error: `Coach unavailable — ${msg}` }, { status: 502 });
+      return NextResponse.json({ error: `Coach unavailable — ${friendlyAiError(e)}` }, { status: 502 });
     }
   }
 
@@ -101,8 +101,7 @@ export async function POST(request: Request) {
       const text = res.content.filter((b) => b.type === "text").map((b) => (b as any).text).join("");
       return NextResponse.json({ score: JSON.parse(text) });
     } catch (e) {
-      const msg = e instanceof Anthropic.APIError ? `${e.status}: ${e.message}` : (e as Error).message;
-      return NextResponse.json({ error: `Scoring failed — ${msg}` }, { status: 502 });
+      return NextResponse.json({ error: `Scoring failed — ${friendlyAiError(e)}` }, { status: 502 });
     }
   }
 
@@ -120,7 +119,6 @@ export async function POST(request: Request) {
     const text = res.content.filter((b) => b.type === "text").map((b) => (b as any).text).join("").trim();
     return NextResponse.json({ reply: text });
   } catch (e) {
-    const msg = e instanceof Anthropic.APIError ? `${e.status}: ${e.message}` : (e as Error).message;
-    return NextResponse.json({ error: `CFO is unavailable — ${msg}` }, { status: 502 });
+    return NextResponse.json({ error: `CFO is unavailable — ${friendlyAiError(e)}` }, { status: 502 });
   }
 }

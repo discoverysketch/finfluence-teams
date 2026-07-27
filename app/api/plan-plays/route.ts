@@ -1,6 +1,7 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { createClient } from "@/lib/supabase/server";
 import { ensureEntityFacts } from "@/lib/facts";
+import { friendlyAiError } from "@/lib/aiRetry";
 import { NextResponse } from "next/server";
 
 // Suggested plays for an account plan: Claude drafts 3–4 concrete plays grounded in
@@ -49,7 +50,6 @@ export async function POST(request: Request) {
     const text = res.content.filter((b) => b.type === "text").map((b) => (b as any).text).join("");
     return NextResponse.json(JSON.parse(text));
   } catch (e) {
-    const msg = e instanceof Anthropic.APIError ? `${e.status}: ${e.message}` : (e as Error).message;
-    return NextResponse.json({ error: `Plays failed — ${msg}` }, { status: 502 });
+    return NextResponse.json({ error: `Plays failed — ${friendlyAiError(e)}` }, { status: 502 });
   }
 }
