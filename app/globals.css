@@ -75,7 +75,11 @@ h2 { font-size: 19px; font-weight: 700; letter-spacing: -.01em; }
 /* Nothing should need that horizontal scroll in the first place. Long URLs,
    vendor evidence and quoted filing text are the usual culprits: an unbroken
    string forces the whole card wider than the screen. */
-.appshell .card, .appshell .card * { min-width: 0; overflow-wrap: anywhere; }
+.appshell .container, .appshell .container * { min-width: 0; }
+.appshell .container { overflow-wrap: break-word; }
+/* anywhere (not break-word) only for the things that are genuinely one long
+   token: URLs and quoted evidence inside cards. */
+.appshell .card a, .appshell .card code { overflow-wrap: anywhere; }
 .appshell img, .appshell svg, .appshell table { max-width: 100%; }
 .appshell > .nav { flex: none; }
 /* the 100px tail existed to clear an overlaying fixed bar; the nav is a real

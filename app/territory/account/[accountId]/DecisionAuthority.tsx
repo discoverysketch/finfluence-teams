@@ -75,7 +75,7 @@ export default function DecisionAuthority({ entityId, initial }: {
       {l ? (
         <>
           <span style={{ background: l.color, color: "#fff", fontSize: 11, fontWeight: 700, borderRadius: 5, padding: "3px 9px", flexShrink: 0 }}>{l.icon} {l.label}</span>
-          <span style={{ fontSize: 12, color: "var(--ink2)", flex: 1, minWidth: 180 }}>
+          <span style={{ fontSize: 12, color: "var(--ink2)", flex: "1 1 100%", minWidth: 0 }}>
             {saved.note}{saved.source && <> · <a href={saved.source} target="_blank" rel="noreferrer" style={{ color: "var(--blue)" }}>source ↗</a></>}
             {(() => {
               const fr = researchedAgo(saved.at, STALE_DAYS.decision);
