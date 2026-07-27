@@ -24,6 +24,7 @@ type Priorities = { summary: string; as_of: string; priorities: { theme: string;
 const EXPOSURE_COLOR: Record<string, string> = {
   technology: "#0572CE", execution: "#9A6700", control: "#8E44AD", workforce: "#1B7A47", other: "#8A7E6E",
 };
+type Dockets = { summary: string; as_of: string; cases: { docket: string; commission: string; title: string; filed: string; status: string; ask: string; drivers: string; systems: string[]; angle: string; source: string }[] };
 type Risks = { summary: string; as_of: string; risks: { theme: string; detail: string; quote: string; exposure: string; angle: string; source: string }[] };
 export type Activity = { id: string; account_id: string; contact_id: string | null; user_id: string | null; kind: string; body: string; due_at: string | null; done: boolean; created_at: string };
 
@@ -155,11 +156,12 @@ function EiaBlock({ eia }: { eia: EiaOps }) {
 type CForm = { id?: string; name: string; title: string; role_tag: string; email: string; phone: string; reports_to: string };
 const emptyC: CForm = { name: "", title: "", role_tag: "", email: "", phone: "", reports_to: "" };
 
-export default function Hub({ accountId, userId, entityId, ticker, initialNotes, initialOwner, canAssign, canResearch, initialPriorities, prioritiesAt, initialRisks, risksAt, initialContacts, initialActivities, emailOf }: {
+export default function Hub({ accountId, userId, entityId, ticker, initialNotes, initialOwner, canAssign, canResearch, initialPriorities, prioritiesAt, initialRisks, risksAt, initialDockets, docketsAt, initialContacts, initialActivities, emailOf }: {
   accountId: string; userId: string; entityId: string | null; ticker: string | null;
   initialNotes: string | null; initialOwner: string | null; canAssign: boolean; canResearch: boolean;
   initialPriorities: Priorities | null; prioritiesAt: string | null;
   initialRisks: Risks | null; risksAt: string | null;
+  initialDockets: Dockets | null; docketsAt: string | null;
   initialContacts: Contact[]; initialActivities: Activity[]; emailOf: Record<string, string>;
 }) {
   const supabase = createClient();
@@ -172,6 +174,10 @@ export default function Hub({ accountId, userId, entityId, ticker, initialNotes,
   const [riskAt, setRiskAt] = useState<string | null>(risksAt);
   const [riskBusy, setRiskBusy] = useState(false);
   const [riskErr, setRiskErr] = useState<string | null>(null);
+  const [dockets, setDockets] = useState<Dockets | null>(initialDockets);
+  const [dockAt, setDockAt] = useState<string | null>(docketsAt);
+  const [dockBusy, setDockBusy] = useState(false);
+  const [dockErr, setDockErr] = useState<string | null>(null);
   // Failures used to write to the page-level message at the top of the Hub,
   // far above this section — the user clicked, it failed, and the explanation
   // scrolled off-screen, so it read as "nothing happened".
@@ -273,6 +279,18 @@ export default function Hub({ accountId, userId, entityId, ticker, initialNotes,
       setRisks(j.risks); setRiskAt(j.at);
     } catch { setRiskErr("Network error — check your connection and try again."); }
     finally { setRiskBusy(false); }
+  }
+
+  async function researchDockets() {
+    if (dockBusy || !entityId) return;
+    setDockBusy(true); setDockErr("");
+    try {
+      const r = await fetch("/api/research-dockets", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ entityId }) });
+      const j = await r.json().catch(() => null);
+      if (!r.ok || !j?.dockets) { setDockErr(j?.error || "Couldn't find a rate case — try again."); return; }
+      setDockets(j.dockets); setDockAt(j.at);
+    } catch { setDockErr("Network error — check your connection and try again."); }
+    finally { setDockBusy(false); }
   }
   async function researchPerson(c: Contact) {
     if (personaBusy) return;
@@ -735,6 +753,54 @@ export default function Hub({ accountId, userId, entityId, ticker, initialNotes,
                 </div>
               ))}
               <div style={{ fontSize: 10.5, color: "var(--muted)", marginTop: 8 }}>Straight from their own 10-K. Quote it back to them carefully — this is language they chose for regulators, not for you.</div>
+            </div>
+          )}
+        </>
+      )}
+
+      {/* ---- What they're asking regulators for (state rate case dockets) ---- */}
+      {entityId && (
+        <>
+          <div className="secttl" style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
+            <span>🏛️ What they&apos;re asking regulators for</span>
+            {dockets && <button className="mini" onClick={researchDockets} disabled={dockBusy}>{dockBusy ? "…" : "↻"}</button>}
+          </div>
+          {!dockets ? (
+            <div className="card" style={{ padding: "13px 14px" }}>
+              <p style={{ fontSize: 12.5, color: "var(--ink2)", margin: "0 0 10px" }}>
+                Find their latest general rate case at the state commission — docket number, what they asked for, and what they told regulators the money is for. A live case means capital is being justified line by line.
+              </p>
+              <button className="btn" onClick={researchDockets} disabled={dockBusy}>
+                {dockBusy ? "Searching the commission… (~2 min)" : "🔎 Find their rate case"}
+              </button>
+              {dockErr && <div style={{ fontSize: 12.5, color: "var(--red)", fontWeight: 600, marginTop: 8 }}>{dockErr}</div>}
+            </div>
+          ) : (
+            <div className="card" style={{ padding: "13px 14px" }}>
+              <div style={{ fontSize: 13.5, lineHeight: 1.5, marginBottom: 4 }}>{dockets.summary}</div>
+              <div style={{ fontSize: 11, color: "var(--muted)", marginBottom: 10 }}>As of {dockets.as_of}{dockAt ? ` · pulled ${fmtDate(dockAt)}` : ""}</div>
+              {dockErr && <div style={{ fontSize: 12.5, color: "var(--red)", fontWeight: 600, marginBottom: 8 }}>{dockErr}</div>}
+              {dockets.cases.map((c, i) => (
+                <div key={i} style={{ padding: "9px 0", borderTop: i ? "1px solid #F0EAE0" : "none" }}>
+                  <div style={{ display: "flex", gap: 7, alignItems: "baseline", flexWrap: "wrap" }}>
+                    <span style={{ fontFamily: "ui-monospace, monospace", fontSize: 12.5, fontWeight: 800, background: "#EEF4FB", color: "#0572CE", borderRadius: 5, padding: "1.5px 7px" }}>{c.docket}</span>
+                    <span style={{ fontSize: 11.5, color: "var(--muted)", fontWeight: 700 }}>{c.commission}</span>
+                  </div>
+                  {c.ask && <div style={{ fontSize: 13, fontWeight: 800, marginTop: 4 }}>Asking {c.ask}</div>}
+                  <div style={{ fontSize: 12.5, color: "var(--ink2)", margin: "3px 0 5px" }}>{c.drivers}</div>
+                  <div style={{ fontSize: 11.5, color: "var(--muted)" }}>Filed {c.filed}{c.status ? ` · ${c.status}` : ""}</div>
+                  {c.systems.length > 0 && (
+                    <div style={{ fontSize: 12, marginTop: 5 }}>
+                      <b>Systems named:</b> {c.systems.map((y, k) => (
+                        <span key={k} style={{ display: "inline-block", background: "#F7F2E9", border: "1px solid var(--gold)", borderRadius: 5, padding: "1px 6px", margin: "2px 4px 0 0", fontWeight: 700 }}>{y}</span>
+                      ))}
+                    </div>
+                  )}
+                  <div style={{ fontSize: 12, color: "#006B72", marginTop: 4 }}><b>Your angle:</b> {c.angle}</div>
+                  {c.source && <a href={c.source} target="_blank" rel="noreferrer" style={{ fontSize: 11.5, color: "var(--blue)", fontWeight: 700 }}>docket ↗</a>}
+                </div>
+              ))}
+              <div style={{ fontSize: 10.5, color: "var(--muted)", marginTop: 8 }}>Public commission filings. Check the docket number against the commission before quoting it to a customer.</div>
             </div>
           )}
         </>

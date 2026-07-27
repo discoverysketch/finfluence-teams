@@ -10,6 +10,7 @@ import Anthropic from "@anthropic-ai/sdk";
 import { createClient } from "@supabase/supabase-js";
 import { runTask, costOf, type TaskKey, type Ent } from "../lib/researchTasks.ts";
 import { fetchProxy, fetchLeadershipDocs, fetchRiskFactors } from "../lib/proxy.ts";
+import { commissionsFor } from "../lib/dockets.ts";
 import { withRetry } from "../lib/aiRetry.ts";
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
@@ -20,7 +21,7 @@ const DRY = process.argv.includes("--dry");
 const CONCURRENCY = 2;
 // --tasks=comp,hiring,decision — priorities is excluded by default: it's the
 // priciest facet (~$0.70) and goes stale fastest, so it's opt-in.
-const ALL: TaskKey[] = ["comp", "hiring", "decision", "priorities", "risks"];
+const ALL: TaskKey[] = ["comp", "hiring", "decision", "priorities", "risks", "dockets"];
 const arg = process.argv.find((a) => a.startsWith("--tasks="));
 const TASKS: TaskKey[] = arg
   ? (arg.split("=")[1].split(",").filter((t) => (ALL as string[]).includes(t)) as TaskKey[])
@@ -30,7 +31,7 @@ const db = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPAB
 const client = new Anthropic();
 
 const { data: accts } = await db.from("accounts")
-  .select("entity:entities(id, canonical_name, ticker, cik, hiring_json, comp_json, priorities_json, risks_json, decision_locus)");
+  .select("entity:entities(id, canonical_name, ticker, cik, hiring_json, comp_json, priorities_json, risks_json, dockets_json, decision_locus)");
 const ents = [...new Map((accts ?? []).filter((a: any) => a.entity).map((a: any) => [a.entity.id, a.entity])).values()] as any[];
 
 // Publicly traded only — the scope chosen for this sweep.
@@ -38,7 +39,7 @@ const listed = ents.filter((e) => e.ticker && e.cik);
 const has: Record<TaskKey, (e: any) => boolean> = {
   comp: (e) => !!e.comp_json, decision: (e) => !!e.decision_locus,
   hiring: (e) => !!e.hiring_json, priorities: (e) => !!e.priorities_json,
-  risks: (e) => !!e.risks_json,
+  risks: (e) => !!e.risks_json, dockets: (e) => !!e.dockets_json,
 };
 
 type Job = { ent: Ent; task: TaskKey };
@@ -60,6 +61,7 @@ async function save(task: TaskKey, ent: Ent, data: any) {
   if (task === "hiring") return db.from("entities").update({ hiring_json: data, hiring_at: now }).eq("id", ent.id);
   if (task === "priorities") return db.from("entities").update({ priorities_json: data, priorities_at: now }).eq("id", ent.id);
   if (task === "risks") return db.from("entities").update({ risks_json: data, risks_at: now }).eq("id", ent.id);
+  if (task === "dockets") return db.from("entities").update({ dockets_json: data, dockets_at: now }).eq("id", ent.id);
   if (task === "comp") {
     const upd: any = { comp_json: data, comp_at: now };
     if (Number.isInteger(data.employees) && data.employees > 0) upd.employees = data.employees;
@@ -81,11 +83,15 @@ async function worker(id: number) {
     if (!job) break;
     const label = `${job.task}/${job.ent.canonical_name.slice(0, 26)}`;
     try {
-      const { data, usage } = await withRetry(() => runTask(client, job.ent, job.task, fetchProxy, fetchLeadershipDocs, undefined, fetchRiskFactors), 4);
+      const { data, usage } = await withRetry(() => runTask(client, job.ent, job.task, fetchProxy, fetchLeadershipDocs, undefined, fetchRiskFactors, commissionsFor(job.ent.canonical_name, job.ent.hq_state)), 4);
       // Same guard the priorities route applies: a priority without a source is dropped.
       if (job.task === "priorities") {
         data.priorities = (data.priorities ?? []).filter((p: any) => /^https?:\/\//.test(p.source)).slice(0, 8);
         if (!data.priorities.length) throw new Error("no citable priorities found");
+      }
+      if (job.task === "dockets") {
+        data.cases = (data.cases ?? []).filter((c: any) => /^https?:\/\//.test(c.source)).slice(0, 3);
+        if (!data.cases.length) throw new Error("no citable rate case found");
       }
       if (job.task === "risks") {
         data.risks = (data.risks ?? []).filter((r: any) => /^https?:\/\//.test(r.source)).slice(0, 8);

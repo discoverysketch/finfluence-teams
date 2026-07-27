@@ -5,12 +5,16 @@
 import type Anthropic from "@anthropic-ai/sdk";
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
-export type TaskKey = "hiring" | "comp" | "priorities" | "decision" | "stack" | "infer" | "risks";
+export type TaskKey = "hiring" | "comp" | "priorities" | "decision" | "stack" | "infer" | "risks" | "dockets";
 export type Ent = { id: string; canonical_name: string; ticker?: string | null; hq_state?: string | null; cik?: string | null };
 export type TaskResult = { data: any; usage: { model: string; input: number; output: number; searches: number }[] };
 // Injected by the caller so the Next route and the node seed script can each
 // import lib/proxy the way their own module resolver expects.
 export type FetchProxy = (cik: string) => Promise<{ url: string; filed: string; section: string } | null>;
+// Injected like the fetchers above: the Next route resolves "@/lib/dockets"
+// and the node seed script needs "../lib/dockets.ts", and neither spelling
+// satisfies both resolvers. The caller imports it and passes the result.
+export type Commission = { name: string; abbr: string; domain: string };
 export type FetchRisks = (cik: string) => Promise<{ url: string; filed: string; section: string } | null>;
 export type FetchLeadership = (cik: string) => Promise<{
   earnings: { url: string; filed: string; text: string } | null;
@@ -33,6 +37,33 @@ const u = (model: string, usage: any) => ({
 const textOf = (m: any) => m.content.filter((b: any) => b.type === "text").map((b: any) => b.text).join("\n").trim();
 
 export const SCHEMAS: Record<TaskKey, any> = {
+  dockets: {
+    type: "object", additionalProperties: false,
+    properties: {
+      summary: { type: "string" },
+      cases: {
+        type: "array",
+        items: {
+          type: "object", additionalProperties: false,
+          properties: {
+            docket: { type: "string" },       // e.g. "ER-2026-0044"
+            commission: { type: "string" },   // e.g. "Missouri PSC"
+            title: { type: "string" },
+            filed: { type: "string" },
+            status: { type: "string" },
+            ask: { type: "string" },          // requested revenue increase, verbatim if stated
+            drivers: { type: "string" },      // what they say the money is for
+            systems: { type: "array", items: { type: "string" } }, // named software/systems, [] if none
+            angle: { type: "string" },
+            source: { type: "string" },
+          },
+          required: ["docket", "commission", "title", "filed", "status", "ask", "drivers", "systems", "angle", "source"],
+        },
+      },
+      as_of: { type: "string" },
+    },
+    required: ["summary", "cases", "as_of"],
+  },
   risks: {
     type: "object", additionalProperties: false,
     properties: {
@@ -167,7 +198,7 @@ const TOOLS = (search: number, fetch: number, contentTokens = 30000) => [
   { type: "web_fetch_20260209", name: "web_fetch", max_uses: fetch, max_content_tokens: contentTokens } as any,
 ];
 
-export async function runTask(client: Anthropic, ent: Ent, key: TaskKey, fetchProxy?: FetchProxy, fetchLeadership?: FetchLeadership, atsVendors?: { vendor: string; mentions: number; titles: string[] }[], fetchRisks?: FetchRisks): Promise<TaskResult> {
+export async function runTask(client: Anthropic, ent: Ent, key: TaskKey, fetchProxy?: FetchProxy, fetchLeadership?: FetchLeadership, atsVendors?: { vendor: string; mentions: number; titles: string[] }[], fetchRisks?: FetchRisks, comms: Commission[] = []): Promise<TaskResult> {
   const usage: TaskResult["usage"] = [];
   const NL = String.fromCharCode(10);
   const SEP = NL + NL + "---" + NL + NL;
@@ -256,7 +287,40 @@ export async function runTask(client: Anthropic, ent: Ent, key: TaskKey, fetchPr
     // No filings found (non-filer) — fall through to the web-search path below.
   }
 
+  // Rate case dockets. A utility justifies its spending under oath here, so
+  // testimony is the one public place that names the systems being replaced,
+  // what they cost and when. There is no national index of dockets and every
+  // state runs its own filing system, so instead of integrating forty of them
+  // we name the right commission and its domain and let the search be scoped.
   const CFG: Record<Exclude<TaskKey, "comp" | "stack" | "risks">, { tools: any[]; maxTokens: number; prompt: string; extractModel: string; extractTokens: number; system: string; notesCap: number }> = {
+    dockets: {
+      tools: TOOLS(4, 1, 16000), maxTokens: 9000, extractModel: "claude-opus-4-8", extractTokens: 4000, notesCap: 18000,
+      prompt:
+        `Find the MOST RECENT general RATE CASE filed by ${ent.canonical_name}${ent.ticker ? ` (${ent.ticker})` : ""} or its regulated operating subsidiaries, and what the company said the money is for.
+
+` +
+        (comms.length
+          ? `They file with: ${comms.map((c) => `${c.name} (${c.abbr}) — filing system at ${c.domain}`).join("; ")}. Search those commissions FIRST, using site: on those domains and the commission name. `
+          : `Identify which state utility commission regulates them, then search that commission's filing system. `) +
+        `Note the OPERATING company usually files, not the holding company (Ameren Missouri and Union Electric, not Ameren Corp; Ohio Power and AEP Ohio, not AEP).
+
+` +
+        `For each rate case found (at most 3, newest first) capture: the DOCKET NUMBER exactly as the commission writes it, the commission, the case title, when it was filed, its status, the requested revenue increase, ` +
+        `and what the company says is DRIVING the request — capital programme, grid modernisation, technology and IT investment, O&M.
+
+` +
+        `Then look specifically for NAMED SYSTEMS in the filing or testimony: customer information system (CIS), enterprise resource planning (ERP), work and asset management, meter data management, general ledger, budgeting and forecasting, ` +
+        `and named vendors (Oracle, SAP, Workday, IBM Maximo, Salesforce, Itron). Utilities name these when justifying capital or deferred accounting for a software project. Only list a system if it is ACTUALLY NAMED in a source you read — an empty list is the correct answer when none is named.
+
+` +
+        `${NO_BATCH} Budget: 4 searches + at most 1 page fetch. Prefer the commission's own docket page and the company's filed testimony over news coverage. Every case needs a source URL.`,
+      system:
+        "Structure the rate case findings from the notes. Use ONLY what is cited — never invent a docket number, figure or system name; a wrong docket number is worse than none. " +
+        "docket = exactly as the commission writes it (e.g. ER-2026-0044, 24-E-0319, A.25-05-012). ask = the requested revenue increase as stated, empty string if not found. " +
+        "drivers = 1-2 sentences on what the company says the money is for. systems = ONLY software or systems actually named in a source; empty array otherwise — do not infer from 'technology investment'. " +
+        "angle = one line on how an Oracle ERP/EPM/Primavera seller uses this (a live rate case means capital is being justified and scrutinised; be specific and honest, and say so if the tie is weak). " +
+        "as_of = the date of the newest case found. Drop any case without a source URL.",
+    },
     hiring: {
       tools: TOOLS(3, 1, 18000), maxTokens: 9000, extractModel: "claude-opus-4-8", extractTokens: 3000, notesCap: 16000,
       prompt:
@@ -386,10 +450,21 @@ export async function runTask(client: Anthropic, ent: Ent, key: TaskKey, fetchPr
   }
 
   const cfg = CFG[key as Exclude<TaskKey, "comp" | "stack" | "risks">];
+
+  // The research and extract calls used to get DEADLINE_MS EACH, so a task
+  // could legitimately run 420s and still blow the 300s function cap — a
+  // docket lookup for Con Edison did exactly that at 368s. They share one wall
+  // clock now: research may use whatever is left minus a reserve for the
+  // extraction, which is the step that turns notes into something storable and
+  // must not be the thing that gets cut off.
+  const EXTRACT_RESERVE_MS = 45_000;
+  const t0 = Date.now();
+  const left = (reserve: number) => Math.max(20_000, DEADLINE_MS - (Date.now() - t0) - reserve);
+
   const research = await client.messages.create({
     model: "claude-sonnet-5", max_tokens: cfg.maxTokens, tools: cfg.tools,
     messages: [{ role: "user", content: cfg.prompt }],
-  }, { timeout: DEADLINE_MS });
+  }, { timeout: left(EXTRACT_RESERVE_MS) });
   usage.push(u("claude-sonnet-5", research.usage));
   const notes = textOf(research);
   if (!notes) throw new Error("research came back empty");
