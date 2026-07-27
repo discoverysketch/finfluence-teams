@@ -76,6 +76,14 @@ h2 { font-size: 19px; font-weight: 700; letter-spacing: -.01em; }
    vendor evidence and quoted filing text are the usual culprits: an unbroken
    string forces the whole card wider than the screen. */
 .appshell .container, .appshell .container * { min-width: 0; }
+/* Hard clamp. Inline styles on components beat any selector here, so a
+   min-width set inline (the decision-authority note carried minWidth:180
+   beside a non-shrinking chip) could push the whole column wider than the
+   phone — and then every block, including plain paragraphs, lays out to that
+   width and gets clipped. Constraining the direct children caps the column
+   whatever a descendant asks for. */
+.appshell > .container > * { max-width: 100%; }
+.appshell > .container { max-width: 100vw; }
 .appshell .container { overflow-wrap: break-word; }
 /* anywhere (not break-word) only for the things that are genuinely one long
    token: URLs and quoted evidence inside cards. */
