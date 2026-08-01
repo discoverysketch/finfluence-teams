@@ -45,7 +45,7 @@ function buildDuel(tName: string, tF: FactMap, pName: string, pF: FactMap): Q[] 
   return qs.slice(0, 5);
 }
 
-export default function Duel({ userId, accounts }: { userId: string; accounts: Acct[] }) {
+export default function Duel({ userId, accounts, initialEntityId }: { userId: string; accounts: Acct[]; initialEntityId?: string }) {
   const supabase = createClient();
   const [phase, setPhase] = useState<"pick" | "peer" | "quiz" | "result">("pick");
   const [loading, setLoading] = useState(false);
@@ -57,6 +57,13 @@ export default function Duel({ userId, accounts }: { userId: string; accounts: A
   const [qi, setQi] = useState(0);
   const [chosen, setChosen] = useState<number | null>(null);
   const [answers, setAnswers] = useState<number[]>([]);
+  const [pickOther, setPickOther] = useState(false);
+  // Arriving from an account page, that account is pre-chosen. It is NOT
+  // started automatically: picking from the dropdown fires a paid AI call
+  // immediately, so auto-running it would bill the rep for merely navigating
+  // here to look. One confirm click, instead of hunting a 49-entry dropdown.
+  const preset = initialEntityId ? accounts.find((a) => a.entity.id === initialEntityId) : undefined;
+
   const [talk, setTalk] = useState<string>("");
   const [talkLoading, setTalkLoading] = useState(false);
 
@@ -119,6 +126,19 @@ export default function Duel({ userId, accounts }: { userId: string; accounts: A
     return (
       <div>
         {msg && <div className="card" style={{ borderColor: "var(--red)", color: "var(--red)", marginBottom: 12 }}>{msg}</div>}
+        {preset && !pickOther && (
+          <div className="card" style={{ marginBottom: 10 }}>
+            <div style={{ fontSize: 12, fontWeight: 700, color: "var(--ink2)" }}>From your account page</div>
+            <div style={{ fontSize: 17, fontWeight: 800, margin: "4px 0 10px" }}>
+              {preset.entity.canonical_name}{preset.entity.ticker ? <span style={{ color: "var(--muted)", fontWeight: 600 }}> · {preset.entity.ticker}</span> : null}
+            </div>
+            <button className="btn" onClick={() => pickAccount(preset.entity.id)} disabled={loading}>
+              {loading ? "Finding a peer…" : "Find a peer to duel"}
+            </button>
+            <button className="linky" onClick={() => setPickOther(true)} disabled={loading}>or pick a different account</button>
+          </div>
+        )}
+        {(!preset || pickOther) && (
         <div className="card">
           <label style={{ fontSize: 12, fontWeight: 700, color: "var(--ink2)" }}>Your account</label>
           <select defaultValue="" onChange={(e) => pickAccount(e.target.value)} disabled={loading} style={{ width: "100%", marginTop: 6, padding: "10px 12px", fontSize: 14 }}>
@@ -126,6 +146,8 @@ export default function Duel({ userId, accounts }: { userId: string; accounts: A
             {accounts.map((a) => <option key={a.id} value={a.entity.id}>{a.entity.canonical_name}{a.entity.ticker ? ` (${a.entity.ticker})` : ""}</option>)}
           </select>
         </div>
+        )}
+        <style>{`.linky{display:block;margin-top:9px;background:none;border:none;padding:0;color:var(--blue);font-size:12.5px;font-weight:700;cursor:pointer;text-decoration:underline}`}</style>
       </div>
     );
   }

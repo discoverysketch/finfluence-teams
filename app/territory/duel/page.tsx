@@ -4,7 +4,10 @@ import Link from "next/link";
 import Shell from "@/components/Shell";
 import Duel, { type Acct } from "./Duel";
 
-export default async function DuelPage() {
+export default async function DuelPage({ searchParams }: { searchParams: Promise<{ entity?: string }> }) {
+  // Carried over when the rep opens this from an account page, so the account
+  // they were just looking at is the one already on screen.
+  const initialEntityId = (await searchParams).entity;
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) redirect("/login");
@@ -28,7 +31,7 @@ export default async function DuelPage() {
       {accounts.length === 0 ? (
         <div className="card">Add some accounts first — <Link href="/territory">go to Accounts</Link>.</div>
       ) : (
-        <Duel userId={user.id} accounts={accounts} />
+        <Duel userId={user.id} accounts={accounts} initialEntityId={initialEntityId} />
       )}
     </Shell>
   );

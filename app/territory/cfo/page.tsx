@@ -4,7 +4,10 @@ import Link from "next/link";
 import Shell from "@/components/Shell";
 import Cfo, { type Acct } from "./Cfo";
 
-export default async function CfoPage() {
+export default async function CfoPage({ searchParams }: { searchParams: Promise<{ entity?: string }> }) {
+  // Carried over when the rep opens this from an account page, so the account
+  // they were just looking at is the one already on screen.
+  const initialEntityId = (await searchParams).entity;
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) redirect("/login");
@@ -28,7 +31,7 @@ export default async function CfoPage() {
       {accounts.length === 0 ? (
         <div className="card">Add some accounts first — <Link href="/territory">go to Accounts</Link>.</div>
       ) : (
-        <Cfo userId={user.id} accounts={accounts} />
+        <Cfo userId={user.id} accounts={accounts} initialEntityId={initialEntityId} />
       )}
     </Shell>
   );

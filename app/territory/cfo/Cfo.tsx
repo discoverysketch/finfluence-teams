@@ -8,7 +8,7 @@ export type Acct = { id: string; entity: Ent };
 type Msg = { role: "cfo" | "rep"; content: string };
 type Score = { financialFluency: number; businessRelevance: number; composure: number; overall: number; coaching: string[]; nextTime: string; conceptsTested: string[]; passed: boolean };
 
-export default function Cfo({ userId, accounts }: { userId: string; accounts: Acct[] }) {
+export default function Cfo({ userId, accounts, initialEntityId }: { userId: string; accounts: Acct[]; initialEntityId?: string }) {
   const supabase = createClient();
   const [phase, setPhase] = useState<"pick" | "chat" | "score">("pick");
   const [entityId, setEntityId] = useState("");
@@ -19,6 +19,13 @@ export default function Cfo({ userId, accounts }: { userId: string; accounts: Ac
   const [err, setErr] = useState("");
   const [score, setScore] = useState<Score | null>(null);
   const [coach, setCoach] = useState<{ loading?: boolean; answer?: string; why?: string[]; proof?: string } | null>(null);
+  const [pickOther, setPickOther] = useState(false);
+  // Arriving from an account page, that account is pre-chosen. It is NOT
+  // started automatically: picking from the dropdown fires a paid AI call
+  // immediately, so auto-running it would bill the rep for merely navigating
+  // here to look. One confirm click, instead of hunting a 49-entry dropdown.
+  const preset = initialEntityId ? accounts.find((a) => a.entity.id === initialEntityId) : undefined;
+
   const scrollRef = useRef<HTMLDivElement>(null);
 
   const repTurns = msgs.filter((m) => m.role === "rep").length;
@@ -87,6 +94,19 @@ export default function Cfo({ userId, accounts }: { userId: string; accounts: Ac
     return (
       <div>
         {err && <div className="card" style={{ borderColor: "var(--red)", color: "var(--red)", marginBottom: 12 }}>{err}</div>}
+        {preset && !pickOther && (
+          <div className="card" style={{ marginBottom: 10 }}>
+            <div style={{ fontSize: 12, fontWeight: 700, color: "var(--ink2)" }}>From your account page</div>
+            <div style={{ fontSize: 17, fontWeight: 800, margin: "4px 0 10px" }}>
+              {preset.entity.canonical_name}{preset.entity.ticker ? <span style={{ color: "var(--muted)", fontWeight: 600 }}> · {preset.entity.ticker}</span> : null}
+            </div>
+            <button className="btn" onClick={() => begin(preset)} disabled={busy}>
+              {busy ? "Walking in…" : `Face the ${preset.entity.canonical_name} CFO`}
+            </button>
+            <button className="linky" onClick={() => setPickOther(true)} disabled={busy}>or pick a different account</button>
+          </div>
+        )}
+        {(!preset || pickOther) && (
         <div className="card">
           <label style={{ fontSize: 12, fontWeight: 700, color: "var(--ink2)" }}>Whose CFO do you want to face?</label>
           <select defaultValue="" onChange={(e) => { const a = accounts.find((x) => x.entity.id === e.target.value); if (a) begin(a); }} disabled={busy}
@@ -95,6 +115,8 @@ export default function Cfo({ userId, accounts }: { userId: string; accounts: Ac
             {accounts.map((a) => <option key={a.id} value={a.entity.id}>{a.entity.canonical_name}{a.entity.ticker ? ` (${a.entity.ticker})` : ""}</option>)}
           </select>
         </div>
+        )}
+        <style>{`.linky{display:block;margin-top:9px;background:none;border:none;padding:0;color:var(--blue);font-size:12.5px;font-weight:700;cursor:pointer;text-decoration:underline}`}</style>
       </div>
     );
   }
