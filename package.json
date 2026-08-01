@@ -20,7 +20,8 @@
     "load-ferc": "node --env-file=.env.local seed/load-ferc.mjs",
     "coverage": "node --env-file=.env.local seed/coverage.mjs",
     "load-websites": "node --env-file=.env.local seed/load-websites.mjs",
-    "load-jobs": "node --env-file=.env.local --experimental-strip-types seed/load-jobs.ts"
+    "load-jobs": "node --env-file=.env.local --experimental-strip-types seed/load-jobs.ts",
+    "load-contracts": "node --env-file=.env.local --experimental-strip-types seed/load-contracts.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.110.0",
@@ -43,6 +44,7 @@
     "hyparquet": "^1.26.2",
     "sharp": "^0.35.3",
     "typescript": "^5.7.3",
+    "unpdf": "^1.8.0",
     "xlsx": "^0.18.5"
   }
 }

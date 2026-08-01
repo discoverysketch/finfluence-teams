@@ -85,6 +85,7 @@ export default async function AccountPage({ params }: { params: Promise<{ accoun
         {ent?.id && <Link href={`/territory/account/${acct.id}/case`} className="mini-link">🧮 Business case</Link>}
         {ent?.id && <Link href={`/territory/cfo?entity=${ent.id}`} className="mini-link">💼 CFO Simulator</Link>}
         {ent?.id && <Link href={`/territory/duel?entity=${ent.id}`} className="mini-link">⚔️ Peer Duel</Link>}
+        <Link href="/contracts" className="mini-link">📜 Negotiation desk</Link>
       </p>
       <Hub
         accountId={acct.id}
