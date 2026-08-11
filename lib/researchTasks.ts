@@ -325,7 +325,7 @@ export async function runTask(client: Anthropic, ent: Ent, key: TaskKey, fetchPr
       tools: TOOLS(3, 1, 18000), maxTokens: 9000, extractModel: "claude-opus-4-8", extractTokens: 3000, notesCap: 16000,
       prompt:
         `Research CURRENT open job postings at ${ent.canonical_name} (a US utility) that signal an enterprise-software or finance-systems initiative. ` +
-        `Search their careers page and job boards for roles like: Oracle/SAP/Workday ERP, financial systems analyst/manager, capital-project systems, EPM/planning, procurement systems, IT applications, digital transformation, controller/close roles. ` +
+        `Search their careers page and job boards for roles like: Oracle/SAP/Workday ERP, financial systems analyst/manager, capital-project systems, EPM/planning, procurement systems, IT applications, digital transformation, controller/close roles. Also look specifically for PowerPlan, fixed-asset accounting, capital-project (CWIP) accounting, tax fixed assets, lease accounting and regulatory/FERC accounting roles — at a regulated utility these name the asset-accounting platform, and PowerPlan is an Oracle PARTNER that runs alongside Oracle ERP, so finding it is a co-sell signal rather than a competitive one. ` +
         `${NO_BATCH} Budget: 3 searches + at most 1 fetch. List the relevant open roles with WHY each is a buying signal and the source URL. If nothing relevant is open, say so. signal = hot (multiple systems/ERP roles), warm (some finance-systems roles), quiet (nothing notable).`,
       system: "Structure the hiring research from the notes. Use ONLY cited facts — never invent numbers, roles, or quotes. Include a source URL. Keep it tight and factual.",
     },
