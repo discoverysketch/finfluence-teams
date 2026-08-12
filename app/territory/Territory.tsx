@@ -295,6 +295,17 @@ export default function Territory({ listId, userId, emailOf, initial }: { listId
     <div>
       {msg && <div className="card" style={{ borderColor: "var(--red)", color: "var(--red)", marginBottom: 12 }}>{msg}</div>}
 
+      {/* Book-wide tools. They were previously reachable only from inside an
+          account, which meant picking an arbitrary account to open a page that
+          had nothing to do with it — the partner desk spans the whole book and
+          the contract terms are identical for every account. */}
+      <div style={{ display: "flex", gap: 6, flexWrap: "wrap", margin: "0 0 12px" }}>
+        <Link href="/partners" className="deskl">🤝 Partner desk</Link>
+        <Link href="/contracts" className="deskl">📜 Negotiation desk</Link>
+        <Link href="/signals" className="deskl">📈 Signals</Link>
+      </div>
+      <style>{`.deskl{border:1px solid var(--border);background:#fff;border-radius:8px;padding:7px 12px;font-size:12.5px;font-weight:700;color:var(--ink2);text-decoration:none}`}</style>
+
       {/* ---------- The book ---------- */}
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", margin: "4px 0 8px", gap: 8 }}>
         <div style={{ fontSize: 11, fontWeight: 700, color: "#8A7E6E", textTransform: "uppercase", letterSpacing: ".6px" }}>
