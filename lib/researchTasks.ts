@@ -411,8 +411,8 @@ export async function runTask(client: Anthropic, ent: Ent, key: TaskKey, fetchPr
       tools: TOOLS(2, 1, 20000), maxTokens: 9000, extractModel: "claude-opus-4-8", extractTokens: 3000, notesCap: 14000,
       prompt:
         `${ent.canonical_name} files nothing public (no SEC filings), so the usual sources are empty. ` +
-        `FIRST establish only what is publicly knowable about WHAT KIND of company it is: ownership (private equity / infrastructure fund / utility subsidiary / municipal / co-operative), ` +
-        `rough scale, business model (developer, IPP, regulated utility, water authority), and whether it operates through project SPVs, joint ventures or tax-equity partnerships. ` +
+        `FIRST establish only what is publicly knowable about WHAT KIND of company it is: ownership (family owned / private equity / infrastructure fund / subsidiary of a listed parent / municipal / co-operative / employee owned), ` +
+        `rough scale, business model, and whether it operates through project SPVs, joint ventures, franchises or tax-equity partnerships. ` +
         `Budget: 2 searches + 1 fetch — company site, press releases, trade press. ` +
         `THEN, from that profile alone, describe what is TYPICAL for companies of that type in: how leadership is compensated and on what measures; where enterprise-software decisions get made; what leadership typically prioritises; how they typically buy; and their typical financial posture. ` +
         `You are reasoning from company TYPE, not reporting facts about this company. Do NOT state or estimate any specific figure, weighting, percentage, executive name, or system for THIS company — only the pattern for its category, and what would confirm it.`,
@@ -429,7 +429,7 @@ export async function runTask(client: Anthropic, ent: Ent, key: TaskKey, fetchPr
     decision: {
       tools: TOOLS(3, 1, 18000), maxTokens: 9000, extractModel: "claude-sonnet-5", extractTokens: 2000, notesCap: 14000,
       prompt:
-        `Research where enterprise-software and major procurement DECISIONS are made for ${ent.canonical_name}${ent.hq_state ? ` (${ent.hq_state})` : ""}, a US utility/energy company. ` +
+        `Research where enterprise-software and major procurement DECISIONS are made for ${WHO}. ` + WHERE + " " +
         `Key question: does it operate autonomously (own CFO/CIO sign for major systems), or does a corporate parent centralize IT/procurement/shared services? ` +
         `Evidence to look for: whether it is a subsidiary and of whom; centralized shared-services or procurement organizations at the parent; a single ERP/IT organization across the family; where the CIO/CFO for the family sit. ` +
         `${NO_BATCH} Budget: up to 3 searches + 1 page fetch. Report what you found with the URL of the best source. If evidence is thin, say so.`,
@@ -458,7 +458,7 @@ export async function runTask(client: Anthropic, ent: Ent, key: TaskKey, fetchPr
         { type: "web_fetch_20260209", name: "web_fetch", max_uses: 2, max_content_tokens: 18000 } as any,
       ],
       messages: [{ role: "user", content:
-        `Which ENTERPRISE SYSTEMS does ${ent.canonical_name} (a US utility/energy company) run TODAY? Public evidence only.` + SEP +
+        `Which ENTERPRISE SYSTEMS does ${WHO} run TODAY? Public evidence only.` + NL + WHERE + SEP +
         (atsVendors?.length
           ? `ALREADY CONFIRMED from their own job postings — treat these as established and do not re-verify; spend your searches on the areas NOT covered here:` + NL +
             atsVendors.map((v) => `  - ${v.vendor} (named in ${v.mentions} posting${v.mentions === 1 ? "" : "s"}: ${v.titles.slice(0, 2).join("; ")})`).join(NL) + SEP
@@ -478,7 +478,7 @@ export async function runTask(client: Anthropic, ent: Ent, key: TaskKey, fetchPr
         `- THEIR OWN JOB POSTINGS name the systems a team supports ("Oracle HCM Cloud Developer", "SAP FICO Analyst", "Maximo administrator") — the richest single source.` + NL +
         `- Vendor press releases and customer case studies naming them; their 10-K technology discussion.` + SEP +
         `An EXISTING Oracle footprint matters as much as a competitor's — if they already run Oracle anywhere, say so explicitly.` + NL +
-        `Report the exact evidence and source URL for each system found. If an area has no real evidence, OMIT it — never infer a vendor from what a utility "typically" runs.` }],
+        `Report the exact evidence and source URL for each system found. If an area has no real evidence, OMIT it — never infer a vendor from what a company of this type "typically" runs.` }],
     }, { timeout: DEADLINE_MS });
     usage.push(u("claude-sonnet-5", res.usage));
     const notes = textOf(res);
