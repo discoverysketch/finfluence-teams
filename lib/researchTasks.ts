@@ -4,10 +4,12 @@
 // off — so the prompt, schema, tool budget and model all live here, once.
 import type Anthropic from "@anthropic-ai/sdk";
 import { inferArchetype, descriptor, sourcePlan, peoplePlan, type Archetype } from "./archetype";
+import { municipalSourcePlan } from "./municipal";
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
-export type TaskKey = "hiring" | "comp" | "priorities" | "decision" | "stack" | "infer" | "risks" | "dockets" | "business";
-export type Ent = { id: string; canonical_name: string; ticker?: string | null; hq_state?: string | null; cik?: string | null; sic?: string | null; entity_type?: string | null; parent_name?: string | null };
+export type TaskKey = "hiring" | "comp" | "priorities" | "decision" | "stack" | "infer" | "risks" | "dockets" | "business" | "municipal" | "parent";
+export type Ent = { id: string; canonical_name: string; ticker?: string | null; hq_state?: string | null; cik?: string | null; sic?: string | null; entity_type?: string | null; parent_name?: string | null; parent_cik?: string | null; website?: string | null };
+export type FetchParent = (parentCik: string, name: string) => Promise<any>;
 export type TaskResult = { data: any; usage: { model: string; input: number; output: number; searches: number }[] };
 // Injected by the caller so the Next route and the node seed script can each
 // import lib/proxy the way their own module resolver expects.
@@ -38,6 +40,58 @@ const u = (model: string, usage: any) => ({
 const textOf = (m: any) => m.content.filter((b: any) => b.type === "text").map((b: any) => b.text).join("\n").trim();
 
 export const SCHEMAS: Record<TaskKey, any> = {
+  municipal: {
+    type: "object", additionalProperties: false,
+    properties: {
+      summary: { type: "string" },
+      solicitations: {
+        type: "array",
+        items: {
+          type: "object", additionalProperties: false,
+          properties: {
+            title: { type: "string" }, reference: { type: "string" },
+            kind: { type: "string", enum: ["rfp", "rfi", "rfq", "itb", "award", "other"] },
+            status: { type: "string" }, date: { type: "string" },
+            scope: { type: "string" }, systems: { type: "array", items: { type: "string" } },
+            value: { type: "string" }, angle: { type: "string" }, source: { type: "string" },
+          },
+          required: ["title", "reference", "kind", "status", "date", "scope", "systems", "value", "angle", "source"],
+        },
+      },
+      board_items: {
+        type: "array",
+        items: {
+          type: "object", additionalProperties: false,
+          properties: { date: { type: "string" }, item: { type: "string" }, detail: { type: "string" }, source: { type: "string" } },
+          required: ["date", "item", "detail", "source"],
+        },
+      },
+      budget_signals: {
+        type: "array",
+        items: {
+          type: "object", additionalProperties: false,
+          properties: { label: { type: "string" }, value: { type: "string" }, source: { type: "string" } },
+          required: ["label", "value", "source"],
+        },
+      },
+      as_of: { type: "string" },
+    },
+    required: ["summary", "solicitations", "board_items", "budget_signals", "as_of"],
+  },
+  parent: {
+    type: "object", additionalProperties: false,
+    properties: {
+      parent: { type: "string" },
+      ownership: { type: "string" },
+      what_parent_says: { type: "string" },
+      operating_model: { type: "string" },
+      decision_implication: { type: "string" },
+      siblings_in_book: { type: "array", items: { type: "string" } },
+      sources: { type: "array", items: { type: "string" } },
+      as_of: { type: "string" },
+    },
+    required: ["parent", "ownership", "what_parent_says", "operating_model", "decision_implication", "siblings_in_book", "sources", "as_of"],
+  },
   business: {
     type: "object", additionalProperties: false,
     properties: {
@@ -236,7 +290,7 @@ const TOOLS = (search: number, fetch: number, contentTokens = 30000) => [
   { type: "web_fetch_20260209", name: "web_fetch", max_uses: fetch, max_content_tokens: contentTokens } as any,
 ];
 
-export async function runTask(client: Anthropic, ent: Ent, key: TaskKey, fetchProxy?: FetchProxy, fetchLeadership?: FetchLeadership, atsVendors?: { vendor: string; mentions: number; titles: string[] }[], fetchRisks?: FetchRisks, comms: Commission[] = []): Promise<TaskResult> {
+export async function runTask(client: Anthropic, ent: Ent, key: TaskKey, fetchProxy?: FetchProxy, fetchLeadership?: FetchLeadership, atsVendors?: { vendor: string; mentions: number; titles: string[] }[], fetchRisks?: FetchRisks, comms: Commission[] = [], fetchParent?: FetchParent): Promise<TaskResult> {
   const usage: TaskResult["usage"] = [];
   const NL = String.fromCharCode(10);
   const SEP = NL + NL + "---" + NL + NL;
@@ -264,6 +318,47 @@ export async function runTask(client: Anthropic, ent: Ent, key: TaskKey, fetchPr
     const data = JSON.parse(textOf(res));
     data.source = proxy.url;
     data.filed = proxy.filed;
+    return { data, usage };
+  }
+
+  // PARENT is deterministic. A subsidiary that files nothing still has a parent
+  // that does, and Exhibit 21 ("Subsidiaries of the Registrant") is a standard
+  // exhibit on every 10-K — so ownership can be CONFIRMED from the parent's own
+  // filing rather than assumed, and the sibling list comes free. No web search.
+  if (key === "parent") {
+    if (!fetchParent || !ent.parent_cik) {
+      throw new Error("This needs a parent company on file with an SEC filer CIK.");
+    }
+    const pc = await fetchParent(ent.parent_cik, ent.canonical_name);
+    const parts: string[] = [];
+    if (pc.exhibit21) {
+      parts.push(`PARENT EXHIBIT 21 — SUBSIDIARIES OF THE REGISTRANT (filed ${pc.exhibit21.filed})` + NL + pc.exhibit21.url + NL +
+        `This subsidiary ${pc.exhibit21.confirmed ? "IS" : "is NOT"} named in the parent's own subsidiary list.` + NL +
+        `Other subsidiaries listed: ${pc.exhibit21.siblings.slice(0, 120).join("; ")}`);
+    }
+    if (pc.tenK?.mentions?.length) {
+      parts.push(`PARENT 10-K (filed ${pc.tenK.filed})` + NL + pc.tenK.url + NL + pc.tenK.mentions.join(NL + "…" + NL));
+    }
+    if (pc.letter) parts.push(`PARENT SHAREHOLDER LETTER` + NL + pc.letter.url + NL + pc.letter.note);
+    if (!parts.length) throw new Error("Nothing found in the parent's filings about this subsidiary.");
+
+    const res = await client.messages.create({
+      model: "claude-opus-4-8", max_tokens: 2500,
+      output_config: { format: { type: "json_schema", schema: SCHEMAS.parent } } as any,
+      system:
+        "Explain what the PARENT's filings establish about this subsidiary, for a rep selling enterprise software to the subsidiary. Use ONLY the text supplied. " +
+        "ownership = state plainly whether the parent's own Exhibit 21 confirms ownership, and say so if it does not. " +
+        "what_parent_says = what the parent's 10-K actually says about this business, quoting the useful part; if it barely mentions it, say that — it is itself informative. " +
+        "operating_model = how the parent runs its subsidiaries, ONLY if the supplied text supports a view. " +
+        "decision_implication = THE most important line: where an enterprise-software decision for this subsidiary realistically sits, and what that means for who to call. " +
+        "A decentralised parent means selling to the subsidiary directly; a parent that runs shared services means the opposite. Do not guess — if the text does not say, say it does not say. " +
+        "siblings_in_book = leave empty; the app fills it. sources = the URLs supplied. as_of = the parent's filing date. Never invent a figure or a quote.",
+      messages: [{ role: "user", content: `Subsidiary: ${ent.canonical_name}` + SEP + `Parent: ${pc.parentName ?? ent.parent_name ?? "unknown"}` + SEP + parts.join(SEP) }],
+    }, { timeout: DEADLINE_MS });
+    usage.push(u("claude-opus-4-8", res.usage));
+    const data = JSON.parse(textOf(res));
+    // Carry the raw exhibit through so the caller can match it against the book.
+    data._exhibitText = (pc.exhibit21?.siblings ?? []).join("; ");
     return { data, usage };
   }
 
@@ -339,7 +434,7 @@ export async function runTask(client: Anthropic, ent: Ent, key: TaskKey, fetchPr
   const WHERE = sourcePlan(arch, ent);
   const WHO_PEOPLE = peoplePlan(arch, ent);
 
-  const CFG: Record<Exclude<TaskKey, "comp" | "stack" | "risks">, { tools: any[]; maxTokens: number; prompt: string; extractModel: string; extractTokens: number; system: string; notesCap: number }> = {
+  const CFG: Record<Exclude<TaskKey, "comp" | "stack" | "risks" | "parent">, { tools: any[]; maxTokens: number; prompt: string; extractModel: string; extractTokens: number; system: string; notesCap: number }> = {
     dockets: {
       tools: TOOLS(4, 1, 16000), maxTokens: 9000, extractModel: "claude-opus-4-8", extractTokens: 4000, notesCap: 18000,
       prompt:
@@ -367,6 +462,22 @@ export async function runTask(client: Anthropic, ent: Ent, key: TaskKey, fetchPr
         "drivers = 1-2 sentences on what the company says the money is for. systems = ONLY software or systems actually named in a source; empty array otherwise — do not infer from 'technology investment'. " +
         "angle = one line on how an Oracle ERP/EPM/Primavera seller uses this (a live rate case means capital is being justified and scrutinised; be specific and honest, and say so if the tie is weak). " +
         "as_of = the date of the newest case found. Drop any case without a source URL.",
+    },
+    municipal: {
+      tools: TOOLS(5, 2, 22000), maxTokens: 11000, extractModel: "claude-opus-4-8", extractTokens: 3800, notesCap: 22000,
+      prompt:
+        `Find what ${ent.canonical_name} is BUYING or has recently approved in enterprise software, finance systems and IT. ` +
+        municipalSourcePlan(ent.canonical_name, ent.website ?? null, ent.hq_state ?? null) + " " + NO_BATCH +
+        ` Budget: 5 searches + at most 2 page fetches. ` +
+        `Wanted, in priority order: (a) OPEN solicitations — an RFP, RFI, RFQ or ITB for ERP, financials, EAM, work management, billing, budgeting, HR or payroll, with its reference number, closing date and scope; ` +
+        `(b) recent contract AWARDS naming a vendor and an amount; (c) board or council agenda items approving a system, contract or upgrade; (d) IT or enterprise-systems capital in the adopted budget. ` +
+        `An open solicitation is the single most valuable thing you can find here — look for it first. Report only what you found with a source URL, and give the reference number exactly as published.`,
+      system:
+        "Structure public-sector buying signals from the notes. Use ONLY cited facts — never invent a solicitation number, a date, a dollar amount or a vendor. " +
+        "solicitations: kind = rfp|rfi|rfq|itb|award|other; reference = the published number, or an empty string if none was stated; status = open, closed, awarded or unknown; " +
+        "systems = the systems or functions named; value = the stated dollar amount if any; angle = one line on what an Oracle ERP/EPM/Primavera seller should do about it. " +
+        "board_items = decisions or discussions naming a system, contract or upgrade. budget_signals = IT or enterprise-systems money in the budget, each with its source. " +
+        "as_of = the date of the newest document found. Drop anything lacking a source URL. If nothing was found, return empty arrays rather than filler.",
     },
     business: {
       tools: TOOLS(5, 2, 22000), maxTokens: 11000, extractModel: "claude-opus-4-8", extractTokens: 3800, notesCap: 22000,
@@ -514,7 +625,7 @@ export async function runTask(client: Anthropic, ent: Ent, key: TaskKey, fetchPr
     return { data: parsed, usage };
   }
 
-  const cfg = CFG[key as Exclude<TaskKey, "comp" | "stack" | "risks">];
+  const cfg = CFG[key as Exclude<TaskKey, "comp" | "stack" | "risks" | "parent">];
 
   // The research and extract calls used to get DEADLINE_MS EACH, so a task
   // could legitimately run 420s and still blow the 300s function cap — a
