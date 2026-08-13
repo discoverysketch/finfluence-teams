@@ -21,7 +21,7 @@ const DRY = process.argv.includes("--dry");
 const CONCURRENCY = 2;
 // --tasks=comp,hiring,decision — priorities is excluded by default: it's the
 // priciest facet (~$0.70) and goes stale fastest, so it's opt-in.
-const ALL: TaskKey[] = ["comp", "hiring", "decision", "priorities", "risks", "dockets"];
+const ALL: TaskKey[] = ["comp", "hiring", "decision", "priorities", "risks", "dockets", "business"];
 const arg = process.argv.find((a) => a.startsWith("--tasks="));
 const TASKS: TaskKey[] = arg
   ? (arg.split("=")[1].split(",").filter((t) => (ALL as string[]).includes(t)) as TaskKey[])
@@ -31,7 +31,7 @@ const db = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPAB
 const client = new Anthropic();
 
 const { data: accts } = await db.from("accounts")
-  .select("entity:entities(id, canonical_name, ticker, cik, hiring_json, comp_json, priorities_json, risks_json, dockets_json, decision_locus)");
+  .select("entity:entities(id, canonical_name, ticker, cik, sic, hq_state, entity_type, parent_name, hiring_json, comp_json, priorities_json, risks_json, dockets_json, business_json, decision_locus)");
 const ents = [...new Map((accts ?? []).filter((a: any) => a.entity).map((a: any) => [a.entity.id, a.entity])).values()] as any[];
 
 // Publicly traded only — the scope chosen for this sweep.
@@ -39,7 +39,7 @@ const listed = ents.filter((e) => e.ticker && e.cik);
 const has: Record<TaskKey, (e: any) => boolean> = {
   comp: (e) => !!e.comp_json, decision: (e) => !!e.decision_locus,
   hiring: (e) => !!e.hiring_json, priorities: (e) => !!e.priorities_json,
-  risks: (e) => !!e.risks_json, dockets: (e) => !!e.dockets_json,
+  risks: (e) => !!e.risks_json, dockets: (e) => !!e.dockets_json, business: (e) => !!e.business_json,
 };
 
 type Job = { ent: Ent; task: TaskKey };
@@ -62,6 +62,7 @@ async function save(task: TaskKey, ent: Ent, data: any) {
   if (task === "priorities") return db.from("entities").update({ priorities_json: data, priorities_at: now }).eq("id", ent.id);
   if (task === "risks") return db.from("entities").update({ risks_json: data, risks_at: now }).eq("id", ent.id);
   if (task === "dockets") return db.from("entities").update({ dockets_json: data, dockets_at: now }).eq("id", ent.id);
+  if (task === "business") return db.from("entities").update({ business_json: data, business_at: now }).eq("id", ent.id);
   if (task === "comp") {
     const upd: any = { comp_json: data, comp_at: now };
     if (Number.isInteger(data.employees) && data.employees > 0) upd.employees = data.employees;
@@ -88,6 +89,13 @@ async function worker(id: number) {
       if (job.task === "priorities") {
         data.priorities = (data.priorities ?? []).filter((p: any) => /^https?:\/\//.test(p.source)).slice(0, 8);
         if (!data.priorities.length) throw new Error("no citable priorities found");
+      }
+      if (job.task === "business") {
+        const cite = (a: any[]) => (a ?? []).filter((x: any) => /^https?:\/\//.test(x.source));
+        data.scale = cite(data.scale).slice(0, 8);
+        data.developments = cite(data.developments).slice(0, 8);
+        data.systems = cite(data.systems).slice(0, 8);
+        if (!data.developments.length && !data.scale.length && !data.systems.length) throw new Error("nothing citable found");
       }
       if (job.task === "dockets") {
         data.cases = (data.cases ?? []).filter((c: any) => /^https?:\/\//.test(c.source)).slice(0, 3);

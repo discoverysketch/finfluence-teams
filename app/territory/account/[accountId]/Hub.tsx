@@ -24,6 +24,12 @@ type Priorities = { summary: string; as_of: string; priorities: { theme: string;
 const EXPOSURE_COLOR: Record<string, string> = {
   technology: "#0572CE", execution: "#9A6700", control: "#8E44AD", workforce: "#1B7A47", other: "#8A7E6E",
 };
+type Business = {
+  summary: string; what_they_do: string; as_of: string; how_they_decide: string;
+  scale: { label: string; value: string; source: string }[];
+  developments: { headline: string; detail: string; date: string; angle: string; source: string }[];
+  systems: { name: string; evidence: string; source: string }[];
+};
 type Dockets = { summary: string; as_of: string; cases: { docket: string; commission: string; title: string; filed: string; status: string; ask: string; drivers: string; systems: string[]; angle: string; source: string }[] };
 type Risks = { summary: string; as_of: string; risks: { theme: string; detail: string; quote: string; exposure: string; angle: string; source: string }[] };
 export type Activity = { id: string; account_id: string; contact_id: string | null; user_id: string | null; kind: string; body: string; due_at: string | null; done: boolean; created_at: string };
@@ -156,12 +162,13 @@ function EiaBlock({ eia }: { eia: EiaOps }) {
 type CForm = { id?: string; name: string; title: string; role_tag: string; email: string; phone: string; reports_to: string };
 const emptyC: CForm = { name: "", title: "", role_tag: "", email: "", phone: "", reports_to: "" };
 
-export default function Hub({ accountId, userId, entityId, ticker, initialNotes, initialOwner, canAssign, canResearch, initialPriorities, prioritiesAt, initialRisks, risksAt, initialDockets, docketsAt, initialContacts, initialActivities, emailOf }: {
+export default function Hub({ accountId, userId, entityId, ticker, initialNotes, initialOwner, canAssign, canResearch, initialPriorities, prioritiesAt, initialRisks, risksAt, initialDockets, docketsAt, initialBusiness, businessAt, archetypeLabel, initialContacts, initialActivities, emailOf }: {
   accountId: string; userId: string; entityId: string | null; ticker: string | null;
   initialNotes: string | null; initialOwner: string | null; canAssign: boolean; canResearch: boolean;
   initialPriorities: Priorities | null; prioritiesAt: string | null;
   initialRisks: Risks | null; risksAt: string | null;
   initialDockets: Dockets | null; docketsAt: string | null;
+  initialBusiness: Business | null; businessAt: string | null; archetypeLabel: string;
   initialContacts: Contact[]; initialActivities: Activity[]; emailOf: Record<string, string>;
 }) {
   const supabase = createClient();
@@ -178,6 +185,10 @@ export default function Hub({ accountId, userId, entityId, ticker, initialNotes,
   const [dockAt, setDockAt] = useState<string | null>(docketsAt);
   const [dockBusy, setDockBusy] = useState(false);
   const [dockErr, setDockErr] = useState<string | null>(null);
+  const [biz, setBiz] = useState<Business | null>(initialBusiness);
+  const [bizAt, setBizAt] = useState<string | null>(businessAt);
+  const [bizBusy, setBizBusy] = useState(false);
+  const [bizErr, setBizErr] = useState<string | null>(null);
   // Failures used to write to the page-level message at the top of the Hub,
   // far above this section — the user clicked, it failed, and the explanation
   // scrolled off-screen, so it read as "nothing happened".
@@ -291,6 +302,18 @@ export default function Hub({ accountId, userId, entityId, ticker, initialNotes,
       setDockets(j.dockets); setDockAt(j.at);
     } catch { setDockErr("Network error — check your connection and try again."); }
     finally { setDockBusy(false); }
+  }
+
+  async function researchBusiness() {
+    if (bizBusy || !entityId) return;
+    setBizBusy(true); setBizErr("");
+    try {
+      const r = await fetch("/api/research-business", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ entityId }) });
+      const j = await r.json().catch(() => null);
+      if (!r.ok || !j?.business) { setBizErr(j?.error || "Couldn't build a picture — try again."); return; }
+      setBiz(j.business); setBizAt(j.at);
+    } catch { setBizErr("Network error — check your connection and try again."); }
+    finally { setBizBusy(false); }
   }
   async function researchPerson(c: Contact) {
     if (personaBusy) return;
@@ -680,6 +703,75 @@ export default function Hub({ accountId, userId, entityId, ticker, initialNotes,
               );
             })()}
           </div>
+        </>
+      )}
+
+      {/* ---- The business (works when there are no filings to read) ---- */}
+      {entityId && (
+        <>
+          <div className="secttl" style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
+            <span>🏢 The business</span>
+            {biz && <button className="mini" onClick={researchBusiness} disabled={bizBusy}>{bizBusy ? "…" : "↻"}</button>}
+          </div>
+          {!biz ? (
+            <div className="card" style={{ padding: "13px 14px" }}>
+              <p style={{ fontSize: 12.5, color: "var(--ink2)", margin: "0 0 10px" }}>
+                Build a picture of what this company actually does, how big it is, and what has happened lately that creates work for a finance system.
+                Aimed at where a <b>{archetypeLabel.toLowerCase()}</b> is genuinely covered — its careers site, trade press, the local business press, and public filings for facilities it is building.
+              </p>
+              <button className="btn" onClick={researchBusiness} disabled={bizBusy}>
+                {bizBusy ? "Researching… (~2 min)" : "🔎 Research the business"}
+              </button>
+              {bizErr && <div style={{ fontSize: 12.5, color: "var(--red)", fontWeight: 600, marginTop: 8 }}>{bizErr}</div>}
+            </div>
+          ) : (
+            <div className="card" style={{ padding: "13px 14px" }}>
+              <div style={{ fontSize: 13.5, lineHeight: 1.5 }}>{biz.summary}</div>
+              <div style={{ fontSize: 12.5, color: "var(--ink2)", marginTop: 5 }}>{biz.what_they_do}</div>
+              <div style={{ fontSize: 11, color: "var(--muted)", margin: "6px 0 10px" }}>As of {biz.as_of}{bizAt ? ` · pulled ${fmtDate(bizAt)}` : ""}</div>
+              {bizErr && <div style={{ fontSize: 12.5, color: "var(--red)", fontWeight: 600, marginBottom: 8 }}>{bizErr}</div>}
+
+              {biz.scale.length > 0 && (
+                <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 10 }}>
+                  {biz.scale.map((x, i) => (
+                    <a key={i} href={x.source} target="_blank" rel="noreferrer"
+                      style={{ background: "#F7F2E9", border: "1px solid var(--gold)", borderRadius: 7, padding: "5px 9px", textDecoration: "none", color: "var(--ink)" }}>
+                      <div style={{ fontSize: 10, fontWeight: 800, textTransform: "uppercase", letterSpacing: ".3px", color: "var(--muted)" }}>{x.label}</div>
+                      <div style={{ fontSize: 13, fontWeight: 800 }}>{x.value}</div>
+                    </a>
+                  ))}
+                </div>
+              )}
+
+              {biz.systems.length > 0 && (
+                <div style={{ marginBottom: 10, paddingBottom: 8, borderBottom: "1px solid #F0EAE0" }}>
+                  <div style={{ fontSize: 10.5, fontWeight: 800, textTransform: "uppercase", letterSpacing: ".5px", color: "var(--muted)", marginBottom: 4 }}>Systems seen</div>
+                  {biz.systems.map((x, i) => (
+                    <div key={i} style={{ fontSize: 12.5, lineHeight: 1.45, marginBottom: 3 }}>
+                      <b>{x.name}</b> — {x.evidence} <a href={x.source} target="_blank" rel="noreferrer" style={{ color: "var(--blue)", fontWeight: 700, fontSize: 11 }}>↗</a>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {biz.developments.map((d, i) => (
+                <div key={i} style={{ padding: "8px 0", borderTop: i ? "1px solid #F0EAE0" : "none" }}>
+                  <div style={{ fontSize: 13.5, fontWeight: 800 }}>{d.headline}</div>
+                  <div style={{ fontSize: 11, color: "var(--muted)", fontWeight: 600 }}>{d.date}</div>
+                  <div style={{ fontSize: 12.5, color: "var(--ink2)", margin: "3px 0" }}>{d.detail}</div>
+                  <div style={{ fontSize: 12, color: "#006B72" }}><b>Your angle:</b> {d.angle}</div>
+                  <a href={d.source} target="_blank" rel="noreferrer" style={{ fontSize: 11.5, color: "var(--blue)", fontWeight: 700 }}>source ↗</a>
+                </div>
+              ))}
+
+              {biz.how_they_decide && (
+                <div style={{ marginTop: 10, background: "#EEF4FB", borderLeft: "3px solid var(--blue)", borderRadius: 6, padding: "8px 10px" }}>
+                  <div style={{ fontSize: 10.5, fontWeight: 800, textTransform: "uppercase", letterSpacing: ".5px", color: "var(--muted)" }}>How they decide</div>
+                  <div style={{ fontSize: 12.5, lineHeight: 1.5, marginTop: 2 }}>{biz.how_they_decide}</div>
+                </div>
+              )}
+            </div>
+          )}
         </>
       )}
 

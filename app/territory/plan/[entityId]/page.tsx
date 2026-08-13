@@ -49,7 +49,7 @@ export default async function PlanPage({ params }: { params: Promise<{ entityId:
   if (!user) redirect("/login");
 
   const { data: ent } = await supabase.from("entities")
-    .select("id, canonical_name, ticker, data_tier, hq_state, entity_type, profile_json, priorities_json, priorities_at, risks_json, risks_at, dockets_json, dockets_at, decision_locus, decision_note, decision_source, decision_at, hiring_json, comp_json, fleet_json, muni_json, stack_json, inferred_json, hiring_at, comp_at, fleet_at, muni_at, stack_at, inferred_at, employees")
+    .select("id, canonical_name, ticker, data_tier, hq_state, entity_type, profile_json, priorities_json, priorities_at, risks_json, risks_at, dockets_json, dockets_at, business_json, business_at, decision_locus, decision_note, decision_source, decision_at, hiring_json, comp_json, fleet_json, muni_json, stack_json, inferred_json, hiring_at, comp_at, fleet_at, muni_at, stack_at, inferred_at, employees")
     .eq("id", entityId).maybeSingle();
   if (!ent) return <main className="container"><p>Account not found.</p><Link href="/territory">← Accounts</Link></main>;
 
@@ -96,6 +96,7 @@ export default async function PlanPage({ params }: { params: Promise<{ entityId:
   const prio: any = (ent as any).priorities_json;
   const risk: any = (ent as any).risks_json;
   const dock: any = (ent as any).dockets_json;
+  const biz: any = (ent as any).business_json;
   const hiring: any = (ent as any).hiring_json;
   const comp: any = (ent as any).comp_json;
   const fleet: any = (ent as any).fleet_json;
@@ -296,6 +297,33 @@ export default async function PlanPage({ params }: { params: Promise<{ entityId:
               <Src url={p.source} />
             </div>
           ))}
+        </>
+      )}
+
+      {/* The business — the primary picture when there are no filings to read */}
+      {(biz?.developments?.length > 0 || biz?.scale?.length > 0) && (
+        <>
+          <h2 style={{ fontSize: 15 }}>The business{biz.as_of ? <span style={{ fontSize: 12, color: "var(--muted)", fontWeight: 600 }}> · {biz.as_of}</span> : null}</h2>
+          <div style={{ marginTop: -4, marginBottom: 6 }}><When iso={(ent as any).business_at} /></div>
+          {biz.summary && <p style={{ fontSize: 13, color: "var(--ink2)", margin: "0 0 4px", lineHeight: 1.5 }}>{biz.summary}</p>}
+          {biz.what_they_do && <p style={{ fontSize: 12.5, color: "var(--ink2)", margin: "0 0 8px" }}>{biz.what_they_do}</p>}
+          {biz.scale?.length > 0 && (
+            <p style={{ fontSize: 12.5, margin: "0 0 8px" }}>
+              {biz.scale.map((x: any, i: number) => <span key={i}>{i ? " · " : ""}<b>{x.label}:</b> {x.value}</span>)}
+            </p>
+          )}
+          {biz.systems?.length > 0 && (
+            <p style={{ fontSize: 12.5, margin: "0 0 8px" }}><b>Systems seen:</b> {biz.systems.map((x: any) => x.name).join(" · ")}</p>
+          )}
+          {(biz.developments ?? []).slice(0, 5).map((d: any, i: number) => (
+            <div key={i} className="pblock" style={{ borderLeft: "3px solid #6A3E8E", paddingLeft: 10, marginBottom: 9 }}>
+              <div style={{ fontSize: 13, fontWeight: 700 }}>{d.headline}{d.date ? <span style={{ fontSize: 11.5, color: "var(--muted)", fontWeight: 600 }}> · {d.date}</span> : null}</div>
+              {d.detail && <div style={{ fontSize: 12.5, color: "var(--ink2)", lineHeight: 1.45 }}>{d.detail}</div>}
+              {d.angle && <div style={{ fontSize: 12, color: "#006B72" }}><b>Our angle:</b> {d.angle}</div>}
+              <Src url={d.source} />
+            </div>
+          ))}
+          {biz.how_they_decide && <p style={{ fontSize: 12.5, color: "var(--ink2)", margin: "0 0 10px" }}><b>How they decide:</b> {biz.how_they_decide}</p>}
         </>
       )}
 

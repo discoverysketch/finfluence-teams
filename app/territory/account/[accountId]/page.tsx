@@ -6,6 +6,7 @@ import Hub, { type Contact, type Activity } from "./Hub";
 import DecisionAuthority from "./DecisionAuthority";
 import CompanyLogo from "@/components/CompanyLogo";
 import { companyDomain } from "@/lib/logo";
+import { inferArchetype, ARCHETYPE_LABEL } from "@/lib/archetype";
 
 // Account Hub: CRM-lite home for one account — stage, org chart, activity.
 /* eslint-disable @typescript-eslint/no-explicit-any */
@@ -20,7 +21,7 @@ export default async function AccountPage({ params }: { params: Promise<{ accoun
 
   // RLS scopes this to the caller's tenant.
   const { data: acct } = await supabase.from("accounts")
-    .select("id, rep_notes, owner, created_by, created_at, entity:entities(id, canonical_name, ticker, data_tier, hq_state, decision_locus, decision_note, decision_source, decision_at, priorities_json, priorities_at, risks_json, risks_at, dockets_json, dockets_at, hiring_json, stack_json, profile_json, website)")
+    .select("id, rep_notes, owner, created_by, created_at, entity:entities(id, canonical_name, ticker, data_tier, hq_state, decision_locus, decision_note, decision_source, decision_at, priorities_json, priorities_at, risks_json, risks_at, dockets_json, dockets_at, business_json, business_at, sic, parent_name, entity_type, hiring_json, stack_json, profile_json, website)")
     .eq("id", accountId).maybeSingle();
   if (!acct) {
     return (
@@ -41,6 +42,12 @@ export default async function AccountPage({ params }: { params: Promise<{ accoun
 
   const ent: any = acct.entity;
   const TIER_COLOR: Record<string, string> = { A: "#1B7A47", B: "#0572CE", C: "#9A6700", D: "#8A7E6E" };
+
+  // What kind of company this is decides where its research is aimed, so it is
+  // shown next to the name — a rep should be able to see why an account is
+  // being researched the way it is.
+  const archetype = ent ? inferArchetype(ent) : "unknown";
+  const archetypeLabel = ARCHETYPE_LABEL[archetype];
 
   // The stored website is authoritative; mining URLs left behind by research is
   // only a fallback for entities that have not been backfilled yet.
@@ -67,6 +74,7 @@ export default async function AccountPage({ params }: { params: Promise<{ accoun
         <h1 style={{ margin: 0 }}>{ent?.canonical_name || "Account"}</h1>
         {ent?.ticker && <span style={{ fontFamily: "ui-monospace, monospace", color: "var(--muted)", fontWeight: 700 }}>{ent.ticker}</span>}
         {ent?.data_tier && <span style={{ background: TIER_COLOR[ent.data_tier] || "#8A7E6E", color: "#fff", fontSize: 11, fontWeight: 700, borderRadius: 5, padding: "2px 8px" }}>Tier {ent.data_tier}</span>}
+        <span title="Decides which sources research is aimed at" style={{ border: "1px solid var(--border)", color: "var(--ink2)", fontSize: 11, fontWeight: 700, borderRadius: 5, padding: "1px 8px" }}>{archetypeLabel}</span>
       </div>
       {logoDomain && (
         <div style={{ fontSize: 12.5, marginTop: 3 }}>
@@ -103,6 +111,9 @@ export default async function AccountPage({ params }: { params: Promise<{ accoun
         risksAt={ent?.risks_at ?? null}
         initialDockets={ent?.dockets_json ?? null}
         docketsAt={ent?.dockets_at ?? null}
+        initialBusiness={ent?.business_json ?? null}
+        businessAt={ent?.business_at ?? null}
+        archetypeLabel={archetypeLabel}
         initialContacts={(contacts ?? []) as Contact[]}
         initialActivities={(activities ?? []) as Activity[]}
         emailOf={emailOf}
