@@ -358,7 +358,7 @@ export async function runTask(client: Anthropic, ent: Ent, key: TaskKey, fetchPr
     usage.push(u("claude-opus-4-8", res.usage));
     const data = JSON.parse(textOf(res));
     // Carry the raw exhibit through so the caller can match it against the book.
-    data._exhibitText = (pc.exhibit21?.siblings ?? []).join("; ");
+    data._exhibitText = pc.exhibit21?.raw ?? "";
     return { data, usage };
   }
 

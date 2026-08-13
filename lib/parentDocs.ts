@@ -44,7 +44,7 @@ const LETTERS: Record<string, { name: string; url: string; note: string }> = {
 
 export type ParentContext = {
   parentName: string | null;
-  exhibit21: { url: string; filed: string; confirmed: boolean; siblings: string[] } | null;
+  exhibit21: { url: string; filed: string; confirmed: boolean; siblings: string[]; raw: string } | null;
   tenK: { url: string; filed: string; mentions: string[] } | null;
   letter: { url: string; note: string } | null;
 };
@@ -93,7 +93,11 @@ export async function fetchParentContext(parentCik: string, subsidiaryName: stri
             .map((x) => x.replace(DOMICILE_PREFIX, "").trim())
             .filter((x) => x.length > 4 && !/^(Company Name|Domicile|State of Incorporation)/i.test(x))
             .filter((x, j, a) => a.indexOf(x) === j);
-          out.exhibit21 = { url, filed, confirmed: rx.test(txt), siblings: siblings.slice(0, 400) };
+          // Keep the raw text. Sibling MATCHING must run against it, not the
+          // parsed list: the name regex requires a corporate suffix, so a
+          // subsidiary called "PacifiCorp" or "GEICO" never appears in
+          // `siblings` even though it is plainly in the exhibit.
+          out.exhibit21 = { url, filed, confirmed: rx.test(txt), siblings: siblings.slice(0, 400), raw: txt.slice(0, 60000) };
         }
       }
     }
