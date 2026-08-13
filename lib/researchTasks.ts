@@ -488,7 +488,10 @@ export async function runTask(client: Anthropic, ent: Ent, key: TaskKey, fetchPr
         `Capture: what they actually do and how they make money; their scale (revenue, headcount, sites, stores, plants, customers) with a source for each figure — an approximate figure with a citation beats a precise one you invented; ` +
         `recent developments in the last 18 months that create work for a finance or operations system — expansions, new facilities, acquisitions, leadership changes, systems projects, restructuring; ` +
         `any SYSTEM they are visibly running, from job postings, press or their own site; and how a company of this ownership structure actually decides on enterprise software. ` +
-        `Only report what you found with a citation. If a figure is an estimate published by someone else, say whose.`,
+        `Only report what you found with a citation. If a figure is an estimate published by someone else, say whose. ` +
+        `SOURCE QUALITY MATTERS MORE HERE THAN ANYWHERE ELSE. Data-broker profiles — Growjo, Zippia, RocketReach, Owler, LeadIQ, IncFact and similar — publish MODELLED revenue and headcount that look like reported figures and often are not. ` +
+        `Prefer, in order: the company's own statements, the parent's filings, industry trade press and its published rankings, and the local business press. ` +
+        `If the only source for a number is a data-broker profile, either omit it or label it plainly as an unverified third-party estimate — a rep who quotes a modelled figure to a customer as fact has been actively harmed by this tool.`,
       system:
         "Structure a business picture from the notes. Use ONLY cited facts — never invent a revenue figure, headcount, date or system. " +
         "summary = 2 sentences a rep could open a meeting with. what_they_do = one plain sentence on the business model. " +
