@@ -25,12 +25,12 @@ export async function POST(request: Request) {
   if (!gate.ok) return NextResponse.json({ error: gate.reason }, { status: 403 });
   // RLS scopes this read — resolves only for accounts in the caller's tenant.
   const { data: acct } = await supabase.from("accounts")
-    .select("id, entity:entities(canonical_name, hq_state)").eq("id", accountId).maybeSingle();
+    .select("id, entity:entities(canonical_name, hq_state, cik, ticker, sic, entity_type, parent_name)").eq("id", accountId).maybeSingle();
   const ent: any = acct?.entity;
   if (!ent) return NextResponse.json({ error: "Account not found" }, { status: 404 });
 
   try {
-    const executives = await researchExecutives(ent.canonical_name, ent.hq_state);
+    const executives = await researchExecutives(ent.canonical_name, ent.hq_state, ent as any);
     if (!executives.length) return NextResponse.json({ error: "No citable leadership info found — this one may need manual entry." }, { status: 502 });
     return NextResponse.json({ executives });
   } catch (e) {

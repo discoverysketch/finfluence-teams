@@ -33,6 +33,12 @@ export function identify(url: string): { platform: string; a?: string; b?: strin
     return { platform: "oracle", a: m[1], b: m[2] };
   if ((m = url.match(/boards\.greenhouse\.io\/([a-z0-9-]+)/i))) return { platform: "greenhouse", a: m[1] };
   if ((m = url.match(/jobs\.lever\.co\/([a-z0-9-]+)/i))) return { platform: "lever", a: m[1] };
+  // Dayforce (Ceridian). a = client namespace, b = career-site code. An employer
+  // often runs one site per location, so b is optional and defaults to the
+  // aggregate board.
+  if ((m = url.match(/jobs\.dayforcehcm\.com\/(?:[a-z]{2}-[A-Z]{2}\/)?([A-Za-z0-9_-]+)(?:\/([A-Za-z0-9_-]+))?/))) {
+    return { platform: "dayforce", a: m[1], b: m[2] };
+  }
   if ((m = url.match(/([a-z0-9-]+)\.taleo\.net/i))) return { platform: "taleo", a: m[1] };
   if ((m = url.match(/([a-z0-9-]+)\.icims\.com/i))) return { platform: "icims", a: m[1] };
   return null;
@@ -117,12 +123,20 @@ async function lever(token: string): Promise<AtsFeed | null> {
   };
 }
 
+// Dayforce (Ceridian) is DETECTED but not read.
+//
+// Its board renders client-side and the listing call —
+// POST /api/geo/{namespace}/jobposting/search — returns 403 without a session
+// and CSRF token. That is an access control, not an oversight, so it is left
+// alone: detection still records the platform and marks Dayforce as a system
+// they run, and posting discovery falls back to web search exactly as it does
+// for Taleo and iCIMS.
 export async function fetchFeed(platform: string, a: string, b?: string): Promise<AtsFeed | null> {
   if (platform === "workday" && b) return workday(a, b);
   if (platform === "oracle" && b) return oracle(a, b);
   if (platform === "greenhouse") return greenhouse(a);
   if (platform === "lever") return lever(a);
-  return null; // taleo / icims have no clean public JSON — those fall back to search
+  return null; // taleo / icims / dayforce have no readable public feed — those fall back to search
 }
 
 // Workday's list is titles-only too. The description — where the system names
@@ -161,7 +175,7 @@ export async function discover(website: string): Promise<{ platform: string; a: 
   if (!html) return null;
 
   // Any ATS URL mentioned anywhere on the page is the cheapest win.
-  const inline = html.match(/https?:\/\/[^"'\s]*(?:myworkdayjobs\.com|oraclecloud\.com\/hcmUI[^"'\s]*|boards\.greenhouse\.io|jobs\.lever\.co|taleo\.net|icims\.com)[^"'\s]*/i);
+  const inline = html.match(/https?:\/\/[^"'\s]*(?:myworkdayjobs\.com|oraclecloud\.com\/hcmUI[^"'\s]*|boards\.greenhouse\.io|jobs\.lever\.co|jobs\.dayforcehcm\.com|taleo\.net|icims\.com)[^"'\s]*/i);
   if (inline) { const id = identify(inline[0]); if (id?.a) return { ...id, a: id.a, url: inline[0] }; }
 
   const links = [...html.matchAll(/href=["']([^"']+)["']/gi)].map((m) => m[1])

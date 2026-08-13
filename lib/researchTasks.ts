@@ -3,10 +3,11 @@
 // researched to different standards depending on how the research was kicked
 // off — so the prompt, schema, tool budget and model all live here, once.
 import type Anthropic from "@anthropic-ai/sdk";
+import { inferArchetype, descriptor, sourcePlan, peoplePlan, type Archetype } from "./archetype";
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
-export type TaskKey = "hiring" | "comp" | "priorities" | "decision" | "stack" | "infer" | "risks" | "dockets";
-export type Ent = { id: string; canonical_name: string; ticker?: string | null; hq_state?: string | null; cik?: string | null };
+export type TaskKey = "hiring" | "comp" | "priorities" | "decision" | "stack" | "infer" | "risks" | "dockets" | "business";
+export type Ent = { id: string; canonical_name: string; ticker?: string | null; hq_state?: string | null; cik?: string | null; sic?: string | null; entity_type?: string | null; parent_name?: string | null };
 export type TaskResult = { data: any; usage: { model: string; input: number; output: number; searches: number }[] };
 // Injected by the caller so the Next route and the node seed script can each
 // import lib/proxy the way their own module resolver expects.
@@ -37,6 +38,43 @@ const u = (model: string, usage: any) => ({
 const textOf = (m: any) => m.content.filter((b: any) => b.type === "text").map((b: any) => b.text).join("\n").trim();
 
 export const SCHEMAS: Record<TaskKey, any> = {
+  business: {
+    type: "object", additionalProperties: false,
+    properties: {
+      summary: { type: "string" },
+      what_they_do: { type: "string" },
+      scale: {
+        type: "array",
+        items: {
+          type: "object", additionalProperties: false,
+          properties: { label: { type: "string" }, value: { type: "string" }, source: { type: "string" } },
+          required: ["label", "value", "source"],
+        },
+      },
+      developments: {
+        type: "array",
+        items: {
+          type: "object", additionalProperties: false,
+          properties: {
+            headline: { type: "string" }, detail: { type: "string" }, date: { type: "string" },
+            angle: { type: "string" }, source: { type: "string" },
+          },
+          required: ["headline", "detail", "date", "angle", "source"],
+        },
+      },
+      systems: {
+        type: "array",
+        items: {
+          type: "object", additionalProperties: false,
+          properties: { name: { type: "string" }, evidence: { type: "string" }, source: { type: "string" } },
+          required: ["name", "evidence", "source"],
+        },
+      },
+      how_they_decide: { type: "string" },
+      as_of: { type: "string" },
+    },
+    required: ["summary", "what_they_do", "scale", "developments", "systems", "how_they_decide", "as_of"],
+  },
   dockets: {
     type: "object", additionalProperties: false,
     properties: {
@@ -292,6 +330,15 @@ export async function runTask(client: Anthropic, ent: Ent, key: TaskKey, fetchPr
   // what they cost and when. There is no national index of dockets and every
   // state runs its own filing system, so instead of integrating forty of them
   // we name the right commission and its domain and let the search be scoped.
+  // How this company is described, and where its information actually lives.
+  // Everything below used to assume a US utility, which is why a private
+  // subsidiary or a listed retailer came back thin: the searches were aimed at
+  // filings and commissions that do not exist for them.
+  const arch: Archetype = inferArchetype(ent);
+  const WHO = descriptor(ent, arch);
+  const WHERE = sourcePlan(arch, ent);
+  const WHO_PEOPLE = peoplePlan(arch, ent);
+
   const CFG: Record<Exclude<TaskKey, "comp" | "stack" | "risks">, { tools: any[]; maxTokens: number; prompt: string; extractModel: string; extractTokens: number; system: string; notesCap: number }> = {
     dockets: {
       tools: TOOLS(4, 1, 16000), maxTokens: 9000, extractModel: "claude-opus-4-8", extractTokens: 4000, notesCap: 18000,
@@ -321,10 +368,29 @@ export async function runTask(client: Anthropic, ent: Ent, key: TaskKey, fetchPr
         "angle = one line on how an Oracle ERP/EPM/Primavera seller uses this (a live rate case means capital is being justified and scrutinised; be specific and honest, and say so if the tie is weak). " +
         "as_of = the date of the newest case found. Drop any case without a source URL.",
     },
+    business: {
+      tools: TOOLS(5, 2, 22000), maxTokens: 11000, extractModel: "claude-opus-4-8", extractTokens: 3800, notesCap: 22000,
+      prompt:
+        `Build a picture of the BUSINESS at ${WHO} for a seller of enterprise finance and operations software. ` +
+        `This company may publish very little, so do not give up when the usual sources are empty — go where companies like this ARE covered. ` +
+        WHERE + " " + NO_BATCH + " Budget: 5 searches + at most 2 page fetches. " +
+        `Capture: what they actually do and how they make money; their scale (revenue, headcount, sites, stores, plants, customers) with a source for each figure — an approximate figure with a citation beats a precise one you invented; ` +
+        `recent developments in the last 18 months that create work for a finance or operations system — expansions, new facilities, acquisitions, leadership changes, systems projects, restructuring; ` +
+        `any SYSTEM they are visibly running, from job postings, press or their own site; and how a company of this ownership structure actually decides on enterprise software. ` +
+        `Only report what you found with a citation. If a figure is an estimate published by someone else, say whose.`,
+      system:
+        "Structure a business picture from the notes. Use ONLY cited facts — never invent a revenue figure, headcount, date or system. " +
+        "summary = 2 sentences a rep could open a meeting with. what_they_do = one plain sentence on the business model. " +
+        "scale = the size figures actually found, each with its source URL; omit rather than guess. " +
+        "developments = recent events that create work for finance or operations systems, newest first; angle = one line on why it matters to an Oracle ERP/EPM/SCM seller. " +
+        "systems = any named software with the evidence for it and a source. " +
+        "how_they_decide = where enterprise-software decisions realistically sit given the ownership structure, and what would confirm it. " +
+        "as_of = the date of the newest source. Drop anything lacking a source URL.",
+    },
     hiring: {
       tools: TOOLS(3, 1, 18000), maxTokens: 9000, extractModel: "claude-opus-4-8", extractTokens: 3000, notesCap: 16000,
       prompt:
-        `Research CURRENT open job postings at ${ent.canonical_name} (a US utility) that signal an enterprise-software or finance-systems initiative. ` +
+        `Research CURRENT open job postings at ${WHO} that signal an enterprise-software or finance-systems initiative. ` + WHERE + " " +
         `Search their careers page and job boards for roles like: Oracle/SAP/Workday ERP, financial systems analyst/manager, capital-project systems, EPM/planning, procurement systems, IT applications, digital transformation, controller/close roles. Also look specifically for PowerPlan, fixed-asset accounting, capital-project (CWIP) accounting, tax fixed assets, lease accounting and regulatory/FERC accounting roles — at a regulated utility these name the asset-accounting platform, and PowerPlan is an Oracle PARTNER that runs alongside Oracle ERP, so finding it is a co-sell signal rather than a competitive one. ` +
         `${NO_BATCH} Budget: 3 searches + at most 1 fetch. List the relevant open roles with WHY each is a buying signal and the source URL. If nothing relevant is open, say so. signal = hot (multiple systems/ERP roles), warm (some finance-systems roles), quiet (nothing notable).`,
       system: "Structure the hiring research from the notes. Use ONLY cited facts — never invent numbers, roles, or quotes. Include a source URL. Keep it tight and factual.",
@@ -332,9 +398,8 @@ export async function runTask(client: Anthropic, ent: Ent, key: TaskKey, fetchPr
     priorities: {
       tools: TOOLS(4, 1, 18000), maxTokens: 9000, extractModel: "claude-opus-4-8", extractTokens: 3500, notesCap: 18000,
       prompt:
-        `Research what leadership at ${ent.canonical_name}${ent.ticker ? ` (${ent.ticker})` : ""}${ent.hq_state ? `, a ${ent.hq_state} US utility` : ", a US utility"} is PUBLICLY PRIORITIZING right now. ` +
-        `Sources, in order: (1) their MOST RECENT quarterly EARNINGS CALL — search "${ent.canonical_name} earnings call transcript" and read it for what the CEO/CFO emphasize (capital program, O&M / cost discipline, rate cases, technology/digital modernization, load growth, credit); ` +
-        `(2) their latest 10-K management discussion (MD&A) and strategy; (3) any recent 8-K on a material strategic move. ` +
+        `Research what leadership at ${WHO} is PUBLICLY PRIORITIZING right now. ` + WHERE + " " +
+        `Where the company files with the SEC, read the most recent earnings call and the 10-K MD&A first. ` +
         `${NO_BATCH} Budget: 4 searches + at most 1 page fetch — prefer quotes visible in search results over fetching whole transcripts, which is what made this time out. For each priority theme capture: a short DIRECT QUOTE from an executive or filing, WHO said it, and the source URL. ` +
         `Focus on things an enterprise-software seller (finance, capital-project, cost, digital systems) could tie value to. Only report what you actually found with a citation.`,
       system:
