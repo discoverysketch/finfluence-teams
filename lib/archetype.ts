@@ -28,10 +28,12 @@ export function inferArchetype(e: ArchetypeEnt): Archetype {
   if (e.sic && UTILITY_SIC.test(String(e.sic))) return "regulated_utility";
   if (!e.cik && MUNI_NAME.test(e.canonical_name)) return "municipal";
   if (e.entity_type && /muni|public power|authority/i.test(e.entity_type)) return "municipal";
-  if (e.cik && e.ticker) return "public_corp";
   if (e.cik) return "public_corp";
-  if (e.parent_name) return "private_subsidiary";
-  return "unknown";
+  // No CIK and not a public body means it does not file: privately held,
+  // whether or not we know the owner. Leaving these "unknown" sent them down
+  // the generic path when the private-company source plan is exactly what they
+  // need — NFM, Scout Clean Energy and Apex Clean Energy all landed there.
+  return "private_subsidiary";
 }
 
 export const ARCHETYPE_LABEL: Record<Archetype, string> = {

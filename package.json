@@ -21,7 +21,8 @@
     "coverage": "node --env-file=.env.local seed/coverage.mjs",
     "load-websites": "node --env-file=.env.local seed/load-websites.mjs",
     "load-jobs": "node --env-file=.env.local --experimental-strip-types seed/load-jobs.ts",
-    "load-contracts": "node --env-file=.env.local --experimental-strip-types seed/load-contracts.ts"
+    "load-contracts": "node --env-file=.env.local --experimental-strip-types seed/load-contracts.ts",
+    "load-sic": "node --env-file=.env.local seed/load-sic.mjs"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.110.0",
